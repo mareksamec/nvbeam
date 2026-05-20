@@ -1,10 +1,14 @@
 #pragma once
 
 #include <QMainWindow>
+#include "config.h"
 
 class GridWidget;
 class NvimProcess;
-struct Config;
+class CmdlineWidget;
+class PopupmenuWidget;
+class TablineWidget;
+class MessageWidget;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -18,4 +22,9 @@ public:
 private:
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
+    CmdlineWidget *m_cmdline = nullptr;
+    PopupmenuWidget *m_popupmenu = nullptr;
+    TablineWidget *m_tabline = nullptr;
+    MessageWidget *m_messages = nullptr;
+    Config m_cfg;
 };
