@@ -55,9 +55,11 @@ NvimProcess::~NvimProcess()
     stop();
 }
 
-void NvimProcess::start()
+void NvimProcess::start(const QStringList &nvimArgs)
 {
-    m_process->start("nvim", {"--embed"});
+    QStringList args = {"--embed"};
+    args.append(nvimArgs);
+    m_process->start("nvim", args);
     if (!m_process->waitForStarted(3000)) {
         qCritical() << "Failed to start nvim:" << m_process->errorString();
         return;

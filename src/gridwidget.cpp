@@ -2,6 +2,9 @@
 #include <QPainter>
 #include <QFontMetrics>
 #include <QResizeEvent>
+#include <QKeyEvent>
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include <QDebug>
 
 GridWidget::GridWidget(QWidget *parent)
@@ -18,6 +21,7 @@ GridWidget::GridWidget(QWidget *parent)
     setFocusPolicy(Qt::StrongFocus);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
+    setMouseTracking(true);
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -51,6 +55,14 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
         handleHlAttrDefine(args);
     } else if (name == "default_colors_set") {
         handleDefaultColorsSet(args);
+    } else if (name == "mode_info_set") {
+        handleModeInfoSet(args);
+    } else if (name == "mode_change") {
+        handleModeChange(args);
+    } else if (name == "busy_start") {
+        m_busy = true;
+    } else if (name == "busy_stop") {
+        m_busy = false;
     }
 }
 
@@ -167,8 +179,9 @@ void GridWidget::handleHlAttrDefine(const QVariantList &args)
     QVariantMap attrs = args[1].toMap();
 
     HlAttr hl;
-    hl.foreground = m_defaultFg;
-    hl.background = m_defaultBg;
+    // Use invalid color as sentinel for "use default"
+    hl.foreground = QColor();
+    hl.background = QColor();
 
     if (attrs.contains("foreground")) {
         hl.foreground = QColor::fromRgb(attrs["foreground"].toUInt());
@@ -211,7 +224,16 @@ void GridWidget::paintEvent(QPaintEvent *event)
     for (int row = 0; row < m_rows; row++) {
         for (int col = 0; col < m_cols; col++) {
             const GridCell &cell = m_grid[row][col];
-            const HlAttr &hl = m_hlAttrs.value(cell.hlId, m_hlAttrs.value(0));
+            HlAttr hl;
+            hl.foreground = m_defaultFg;
+            hl.background = m_defaultBg;
+            if (cell.hlId != 0 && m_hlAttrs.contains(cell.hlId)) {
+                hl = m_hlAttrs[cell.hlId];
+                if (!m_hlAttrs[cell.hlId].foreground.isValid())
+                    hl.foreground = m_defaultFg;
+                if (!m_hlAttrs[cell.hlId].background.isValid())
+                    hl.background = m_defaultBg;
+            }
 
             QColor fg = hl.reverse ? hl.background : hl.foreground;
             QColor bg = hl.reverse ? hl.foreground : hl.background;
@@ -243,11 +265,37 @@ void GridWidget::paintEvent(QPaintEvent *event)
         }
     }
 
-    // Draw cursor
-    if (m_cursorRow < m_rows && m_cursorCol < m_cols) {
+    // Draw cursor based on mode
+    if (!m_busy && m_cursorRow < m_rows && m_cursorCol < m_cols) {
         int x = m_cursorCol * m_cellWidth;
         int y = m_cursorRow * m_cellHeight;
-        painter.fillRect(x, y, m_cellWidth, m_cellHeight, QColor(255, 255, 255, 128));
+
+        QString shape = "block";
+        int pct = 100;
+        if (m_currentMode < m_modeInfoList.size()) {
+            shape = m_modeInfoList[m_currentMode].cursorShape;
+            pct = m_modeInfoList[m_currentMode].cellPercentage;
+        }
+
+        painter.setCompositionMode(QPainter::CompositionMode_SourceOver);
+        QColor cursorColor(255, 255, 255, 180);
+
+        if (shape == "block") {
+            painter.fillRect(x, y, m_cellWidth, m_cellHeight, cursorColor);
+            // Draw the character under cursor in inverted color
+            if (m_cursorCol < m_cols) {
+                painter.setPen(m_defaultBg);
+                painter.setFont(m_font);
+                painter.drawText(x, y + m_cellHeight - painter.fontMetrics().descent(),
+                                 m_grid[m_cursorRow][m_cursorCol].text);
+            }
+        } else if (shape == "vertical") {
+            int w = qMax(1, m_cellWidth * pct / 100);
+            painter.fillRect(x, y, w, m_cellHeight, cursorColor);
+        } else if (shape == "horizontal") {
+            int h = qMax(1, m_cellHeight * pct / 100);
+            painter.fillRect(x, y + m_cellHeight - h, m_cellWidth, h, cursorColor);
+        }
     }
 }
 
@@ -264,4 +312,172 @@ void GridWidget::recalculateGrid()
     if (newCols > 0 && newRows > 0 && (newCols != m_cols || newRows != m_rows)) {
         emit gridSizeReady(newRows, newCols);
     }
+}
+
+void GridWidget::handleModeInfoSet(const QVariantList &args)
+{
+    if (args.size() < 2) return;
+    // [cursor_style_enabled, mode_info_list]
+    QVariantList modeList = args[1].toList();
+    m_modeInfoList.clear();
+    for (const auto &modeVar : modeList) {
+        QVariantMap m = modeVar.toMap();
+        ModeInfo info;
+        QString shape = m.value("cursor_shape", "block").toString();
+        if (shape == "block") info.cursorShape = "block";
+        else if (shape == "vertical") info.cursorShape = "vertical";
+        else if (shape == "horizontal") info.cursorShape = "horizontal";
+        info.cellPercentage = m.value("cell_percentage", 100).toInt();
+        m_modeInfoList.append(info);
+    }
+}
+
+void GridWidget::handleModeChange(const QVariantList &args)
+{
+    if (args.size() < 2) return;
+    // [mode_name, mode_idx]
+    m_currentMode = args[1].toInt();
+}
+
+// --- Keyboard input ---
+
+static const QHash<int, QString> &specialKeyMap()
+{
+    static const QHash<int, QString> map = {
+        {Qt::Key_Escape, "Esc"},
+        {Qt::Key_Return, "CR"},
+        {Qt::Key_Enter, "CR"},
+        {Qt::Key_Backspace, "BS"},
+        {Qt::Key_Tab, "Tab"},
+        {Qt::Key_Backtab, "Tab"}, // Shift+Tab handled via modifier
+        {Qt::Key_Space, "Space"},
+        {Qt::Key_Up, "Up"},
+        {Qt::Key_Down, "Down"},
+        {Qt::Key_Left, "Left"},
+        {Qt::Key_Right, "Right"},
+        {Qt::Key_Home, "Home"},
+        {Qt::Key_End, "End"},
+        {Qt::Key_PageUp, "PageUp"},
+        {Qt::Key_PageDown, "PageDown"},
+        {Qt::Key_Insert, "Insert"},
+        {Qt::Key_Delete, "Del"},
+        {Qt::Key_F1, "F1"}, {Qt::Key_F2, "F2"}, {Qt::Key_F3, "F3"},
+        {Qt::Key_F4, "F4"}, {Qt::Key_F5, "F5"}, {Qt::Key_F6, "F6"},
+        {Qt::Key_F7, "F7"}, {Qt::Key_F8, "F8"}, {Qt::Key_F9, "F9"},
+        {Qt::Key_F10, "F10"}, {Qt::Key_F11, "F11"}, {Qt::Key_F12, "F12"},
+        {Qt::Key_Less, "lt"},
+    };
+    return map;
+}
+
+QString GridWidget::modifierPrefix(Qt::KeyboardModifiers mods, bool isSpecial)
+{
+    QString prefix;
+    if (mods & Qt::ShiftModifier && isSpecial) prefix += "S-";
+    if (mods & Qt::ControlModifier) prefix += "C-";
+    if (mods & Qt::AltModifier) prefix += "A-";
+    if (mods & Qt::MetaModifier) prefix += "D-";
+    return prefix;
+}
+
+QString GridWidget::keyToNvim(QKeyEvent *event)
+{
+    int key = event->key();
+    Qt::KeyboardModifiers mods = event->modifiers();
+    QString text = event->text();
+
+    // Check if it's a known special key
+    const auto &map = specialKeyMap();
+    if (map.contains(key)) {
+        QString name = map[key];
+        QString mod = modifierPrefix(mods, true);
+        if (key == Qt::Key_Backtab) mod += "S-"; // Backtab is Shift+Tab
+        return "<" + mod + name + ">";
+    }
+
+    // Control+letter
+    if ((mods & Qt::ControlModifier) && key >= Qt::Key_A && key <= Qt::Key_Z) {
+        QString mod = modifierPrefix(mods, true);
+        QString ch = QString(QChar('a' + (key - Qt::Key_A)));
+        return "<" + mod + ch + ">";
+    }
+
+    // Alt+key
+    if ((mods & Qt::AltModifier) && !text.isEmpty()) {
+        QString mod = modifierPrefix(mods, true);
+        return "<" + mod + text + ">";
+    }
+
+    // Regular text
+    if (!text.isEmpty() && text[0].isPrint()) {
+        if (text == "<") return "<lt>";
+        return text;
+    }
+
+    return {};
+}
+
+void GridWidget::keyPressEvent(QKeyEvent *event)
+{
+    QString keys = keyToNvim(event);
+    if (!keys.isEmpty()) {
+        emit inputKey(keys);
+    }
+}
+
+// --- Mouse input ---
+
+QPair<int,int> GridWidget::cellAt(const QPoint &pos)
+{
+    int col = pos.x() / m_cellWidth;
+    int row = pos.y() / m_cellHeight;
+    col = qBound(0, col, m_cols - 1);
+    row = qBound(0, row, m_rows - 1);
+    return {row, col};
+}
+
+void GridWidget::mousePressEvent(QMouseEvent *event)
+{
+    auto [row, col] = cellAt(event->pos());
+    m_mousePressed = true;
+
+    QString button;
+    if (event->button() == Qt::LeftButton) button = "left";
+    else if (event->button() == Qt::RightButton) button = "right";
+    else if (event->button() == Qt::MiddleButton) button = "middle";
+    else return;
+
+    QString mod = modifierPrefix(event->modifiers(), false);
+    emit inputMouse(button, "press", mod, 0, row, col);
+}
+
+void GridWidget::mouseReleaseEvent(QMouseEvent *event)
+{
+    auto [row, col] = cellAt(event->pos());
+    m_mousePressed = false;
+
+    QString button;
+    if (event->button() == Qt::LeftButton) button = "left";
+    else if (event->button() == Qt::RightButton) button = "right";
+    else if (event->button() == Qt::MiddleButton) button = "middle";
+    else return;
+
+    QString mod = modifierPrefix(event->modifiers(), false);
+    emit inputMouse(button, "release", mod, 0, row, col);
+}
+
+void GridWidget::mouseMoveEvent(QMouseEvent *event)
+{
+    if (!m_mousePressed) return;
+    auto [row, col] = cellAt(event->pos());
+    QString mod = modifierPrefix(event->modifiers(), false);
+    emit inputMouse("left", "drag", mod, 0, row, col);
+}
+
+void GridWidget::wheelEvent(QWheelEvent *event)
+{
+    auto [row, col] = cellAt(event->position().toPoint());
+    QString mod = modifierPrefix(event->modifiers(), false);
+    QString button = event->angleDelta().y() > 0 ? "wheel_up" : "wheel_down";
+    emit inputMouse(button, "press", mod, 0, row, col);
 }
