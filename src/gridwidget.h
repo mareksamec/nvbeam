@@ -33,6 +33,8 @@ public:
     /// Returns grid dimensions in cells
     int gridRows() const { return m_rows; }
     int gridCols() const { return m_cols; }
+    int cellWidth() const { return m_cellWidth; }
+    int cellHeight() const { return m_cellHeight; }
 
 public slots:
     /// Process redraw events from Neovim
