@@ -31,6 +31,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_messages = new MessageWidget(cfg.accentColor, central);
     layout->addWidget(m_messages);
 
+    m_statusline = new StatuslineWidget(cfg.accentColor, central);
+    if (cfg.extStatusline)
+        layout->addWidget(m_statusline);
+
     setCentralWidget(central);
 
     // Popupmenu is a floating child of the grid
@@ -128,6 +132,50 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         });
         connect(m_grid, &GridWidget::flushed, bufTimer, [bufTimer]() {
             if (!bufTimer->isActive()) bufTimer->start();
+        });
+    }
+
+    // Statusline: poll Neovim for mode, file, position, diagnostics (throttled)
+    if (cfg.extStatusline) {
+        auto *statusTimer = new QTimer(this);
+        statusTimer->setSingleShot(true);
+        statusTimer->setInterval(100);
+        connect(statusTimer, &QTimer::timeout, this, [this]() {
+            QString lua = R"(
+                local mode = vim.api.nvim_get_mode().mode
+                local mode_map = {
+                    n = "NORMAL", i = "INSERT", v = "VISUAL", V = "V-LINE",
+                    ["\22"] = "V-BLOCK", c = "COMMAND", R = "REPLACE",
+                    t = "TERMINAL", s = "SELECT", S = "S-LINE",
+                }
+                local buf = vim.api.nvim_get_current_buf()
+                local name = vim.api.nvim_buf_get_name(buf)
+                if name == "" then name = "[No Name]" end
+                local pos = vim.api.nvim_win_get_cursor(0)
+                local encoding = vim.o.fileencoding ~= "" and vim.o.fileencoding or vim.o.encoding
+                local branch = ""
+                if vim.b.gitsigns_head then branch = " " .. vim.b.gitsigns_head end
+                local diag = ""
+                local e = #vim.diagnostic.get(buf, {severity = vim.diagnostic.severity.ERROR})
+                local w = #vim.diagnostic.get(buf, {severity = vim.diagnostic.severity.WARN})
+                if e > 0 or w > 0 then
+                    diag = "E:" .. e .. " W:" .. w
+                end
+                return {
+                    mode = mode_map[mode] or mode,
+                    file = name,
+                    pos = pos[1] .. ":" .. pos[2],
+                    encoding = encoding,
+                    branch = branch,
+                    diagnostics = diag,
+                }
+            )";
+            m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
+                m_statusline->updateStatus(result.toMap());
+            });
+        });
+        connect(m_grid, &GridWidget::flushed, statusTimer, [statusTimer]() {
+            if (!statusTimer->isActive()) statusTimer->start();
         });
     }
 

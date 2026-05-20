@@ -39,6 +39,7 @@ Config Config::load()
                 "# ext_tabline = true\n"
                 "# ext_messages = true\n"
                 "# bufferline = true  # show open buffers instead of tabpages\n"
+                "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
                 "# accent_color = \"#50fa7b\"\n"
             );
             file.close();
@@ -91,6 +92,8 @@ Config Config::load()
                 cfg.accentColor = QString::fromStdString(toml::find<std::string>(ui, "accent_color"));
             if (ui.contains("bufferline"))
                 cfg.bufferline = toml::find<bool>(ui, "bufferline");
+            if (ui.contains("statusline"))
+                cfg.extStatusline = toml::find<bool>(ui, "statusline");
         }
     } catch (const std::exception &e) {
         qWarning() << "Failed to parse config:" << e.what();

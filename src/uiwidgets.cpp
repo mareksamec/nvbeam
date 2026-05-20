@@ -228,3 +228,69 @@ void MessageWidget::showRuler(const QVariantList &content)
 {
     Q_UNUSED(content)
 }
+
+// --- StatuslineWidget ---
+
+StatuslineWidget::StatuslineWidget(const QString &accent, QWidget *parent)
+    : QWidget(parent)
+    , m_accent(accent)
+{
+    auto *layout = new QHBoxLayout(this);
+    layout->setContentsMargins(8, 0, 8, 0);
+    layout->setSpacing(12);
+
+    m_modeLabel = new QLabel(this);
+    m_modeLabel->setStyleSheet(QString(
+        "color: #1a1b26; background-color: %1; font-family: monospace; "
+        "font-size: 10pt; font-weight: bold; padding: 2px 8px; border-radius: 3px;"
+    ).arg(accent));
+
+    m_branchLabel = new QLabel(this);
+    m_branchLabel->setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;");
+
+    m_fileLabel = new QLabel(this);
+    m_fileLabel->setStyleSheet("color: #c0caf5; font-family: monospace; font-size: 10pt;");
+
+    m_diagLabel = new QLabel(this);
+    m_diagLabel->setStyleSheet("color: #f7768e; font-family: monospace; font-size: 10pt;");
+
+    m_encodingLabel = new QLabel(this);
+    m_encodingLabel->setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;");
+
+    m_posLabel = new QLabel(this);
+    m_posLabel->setStyleSheet(QString(
+        "color: %1; font-family: monospace; font-size: 10pt;"
+    ).arg(accent));
+
+    layout->addWidget(m_modeLabel);
+    layout->addWidget(m_branchLabel);
+    layout->addWidget(m_fileLabel, 1); // stretch
+    layout->addWidget(m_diagLabel);
+    layout->addWidget(m_encodingLabel);
+    layout->addWidget(m_posLabel);
+
+    setStyleSheet("background-color: #1a1b26; border-top: 1px solid #333;");
+    setFixedHeight(28);
+    setMode("NORMAL");
+}
+
+void StatuslineWidget::setMode(const QString &mode)
+{
+    m_modeLabel->setText(mode.toUpper());
+}
+
+void StatuslineWidget::updateStatus(const QVariantMap &data)
+{
+    if (data.contains("mode"))
+        setMode(data["mode"].toString());
+    if (data.contains("file"))
+        m_fileLabel->setText(data["file"].toString());
+    if (data.contains("branch"))
+        m_branchLabel->setText(data["branch"].toString());
+    if (data.contains("pos"))
+        m_posLabel->setText(data["pos"].toString());
+    if (data.contains("encoding"))
+        m_encodingLabel->setText(data["encoding"].toString());
+    if (data.contains("diagnostics"))
+        m_diagLabel->setText(data["diagnostics"].toString());
+}
