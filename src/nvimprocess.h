@@ -14,7 +14,7 @@ public:
     explicit NvimProcess(QObject *parent = nullptr);
     ~NvimProcess() override;
 
-    void start();
+    void start(const QStringList &nvimArgs = {});
     void stop();
 
     /// Send an RPC request to Neovim

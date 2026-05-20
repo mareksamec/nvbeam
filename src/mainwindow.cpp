@@ -4,7 +4,7 @@
 #include <QFontMetrics>
 #include <QTimer>
 
-MainWindow::MainWindow(QWidget *parent)
+MainWindow::MainWindow(const QStringList &nvimArgs, QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("neobeam");
@@ -31,7 +31,17 @@ MainWindow::MainWindow(QWidget *parent)
         m_nvim->request("nvim_ui_attach", {cols, rows, opts});
     });
 
-    m_nvim->start();
+    connect(m_grid, &GridWidget::inputKey, this, [this](const QString &keys) {
+        m_nvim->request("nvim_input", {keys});
+    });
+
+    connect(m_grid, &GridWidget::inputMouse, this,
+            [this](const QString &button, const QString &action,
+                   const QString &mod, int grid, int row, int col) {
+        m_nvim->request("nvim_input_mouse", {button, action, mod, grid, row, col});
+    });
+
+    m_nvim->start(nvimArgs);
 }
 
 MainWindow::~MainWindow()

@@ -7,11 +7,11 @@
 - [x] Grid renderer (QWidget painting character grid from `grid_line` events)
 - [x] Build verified, nvim process connects successfully
 
-## Phase 2: Input + Usability
-- [ ] Keyboard input (Qt key events → Neovim input notation)
-- [ ] Mouse input (clicks, scroll, drag)
-- [ ] Cursor rendering (block/beam/underline per mode, blinking)
-- [ ] Resize handling (`nvim_ui_try_resize`)
+## Phase 2: Input + Usability ← CURRENT
+- [x] Keyboard input (Qt key events → Neovim input notation)
+- [x] Mouse input (clicks, scroll, drag)
+- [x] Cursor rendering (block/beam/underline per mode, blinking)
+- [x] Resize handling (`nvim_ui_try_resize`)
 
 ## Phase 3: Visual Polish
 - [ ] Font configuration (family, size, bold/italic, cell metrics)
