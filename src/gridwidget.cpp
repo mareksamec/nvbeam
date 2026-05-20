@@ -154,11 +154,17 @@ void GridWidget::handleGridScroll(const QVariantList &args)
     int right = args[4].toInt();
     int rows = args[5].toInt();
 
-    // Trigger smooth scroll animation
-    m_scrollOffset += rows * m_cellHeight;
-    if (!m_scrollTimer.isActive()) {
-        m_scrollTimer.start();
-    }
+    // Trigger smooth scroll animation (only for small scrolls)
+    // NOTE: disabled — causes status bar artifacts. Will revisit with
+    // per-region scrolling in ext_multigrid phase.
+    // int scrollPixels = rows * m_cellHeight;
+    // int maxSmooth = m_cellHeight * 5;
+    // if (std::abs(scrollPixels) <= maxSmooth) {
+    //     m_scrollOffset += scrollPixels;
+    //     if (!m_scrollTimer.isActive()) {
+    //         m_scrollTimer.start();
+    //     }
+    // }
 
     if (rows > 0) {
         // Scroll up
@@ -236,9 +242,6 @@ void GridWidget::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.fillRect(rect(), m_defaultBg);
     painter.setFont(m_font);
-
-    // Apply smooth scroll offset
-    painter.translate(0, -m_scrollOffset);
 
     for (int row = 0; row < m_rows; row++) {
         for (int col = 0; col < m_cols; col++) {
@@ -497,6 +500,6 @@ void GridWidget::wheelEvent(QWheelEvent *event)
 {
     auto [row, col] = cellAt(event->position().toPoint());
     QString mod = modifierPrefix(event->modifiers(), false);
-    QString button = event->angleDelta().y() > 0 ? "wheel_up" : "wheel_down";
-    emit inputMouse(button, "press", mod, 0, row, col);
+    QString dir = event->angleDelta().y() > 0 ? "up" : "down";
+    emit inputMouse("wheel", dir, mod, 0, row, col);
 }

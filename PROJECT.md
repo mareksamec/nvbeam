@@ -16,7 +16,7 @@
 ## Phase 3: Visual Polish ✓
 - [x] Font configuration (family, size, bold/italic, hinting, antialiasing)
 - [x] `ext_hlstate` semantic highlights
-- [x] Smooth scrolling (animated decay on grid_scroll)
+- [x] Smooth scrolling (deferred to Phase 4 — needs per-window grids)
 - [x] TOML config loading (~/.config/neobeam/neobeam.toml)
 
 ## Phase 4: Multi-grid + UI Chrome
