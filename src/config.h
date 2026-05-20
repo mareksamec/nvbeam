@@ -14,6 +14,14 @@ struct Config {
     // Terminal settings
     bool terminalFollowCwd = true;
 
+    // UI extensions (native chrome)
+    bool extCmdline = true;
+    bool extPopupmenu = true;
+    bool extTabline = true;
+    bool extMessages = true;
+    bool bufferline = true;           // show open buffers instead of tabpages
+    QString accentColor = "#50fa7b";  // greenish accent for native elements
+
     // Load config from standard path, returns default if not found
     static Config load();
 

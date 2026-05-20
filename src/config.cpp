@@ -32,6 +32,14 @@ Config Config::load()
                 "\n"
                 "# [terminal]\n"
                 "# follow_cwd = true\n"
+                "\n"
+                "# [ui]\n"
+                "# ext_cmdline = true\n"
+                "# ext_popupmenu = true\n"
+                "# ext_tabline = true\n"
+                "# ext_messages = true\n"
+                "# bufferline = true  # show open buffers instead of tabpages\n"
+                "# accent_color = \"#50fa7b\"\n"
             );
             file.close();
             qDebug() << "Created default config at:" << path;
@@ -67,6 +75,22 @@ Config Config::load()
             if (term.contains("follow_cwd")) {
                 cfg.terminalFollowCwd = toml::find<bool>(term, "follow_cwd");
             }
+        }
+
+        if (data.contains("ui")) {
+            auto &ui = data.at("ui");
+            if (ui.contains("ext_cmdline"))
+                cfg.extCmdline = toml::find<bool>(ui, "ext_cmdline");
+            if (ui.contains("ext_popupmenu"))
+                cfg.extPopupmenu = toml::find<bool>(ui, "ext_popupmenu");
+            if (ui.contains("ext_tabline"))
+                cfg.extTabline = toml::find<bool>(ui, "ext_tabline");
+            if (ui.contains("ext_messages"))
+                cfg.extMessages = toml::find<bool>(ui, "ext_messages");
+            if (ui.contains("accent_color"))
+                cfg.accentColor = QString::fromStdString(toml::find<std::string>(ui, "accent_color"));
+            if (ui.contains("bufferline"))
+                cfg.bufferline = toml::find<bool>(ui, "bufferline");
         }
     } catch (const std::exception &e) {
         qWarning() << "Failed to parse config:" << e.what();

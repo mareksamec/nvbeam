@@ -13,6 +13,7 @@ add_executable(neobeam
     src/nvimprocess.cpp
     src/gridwidget.cpp
     src/config.cpp
+    src/uiwidgets.cpp
 )
 
 target_include_directories(neobeam PRIVATE
