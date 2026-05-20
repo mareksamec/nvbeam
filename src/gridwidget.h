@@ -82,6 +82,7 @@ signals:
     void msgClear();
     void msgShowmode(const QVariantList &content);
     void msgRuler(const QVariantList &content);
+    void flushed();
 
 protected:
     void paintEvent(QPaintEvent *event) override;

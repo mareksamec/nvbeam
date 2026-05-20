@@ -38,19 +38,22 @@ private:
     QString m_accent;
 };
 
-/// Native tabline widget
+/// Native tabline widget (can show tabpages or buffers)
 class TablineWidget : public QTabBar
 {
     Q_OBJECT
 public:
     explicit TablineWidget(const QString &accent, QWidget *parent = nullptr);
     void update(int curtab, const QVariantList &tabs);
+    void updateBuffers(const QVariantList &buffers, int currentBuf);
 
 signals:
     void tabSelected(int tabId);
+    void bufferSelected(int bufId);
 
 private:
     QVector<int> m_tabIds;
+    bool m_bufferMode = false;
 };
 
 /// Native message area widget

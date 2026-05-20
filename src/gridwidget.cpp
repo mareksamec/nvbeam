@@ -68,6 +68,7 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
     else if (name == "msg_ruler") handleMsgRuler(args);
     else if (name == "busy_start") m_busy = true;
     else if (name == "busy_stop") m_busy = false;
+    else if (name == "flush") emit flushed();
 }
 
 void GridWidget::handleGridResize(const QVariantList &args)

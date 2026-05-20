@@ -117,13 +117,19 @@ TablineWidget::TablineWidget(const QString &accent, QWidget *parent)
     setVisible(false);
 
     connect(this, &QTabBar::currentChanged, this, [this](int idx) {
-        if (idx >= 0 && idx < m_tabIds.size())
-            emit tabSelected(m_tabIds[idx]);
+        if (idx >= 0 && idx < m_tabIds.size()) {
+            if (m_bufferMode)
+                emit bufferSelected(m_tabIds[idx]);
+            else
+                emit tabSelected(m_tabIds[idx]);
+        }
     });
 }
 
 void TablineWidget::update(int curtab, const QVariantList &tabs)
 {
+    if (m_bufferMode) return; // ignore tabline events in buffer mode
+
     blockSignals(true);
     while (count() > 0) removeTab(0);
     m_tabIds.clear();
@@ -139,7 +145,35 @@ void TablineWidget::update(int curtab, const QVariantList &tabs)
     }
 
     setCurrentIndex(currentIdx);
-    setVisible(true);  // Always show when ext_tabline is active
+    setVisible(true);
+    blockSignals(false);
+}
+
+void TablineWidget::updateBuffers(const QVariantList &buffers, int currentBuf)
+{
+    m_bufferMode = true;
+    blockSignals(true);
+    while (count() > 0) removeTab(0);
+    m_tabIds.clear();
+
+    int currentIdx = 0;
+    for (int i = 0; i < buffers.size(); i++) {
+        QVariantMap buf = buffers[i].toMap();
+        int id = buf.value("id").toInt();
+        QString name = buf.value("name", "[No Name]").toString();
+        if (name.isEmpty()) name = "[No Name]";
+        // Show just the filename
+        int slash = name.lastIndexOf('/');
+        if (slash >= 0) name = name.mid(slash + 1);
+        bool modified = buf.value("modified", false).toBool();
+        if (modified) name += " ●";
+        addTab(name);
+        m_tabIds.append(id);
+        if (id == currentBuf) currentIdx = i;
+    }
+
+    setCurrentIndex(currentIdx);
+    setVisible(m_tabIds.size() > 0);
     blockSignals(false);
 }
 

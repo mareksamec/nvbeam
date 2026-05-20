@@ -38,6 +38,7 @@ Config Config::load()
                 "# ext_popupmenu = true\n"
                 "# ext_tabline = true\n"
                 "# ext_messages = true\n"
+                "# bufferline = true  # show open buffers instead of tabpages\n"
                 "# accent_color = \"#50fa7b\"\n"
             );
             file.close();
@@ -88,6 +89,8 @@ Config Config::load()
                 cfg.extMessages = toml::find<bool>(ui, "ext_messages");
             if (ui.contains("accent_color"))
                 cfg.accentColor = QString::fromStdString(toml::find<std::string>(ui, "accent_color"));
+            if (ui.contains("bufferline"))
+                cfg.bufferline = toml::find<bool>(ui, "bufferline");
         }
     } catch (const std::exception &e) {
         qWarning() << "Failed to parse config:" << e.what();

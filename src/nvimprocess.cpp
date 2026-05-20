@@ -84,7 +84,16 @@ void NvimProcess::stop()
 
 void NvimProcess::request(const QString &method, const QVariantList &args)
 {
-    // RPC request: [type=0, msgid, method, params]
+    QVariantList msg = {0, m_msgid++, method, args};
+    QByteArray encoded = encodeMsgpack(QVariant(msg));
+    m_process->write(encoded);
+}
+
+void NvimProcess::request(const QString &method, const QVariantList &args,
+                           std::function<void(const QVariant &)> callback)
+{
+    uint32_t id = m_msgid;
+    m_callbacks[id] = callback;
     QVariantList msg = {0, m_msgid++, method, args};
     QByteArray encoded = encodeMsgpack(QVariant(msg));
     m_process->write(encoded);
@@ -129,10 +138,15 @@ void NvimProcess::parseMessages(const QByteArray &data)
         int type = msgList[0].toInt();
         if (type == 1) {
             // Response: [1, msgid, error, result]
+            uint32_t respId = msgList[1].toUInt();
             if (m_waitingForReady) {
                 m_waitingForReady = false;
                 qDebug() << "Neovim ready";
                 emit ready();
+            }
+            if (m_callbacks.contains(respId)) {
+                auto cb = m_callbacks.take(respId);
+                cb(msgList[3]);
             }
         } else if (type == 2) {
             // Notification: [2, method, params]

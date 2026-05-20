@@ -6,7 +6,6 @@
 #include <QFontMetrics>
 #include <QTimer>
 #include <QVBoxLayout>
-
 MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *parent)
     : QMainWindow(parent)
     , m_cfg(cfg)
@@ -91,10 +90,46 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_set_current_tabpage", {tabId});
     });
 
+    connect(m_tabline, &TablineWidget::bufferSelected, this, [this](int bufId) {
+        m_nvim->request("nvim_set_current_buf", {bufId});
+    });
+
     connect(m_grid, &GridWidget::msgShow, m_messages, &MessageWidget::showMsg);
     connect(m_grid, &GridWidget::msgClear, m_messages, &MessageWidget::clear);
     connect(m_grid, &GridWidget::msgShowmode, m_messages, &MessageWidget::showMode);
     connect(m_grid, &GridWidget::msgRuler, m_messages, &MessageWidget::showRuler);
+
+    // Bufferline: refresh buffer list on each flush (throttled)
+    if (cfg.bufferline) {
+        auto *bufTimer = new QTimer(this);
+        bufTimer->setSingleShot(true);
+        bufTimer->setInterval(100);
+        connect(bufTimer, &QTimer::timeout, this, [this]() {
+            QString lua = R"(
+                local bufs = {}
+                local cur = vim.api.nvim_get_current_buf()
+                for _, b in ipairs(vim.api.nvim_list_bufs()) do
+                    if vim.bo[b].buflisted then
+                        table.insert(bufs, {
+                            id = b,
+                            name = vim.api.nvim_buf_get_name(b),
+                            modified = vim.bo[b].modified
+                        })
+                    end
+                end
+                return {bufs = bufs, current = cur}
+            )";
+            m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
+                QVariantMap data = result.toMap();
+                int currentBuf = data["current"].toInt();
+                QVariantList bufs = data["bufs"].toList();
+                m_tabline->updateBuffers(bufs, currentBuf);
+            });
+        });
+        connect(m_grid, &GridWidget::flushed, bufTimer, [bufTimer]() {
+            if (!bufTimer->isActive()) bufTimer->start();
+        });
+    }
 
     m_nvim->start(nvimArgs);
 }
