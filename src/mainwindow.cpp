@@ -4,13 +4,11 @@
 #include "config.h"
 #include <QFontMetrics>
 #include <QTimer>
-MainWindow::MainWindow(const QStringList &nvimArgs, QWidget *parent)
+MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *parent)
     : QMainWindow(parent)
 {
     setWindowTitle("neobeam");
     resize(800, 600);
-
-    Config cfg = Config::load();
 
     m_grid = new GridWidget(cfg.font(), this);
     setCentralWidget(m_grid);
