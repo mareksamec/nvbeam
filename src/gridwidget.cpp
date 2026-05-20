@@ -6,13 +6,12 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QDebug>
+#include <cmath>
 
-GridWidget::GridWidget(QWidget *parent)
+GridWidget::GridWidget(const QFont &font, QWidget *parent)
     : QWidget(parent)
 {
-    m_font = QFont("Monospace", 10);
-    m_font.setStyleHint(QFont::Monospace);
-    m_font.setFixedPitch(true);
+    m_font = font;
 
     QFontMetrics fm(m_font);
     m_cellWidth = fm.horizontalAdvance('M');
@@ -22,6 +21,17 @@ GridWidget::GridWidget(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
+
+    // Smooth scroll animation at ~60fps
+    m_scrollTimer.setInterval(16);
+    connect(&m_scrollTimer, &QTimer::timeout, this, [this]() {
+        m_scrollOffset *= 0.65; // decay factor
+        if (std::abs(m_scrollOffset) < 0.5) {
+            m_scrollOffset = 0;
+            m_scrollTimer.stop();
+        }
+        update();
+    });
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -144,6 +154,12 @@ void GridWidget::handleGridScroll(const QVariantList &args)
     int right = args[4].toInt();
     int rows = args[5].toInt();
 
+    // Trigger smooth scroll animation
+    m_scrollOffset += rows * m_cellHeight;
+    if (!m_scrollTimer.isActive()) {
+        m_scrollTimer.start();
+    }
+
     if (rows > 0) {
         // Scroll up
         for (int r = top; r < bot - rows; r++) {
@@ -220,6 +236,9 @@ void GridWidget::paintEvent(QPaintEvent *event)
     QPainter painter(this);
     painter.fillRect(rect(), m_defaultBg);
     painter.setFont(m_font);
+
+    // Apply smooth scroll offset
+    painter.translate(0, -m_scrollOffset);
 
     for (int row = 0; row < m_rows; row++) {
         for (int col = 0; col < m_cols; col++) {

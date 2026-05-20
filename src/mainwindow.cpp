@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include "gridwidget.h"
 #include "nvimprocess.h"
+#include "config.h"
 #include <QFontMetrics>
 #include <QTimer>
 MainWindow::MainWindow(const QStringList &nvimArgs, QWidget *parent)
@@ -9,7 +10,9 @@ MainWindow::MainWindow(const QStringList &nvimArgs, QWidget *parent)
     setWindowTitle("neobeam");
     resize(800, 600);
 
-    m_grid = new GridWidget(this);
+    Config cfg = Config::load();
+
+    m_grid = new GridWidget(cfg.font(), this);
     setCentralWidget(m_grid);
 
     m_nvim = new NvimProcess(this);
@@ -28,6 +31,7 @@ MainWindow::MainWindow(const QStringList &nvimArgs, QWidget *parent)
 
             QVariantMap opts;
             opts["ext_linegrid"] = true;
+            opts["ext_hlstate"] = true;
             m_nvim->request("nvim_ui_attach", {cols, rows, opts});
         });
     });

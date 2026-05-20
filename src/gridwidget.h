@@ -5,6 +5,7 @@
 #include <QFont>
 #include <QVector>
 #include <QHash>
+#include <QTimer>
 
 /// A single cell in the character grid
 struct GridCell {
@@ -28,7 +29,7 @@ class GridWidget : public QWidget
     Q_OBJECT
 
 public:
-    explicit GridWidget(QWidget *parent = nullptr);
+    explicit GridWidget(const QFont &font, QWidget *parent = nullptr);
 
     /// Returns grid dimensions in cells
     int gridRows() const { return m_rows; }
@@ -95,6 +96,11 @@ private:
 
     // Mouse state
     bool m_mousePressed = false;
+
+    // Smooth scroll state
+    double m_scrollOffset = 0.0;   // current pixel offset (animating toward 0)
+    double m_scrollTarget = 0.0;   // always 0 — offset decays to this
+    QTimer m_scrollTimer;
 
     QVector<QVector<GridCell>> m_grid;
     QHash<int, HlAttr> m_hlAttrs;
