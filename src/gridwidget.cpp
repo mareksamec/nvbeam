@@ -7,7 +7,7 @@
 GridWidget::GridWidget(QWidget *parent)
     : QWidget(parent)
 {
-    m_font = QFont("Monospace", 12);
+    m_font = QFont("Monospace", 10);
     m_font.setStyleHint(QFont::Monospace);
     m_font.setFixedPitch(true);
 
