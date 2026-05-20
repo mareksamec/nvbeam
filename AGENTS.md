@@ -43,6 +43,7 @@
 - Do not hard code values, expose them in parameters and variables
 - Prefer readable code instead of super l33t tricks and hacks that are hard to read and maintain for less experienced programmers.
 - CMake build system
+- When api or git repo is mentioned, always search the web for current repo state and up to date documentation.
 
 # Performance targets
 - Low latency

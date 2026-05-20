@@ -27,6 +27,9 @@ signals:
     /// Emitted when a redraw notification arrives with its event list
     void redraw(const QVariantList &events);
 
+    /// Emitted when Neovim is ready to receive commands
+    void ready();
+
     /// Emitted when Neovim process exits
     void finished();
 
@@ -42,4 +45,5 @@ private:
     QProcess *m_process = nullptr;
     QByteArray m_buffer;
     uint32_t m_msgid = 0;
+    bool m_waitingForReady = false;
 };

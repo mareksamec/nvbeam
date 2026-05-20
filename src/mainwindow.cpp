@@ -2,6 +2,7 @@
 #include "gridwidget.h"
 #include "nvimprocess.h"
 #include <QFontMetrics>
+#include <QTimer>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -18,19 +19,19 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_grid, &GridWidget::gridSizeReady, this, [this](int rows, int cols) {
         m_nvim->request("nvim_ui_try_resize", {cols, rows});
     });
+    connect(m_nvim, &NvimProcess::ready, this, [this]() {
+        QFontMetrics fm(m_grid->font());
+        int cols = m_grid->width() / fm.horizontalAdvance('M');
+        int rows = m_grid->height() / fm.height();
+        if (cols < 1) cols = 80;
+        if (rows < 1) rows = 24;
+
+        QVariantMap opts;
+        opts["ext_linegrid"] = true;
+        m_nvim->request("nvim_ui_attach", {cols, rows, opts});
+    });
 
     m_nvim->start();
-
-    // Attach UI after nvim starts
-    QFontMetrics fm(m_grid->font());
-    int cols = m_grid->width() / fm.horizontalAdvance('M');
-    int rows = m_grid->height() / fm.height();
-    if (cols < 1) cols = 80;
-    if (rows < 1) rows = 24;
-
-    QVariantMap opts;
-    opts["ext_linegrid"] = true;
-    m_nvim->request("nvim_ui_attach", {cols, rows, opts});
 }
 
 MainWindow::~MainWindow()

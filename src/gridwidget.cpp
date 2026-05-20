@@ -72,15 +72,16 @@ void GridWidget::handleGridResize(const QVariantList &args)
 void GridWidget::handleGridLine(const QVariantList &args)
 {
     if (args.size() < 4) return;
-    // [grid, row, col_start, cells...]
+    // [grid, row, col_start, cells, wrap]
     int row = args[1].toInt();
     int col = args[2].toInt();
+    QVariantList cells = args[3].toList();
 
     if (row < 0 || row >= m_rows) return;
 
     int hlId = 0;
-    for (int i = 3; i < args.size(); i++) {
-        QVariantList cell = args[i].toList();
+    for (const auto &cellVar : cells) {
+        QVariantList cell = cellVar.toList();
         if (cell.isEmpty()) continue;
 
         QString text = cell[0].toString();

@@ -63,6 +63,10 @@ void NvimProcess::start()
         return;
     }
     qDebug() << "Neovim started, pid:" << m_process->processId();
+
+    // Send a simple request to confirm nvim is ready, then emit ready on first response
+    m_waitingForReady = true;
+    request("nvim_get_api_info", {});
 }
 
 void NvimProcess::stop()
@@ -123,7 +127,11 @@ void NvimProcess::parseMessages(const QByteArray &data)
         int type = msgList[0].toInt();
         if (type == 1) {
             // Response: [1, msgid, error, result]
-            // TODO: handle responses
+            if (m_waitingForReady) {
+                m_waitingForReady = false;
+                qDebug() << "Neovim ready";
+                emit ready();
+            }
         } else if (type == 2) {
             // Notification: [2, method, params]
             QString method = msgList[1].toString();
