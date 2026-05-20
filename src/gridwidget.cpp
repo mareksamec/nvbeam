@@ -6,13 +6,12 @@
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include <QDebug>
+#include <cmath>
 
-GridWidget::GridWidget(QWidget *parent)
+GridWidget::GridWidget(const QFont &font, QWidget *parent)
     : QWidget(parent)
 {
-    m_font = QFont("Monospace", 10);
-    m_font.setStyleHint(QFont::Monospace);
-    m_font.setFixedPitch(true);
+    m_font = font;
 
     QFontMetrics fm(m_font);
     m_cellWidth = fm.horizontalAdvance('M');
@@ -22,6 +21,17 @@ GridWidget::GridWidget(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
+
+    // Smooth scroll animation at ~60fps
+    m_scrollTimer.setInterval(16);
+    connect(&m_scrollTimer, &QTimer::timeout, this, [this]() {
+        m_scrollOffset *= 0.65; // decay factor
+        if (std::abs(m_scrollOffset) < 0.5) {
+            m_scrollOffset = 0;
+            m_scrollTimer.stop();
+        }
+        update();
+    });
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -143,6 +153,18 @@ void GridWidget::handleGridScroll(const QVariantList &args)
     int left = args[3].toInt();
     int right = args[4].toInt();
     int rows = args[5].toInt();
+
+    // Trigger smooth scroll animation (only for small scrolls)
+    // NOTE: disabled — causes status bar artifacts. Will revisit with
+    // per-region scrolling in ext_multigrid phase.
+    // int scrollPixels = rows * m_cellHeight;
+    // int maxSmooth = m_cellHeight * 5;
+    // if (std::abs(scrollPixels) <= maxSmooth) {
+    //     m_scrollOffset += scrollPixels;
+    //     if (!m_scrollTimer.isActive()) {
+    //         m_scrollTimer.start();
+    //     }
+    // }
 
     if (rows > 0) {
         // Scroll up
@@ -478,6 +500,6 @@ void GridWidget::wheelEvent(QWheelEvent *event)
 {
     auto [row, col] = cellAt(event->position().toPoint());
     QString mod = modifierPrefix(event->modifiers(), false);
-    QString button = event->angleDelta().y() > 0 ? "wheel_up" : "wheel_down";
-    emit inputMouse(button, "press", mod, 0, row, col);
+    QString dir = event->angleDelta().y() > 0 ? "up" : "down";
+    emit inputMouse("wheel", dir, mod, 0, row, col);
 }

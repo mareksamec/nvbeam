@@ -12,9 +12,13 @@ add_executable(neobeam
     src/mainwindow.cpp
     src/nvimprocess.cpp
     src/gridwidget.cpp
+    src/config.cpp
 )
 
-target_include_directories(neobeam PRIVATE src)
+target_include_directories(neobeam PRIVATE
+    src
+    third_party/toml11/include
+)
 
 target_link_libraries(neobeam PRIVATE
     Qt6::Core
