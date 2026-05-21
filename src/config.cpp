@@ -31,7 +31,7 @@ Config Config::load()
                 "# antialiasing = true\n"
                 "\n"
                 "# [terminal]\n"
-                "# follow_cwd = true\n"
+                "# follow_cwd = true  # terminal follows nvim working directory\n"
                 "\n"
                 "# [ui]\n"
                 "# ext_cmdline = true\n"
