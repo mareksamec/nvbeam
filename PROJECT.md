@@ -33,6 +33,20 @@
 - [x] Minimap (buffer content + highlight data)
 - [x] Image rendering (via `vim.ui.img` API when available)
 
+## Phase 6: Native Image Preview
+- [ ] Custom RPC notification handler (`neobeam_image_show`, `neobeam_image_hide`)
+- [ ] Signal pipeline: NvimProcess → MainWindow → ImageRenderer
+- [ ] Bundled Lua plugin (`neobeam_preview.lua`) with adapter pattern for file browsers:
+  - [ ] netrw / Lexplore
+  - [ ] oil.nvim
+  - [ ] neo-tree.nvim
+  - [ ] snacks.nvim explorer
+  - [ ] telescope.nvim (preview pane)
+- [ ] Configurable preview position (right half, floating, fixed column)
+- [ ] Supported formats: PNG, JPEG, GIF, BMP, WebP, SVG
+- [ ] Graceful fallback (no-op when file is not an image)
+- [ ] Config option `[preview]` section: enable/disable, max size, position preference
+
 
 ## Fixes/Adjustments
 ### Term
