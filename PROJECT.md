@@ -32,3 +32,4 @@
 - [ ] Embedded QTermWidget (splits, follows nvim cwd)
 - [ ] Minimap (buffer content + highlight data)
 - [ ] Image rendering (via `vim.ui.img` API when available)
+

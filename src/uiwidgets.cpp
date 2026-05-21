@@ -277,6 +277,20 @@ StatuslineWidget::StatuslineWidget(const QString &accent, QWidget *parent)
 void StatuslineWidget::setMode(const QString &mode)
 {
     m_modeLabel->setText(mode.toUpper());
+
+    // Per-mode indicator colors (One Dark theme)
+    QString bg = m_accent; // default (NORMAL etc.)
+    if (mode.startsWith("i", Qt::CaseInsensitive))
+        bg = "#c678dd"; // violet — Insert
+    else if (mode.startsWith("v", Qt::CaseInsensitive) ||
+             mode.startsWith("s", Qt::CaseInsensitive) ||
+             mode.contains("block", Qt::CaseInsensitive))
+        bg = "#56b6c2"; // cyan — Visual/Select/V-Block
+
+    m_modeLabel->setStyleSheet(QString(
+        "color: #1a1b26; background-color: %1; font-family: monospace; "
+        "font-size: 10pt; font-weight: bold; padding: 2px 8px; border-radius: 3px;"
+    ).arg(bg));
 }
 
 void StatuslineWidget::updateStatus(const QVariantMap &data)
