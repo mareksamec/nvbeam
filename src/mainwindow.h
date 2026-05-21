@@ -9,6 +9,7 @@ class CmdlineWidget;
 class PopupmenuWidget;
 class TablineWidget;
 class MessageWidget;
+class StatuslineWidget;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -26,5 +27,6 @@ private:
     PopupmenuWidget *m_popupmenu = nullptr;
     TablineWidget *m_tabline = nullptr;
     MessageWidget *m_messages = nullptr;
+    StatuslineWidget *m_statusline = nullptr;
     Config m_cfg;
 };

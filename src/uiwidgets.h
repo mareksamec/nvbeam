@@ -71,3 +71,26 @@ private:
     QLabel *m_label;
     QLabel *m_modeLabel;
 };
+
+/// Native statusline widget displaying mode, file, position, diagnostics
+class StatuslineWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit StatuslineWidget(const QString &accent, QWidget *parent = nullptr);
+
+    /// Update all statusline segments from Neovim state
+    void updateStatus(const QVariantMap &data);
+
+    /// Update the current mode display
+    void setMode(const QString &mode);
+
+private:
+    QLabel *m_modeLabel;
+    QLabel *m_fileLabel;
+    QLabel *m_branchLabel;
+    QLabel *m_diagLabel;
+    QLabel *m_posLabel;
+    QLabel *m_encodingLabel;
+    QString m_accent;
+};
