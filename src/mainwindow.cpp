@@ -50,8 +50,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         layout->addWidget(m_statusline);
 
     // Embedded terminal panel (VSCode-like, below statusline)
-    m_terminal = new TerminalPanel(cfg.fontFamily, cfg.fontSize,
-                                   cfg.terminalFollowCwd, central);
+    TerminalConfig termCfg;
+    termCfg.fontFamily = cfg.terminalFont.isEmpty() ? cfg.fontFamily : cfg.terminalFont;
+    termCfg.fontSize = cfg.terminalFontSize > 0 ? cfg.terminalFontSize : cfg.fontSize;
+    termCfg.followCwd = cfg.terminalFollowCwd;
+    termCfg.height = cfg.terminalHeight;
+    termCfg.colorScheme = cfg.terminalColorScheme;
+    termCfg.shell = cfg.terminalShell;
+    termCfg.shellArgs = cfg.terminalShellArgs;
+    termCfg.execCommand = cfg.terminalExecCommand;
+    m_terminal = new TerminalPanel(termCfg, central);
     layout->addWidget(m_terminal);
 
     // Ctrl+` toggles terminal panel

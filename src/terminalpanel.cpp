@@ -3,12 +3,9 @@
 #include <QVBoxLayout>
 #include <QDir>
 
-TerminalPanel::TerminalPanel(const QString &fontFamily, int fontSize,
-                             bool followCwd, QWidget *parent)
+TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     : QWidget(parent)
-    , m_fontFamily(fontFamily)
-    , m_fontSize(fontSize)
-    , m_followCwd(followCwd)
+    , m_cfg(cfg)
     , m_cwd(QDir::homePath())
 {
     auto *layout = new QVBoxLayout(this);
@@ -19,9 +16,9 @@ TerminalPanel::TerminalPanel(const QString &fontFamily, int fontSize,
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    m_toolbar->setStyleSheet("QToolBar { background: #1e1e2e; border: none; spacing: 4px; }"
-                             "QToolButton { color: #cdd6f4; background: transparent; border: none; padding: 2px 6px; }"
-                             "QToolButton:hover { background: #313244; border-radius: 3px; }");
+    m_toolbar->setStyleSheet("QToolBar { background: #000; border: none; spacing: 4px; }"
+                             "QToolButton { color: #aaa; background: transparent; border: none; padding: 2px 6px; }"
+                             "QToolButton:hover { background: #333; border-radius: 3px; }");
 
     auto *addAct = m_toolbar->addAction("+", this, &TerminalPanel::addTerminal);
     addAct->setToolTip("New terminal");
@@ -34,12 +31,12 @@ TerminalPanel::TerminalPanel(const QString &fontFamily, int fontSize,
 
     // Splitter holds terminal instances side by side
     m_splitter = new QSplitter(Qt::Horizontal, this);
-    m_splitter->setStyleSheet("QSplitter { background: #1e1e2e; }"
-                              "QSplitter::handle { background: #313244; width: 2px; }");
+    m_splitter->setStyleSheet("QSplitter { background: #000; }"
+                              "QSplitter::handle { background: #333; width: 2px; }");
     layout->addWidget(m_splitter, 1);
 
-    setStyleSheet("background: #1e1e2e; border-top: 1px solid #313244;");
-    setMinimumHeight(150);
+    setStyleSheet("background: #000; border-top: 1px solid #333;");
+    setFixedHeight(cfg.height);
     hide();
 
     // Create initial terminal
@@ -60,6 +57,9 @@ void TerminalPanel::showEvent(QShowEvent *event)
         if (term->property("_nb_pending").toBool()) {
             term->setProperty("_nb_pending", false);
             term->startShellProgram();
+            if (!m_cfg.execCommand.isEmpty()) {
+                term->sendText(m_cfg.execCommand + "\n");
+            }
         }
     }
 #endif
@@ -67,7 +67,7 @@ void TerminalPanel::showEvent(QShowEvent *event)
 
 void TerminalPanel::setWorkingDirectory(const QString &dir)
 {
-    if (!m_followCwd || dir == m_cwd || dir.isEmpty())
+    if (!m_cfg.followCwd || dir == m_cwd || dir.isEmpty())
         return;
     m_cwd = dir;
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -110,17 +110,33 @@ void TerminalPanel::removeCurrentTerminal()
 QTermWidget *TerminalPanel::createTermWidget()
 {
     auto *term = new QTermWidget(0, this);
-    QFont f(m_fontFamily, m_fontSize);
+
+    // Font: use terminal-specific or fall back to global
+    QString family = m_cfg.fontFamily;
+    int size = m_cfg.fontSize;
+    QFont f(family, size);
     f.setStyleHint(QFont::Monospace);
     term->setTerminalFont(f);
-    term->setColorScheme("Linux");
+
+    // Color scheme (default "Linux" = white on black)
+    term->setColorScheme(m_cfg.colorScheme);
     term->setScrollBarPosition(QTermWidgetInterface::ScrollBarRight);
     term->setWorkingDirectory(m_cwd);
     term->setTerminalOpacity(1.0);
 
+    // Shell program
+    if (!m_cfg.shell.isEmpty())
+        term->setShellProgram(m_cfg.shell);
+    if (!m_cfg.shellArgs.isEmpty())
+        term->setArgs(m_cfg.shellArgs);
+
     // Defer shell start until visible so terminal gets correct size
     if (isVisible()) {
         term->startShellProgram();
+        // Execute startup command after shell is ready
+        if (!m_cfg.execCommand.isEmpty()) {
+            term->sendText(m_cfg.execCommand + "\n");
+        }
     } else {
         term->setProperty("_nb_pending", true);
     }
