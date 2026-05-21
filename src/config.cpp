@@ -32,6 +32,13 @@ Config Config::load()
                 "\n"
                 "# [terminal]\n"
                 "# follow_cwd = true  # terminal follows nvim working directory\n"
+                "# height = 300  # startup height in pixels\n"
+                "# font = \"\"  # terminal font (empty = use global font)\n"
+                "# font_size = 0  # terminal font size (0 = use global)\n"
+                "# color_scheme = \"Linux\"  # QTermWidget color scheme\n"
+                "# shell = \"\"  # shell program (empty = system default)\n"
+                "# shell_args = []  # arguments passed to shell\n"
+                "# exec_command = \"\"  # command to run after shell starts (e.g. \"tmux\")\n"
                 "\n"
                 "# [ui]\n"
                 "# ext_cmdline = true\n"
@@ -76,6 +83,23 @@ Config Config::load()
             if (term.contains("follow_cwd")) {
                 cfg.terminalFollowCwd = toml::find<bool>(term, "follow_cwd");
             }
+            if (term.contains("height"))
+                cfg.terminalHeight = toml::find<int>(term, "height");
+            if (term.contains("font"))
+                cfg.terminalFont = QString::fromStdString(toml::find<std::string>(term, "font"));
+            if (term.contains("font_size"))
+                cfg.terminalFontSize = toml::find<int>(term, "font_size");
+            if (term.contains("color_scheme"))
+                cfg.terminalColorScheme = QString::fromStdString(toml::find<std::string>(term, "color_scheme"));
+            if (term.contains("shell"))
+                cfg.terminalShell = QString::fromStdString(toml::find<std::string>(term, "shell"));
+            if (term.contains("shell_args")) {
+                auto args = toml::find<std::vector<std::string>>(term, "shell_args");
+                for (const auto &a : args)
+                    cfg.terminalShellArgs.append(QString::fromStdString(a));
+            }
+            if (term.contains("exec_command"))
+                cfg.terminalExecCommand = QString::fromStdString(toml::find<std::string>(term, "exec_command"));
         }
 
         if (data.contains("ui")) {

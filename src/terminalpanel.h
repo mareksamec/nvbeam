@@ -7,10 +7,22 @@
 #include <QAction>
 #include <QList>
 #include <QString>
+#include <QStringList>
 
 #ifdef NEOBEAM_HAS_TERMINAL
 #include <qtermwidget.h>
 #endif
+
+struct TerminalConfig {
+    QString fontFamily = "Monospace";
+    int fontSize = 10;
+    bool followCwd = true;
+    int height = 300;
+    QString colorScheme = "Linux";
+    QString shell;            // empty = system default
+    QStringList shellArgs;
+    QString execCommand;      // run after shell starts
+};
 
 /// VSCode-like embedded terminal panel with split support
 class TerminalPanel : public QWidget
@@ -18,8 +30,7 @@ class TerminalPanel : public QWidget
     Q_OBJECT
 
 public:
-    explicit TerminalPanel(const QString &fontFamily, int fontSize,
-                           bool followCwd, QWidget *parent = nullptr);
+    explicit TerminalPanel(const TerminalConfig &cfg, QWidget *parent = nullptr);
 
     /// Update the working directory (called when nvim cwd changes)
     void setWorkingDirectory(const QString &dir);
@@ -47,8 +58,6 @@ private:
 
     QSplitter *m_splitter = nullptr;
     QToolBar *m_toolbar = nullptr;
-    QString m_fontFamily;
-    int m_fontSize;
-    bool m_followCwd;
+    TerminalConfig m_cfg;
     QString m_cwd;
 };
