@@ -33,3 +33,14 @@
 - [x] Minimap (buffer content + highlight data)
 - [x] Image rendering (via `vim.ui.img` API when available)
 
+
+## Fixes/Adjustments
+### Term
+- [ ] Enable sixel support for Qterm
+- [ ] Add Shift+Insert and Ctrl+Shift+V bindings to paste Clipboard to terminal.
+- [ ] Add option to enable Putty style right-click paste in the terminal to the config.
+- [ ] Add swith -c to start the terminal with a custom config file path
+- [ ] Add options to enable text anti-aliasing and hinting if Qtermwidget supports it
+
+### Gui
+
