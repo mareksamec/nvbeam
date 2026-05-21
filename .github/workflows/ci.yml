@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            terminal: ON
+          - os: ubuntu-22.04
+            terminal: OFF
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake \
+            g++ \
+            qt6-base-dev \
+            libgl1-mesa-dev
+
+      - name: Install qtermwidget6 (if available)
+        if: matrix.terminal == 'ON'
+        run: |
+          sudo apt-get install -y qtermwidget6-dev || \
+          sudo apt-get install -y libqtermwidget6-1-dev || \
+          echo "qtermwidget6 not available — building without terminal"
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=${{ matrix.terminal }}
+
+      - name: Build
+        run: cmake --build build -j$(nproc)
+
+  build-fedora:
+    runs-on: ubuntu-latest
+    container: fedora:latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          dnf install -y \
+            cmake \
+            gcc-c++ \
+            qt6-qtbase-devel \
+            mesa-libGL-devel \
+            qtermwidget-qt6-devel
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)

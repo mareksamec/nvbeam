@@ -19,17 +19,17 @@
 - [x] Smooth scrolling (deferred to Phase 4 — needs per-window grids)
 - [x] TOML config loading (~/.config/neobeam/neobeam.toml)
 
-## Phase 4: Multi-grid + UI Chrome
+## Phase 4: Multi-grid + UI Chrome ✓
 - [x] `ext_multigrid` (per-window grids, floating windows, z-ordering)
 - [x] `ext_cmdline` (native command line widget)
 - [x] `ext_popupmenu` (native completion popup)
 - [x] `ext_tabline` (native tab bar)
 - [x] `ext_messages` (native message area)
 - [x] All UI extensions configurable in `[ui]` section of config
-- [ ] Native statusline (Qt widget, mode/file/position/diagnostics, configurable segments)
+- [x] Native statusline (Qt widget, mode/file/position/diagnostics, configurable segments)
 
 ## Phase 5: Terminal + Advanced
-- [ ] Embedded QTermWidget (splits, follows nvim cwd)
-- [ ] Minimap (buffer content + highlight data)
-- [ ] Image rendering (via `vim.ui.img` API when available)
+- [x] Embedded QTermWidget (splits, follows nvim cwd)
+- [x] Minimap (buffer content + highlight data)
+- [x] Image rendering (via `vim.ui.img` API when available)
 
