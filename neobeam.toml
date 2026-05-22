@@ -1,0 +1,30 @@
+# Neobeam configuration
+# Copy this file to ~/.config/neobeam/neobeam.toml
+
+[font]
+# family = "Monospace"
+# size = 10
+# hinting = "default"  # none, slight, medium, full, default
+# antialiasing = true
+
+[terminal]
+# follow_cwd = true  # terminal follows nvim working directory
+# height = 300  # startup height in pixels
+font = "Hack Nerd Font Mono"  # terminal font (empty = use global font)
+# font_size = 0  # terminal font size (0 = use global)
+# color_scheme = "Linux"  # QTermWidget color scheme
+shell = "/usr/bin/zsh"  # shell program (empty = system default)
+# shell_args = []  # arguments passed to shell
+# exec_command = ""  # command to run after shell starts (e.g. "tmux")
+right_click_paste = true  # PuTTY-style right-click paste
+# antialiasing = true  # font antialiasing in terminal
+# hinting = "default"  # font hinting: none, slight, medium, full, default
+
+[ui]
+# ext_cmdline = true
+# ext_popupmenu = true
+# ext_tabline = true
+# ext_messages = true
+# bufferline = true  # show open buffers instead of tabpages
+# statusline = true  # native statusline (mode, file, position, diagnostics)
+# accent_color = "#50fa7b"
