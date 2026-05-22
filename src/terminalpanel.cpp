@@ -2,6 +2,10 @@
 #include <QShowEvent>
 #include <QVBoxLayout>
 #include <QDir>
+#include <QShortcut>
+#include <QMouseEvent>
+#include <QApplication>
+#include <QClipboard>
 
 TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     : QWidget(parent)
@@ -41,6 +45,12 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     // Create initial terminal
     addTerminal();
+
+    // Paste shortcuts: Shift+Insert and Ctrl+Shift+V
+    auto *pasteShortcut1 = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Insert), this);
+    connect(pasteShortcut1, &QShortcut::activated, this, &TerminalPanel::pasteClipboard);
+    auto *pasteShortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this);
+    connect(pasteShortcut2, &QShortcut::activated, this, &TerminalPanel::pasteClipboard);
 }
 
 void TerminalPanel::toggle()
@@ -106,16 +116,27 @@ void TerminalPanel::removeCurrentTerminal()
 #endif
 }
 
+void TerminalPanel::pasteClipboard()
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (m_currentTerm)
+        m_currentTerm->pasteClipboard();
+#endif
+}
+
 #ifdef NEOBEAM_HAS_TERMINAL
 QTermWidget *TerminalPanel::createTermWidget()
 {
     auto *term = new QTermWidget(0, this);
 
-    // Font: use terminal-specific or fall back to global
+    // Font: use terminal-specific or fall back to global, with hinting/antialiasing
     QString family = m_cfg.fontFamily;
     int size = m_cfg.fontSize;
     QFont f(family, size);
     f.setStyleHint(QFont::Monospace);
+    f.setHintingPreference(m_cfg.hinting);
+    if (!m_cfg.antialiasing)
+        f.setStyleStrategy(QFont::NoAntialias);
     term->setTerminalFont(f);
 
     // Color scheme (default "Linux" = white on black)
@@ -123,6 +144,18 @@ QTermWidget *TerminalPanel::createTermWidget()
     term->setScrollBarPosition(QTermWidgetInterface::ScrollBarRight);
     term->setWorkingDirectory(m_cwd);
     term->setTerminalOpacity(1.0);
+
+    // NOTE: Sixel image protocol is not supported by upstream QTermWidget.
+    // Tracking: https://github.com/lxqt/qtermwidget — no sixel code exists.
+    // When/if upstream adds sixel support, enable it here.
+
+    // Right-click paste (PuTTY-style)
+    if (m_cfg.rightClickPaste) {
+        term->setContextMenuPolicy(Qt::CustomContextMenu);
+        connect(term, &QWidget::customContextMenuRequested, this, [term]() {
+            term->pasteClipboard();
+        });
+    }
 
     // Shell program
     if (!m_cfg.shell.isEmpty())
@@ -133,7 +166,6 @@ QTermWidget *TerminalPanel::createTermWidget()
     // Defer shell start until visible so terminal gets correct size
     if (isVisible()) {
         term->startShellProgram();
-        // Execute startup command after shell is ready
         if (!m_cfg.execCommand.isEmpty()) {
             term->sendText(m_cfg.execCommand + "\n");
         }

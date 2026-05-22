@@ -49,12 +49,13 @@
 
 
 ## Fixes/Adjustments
-### Term
-- [ ] Enable sixel support for Qterm
-- [ ] Add Shift+Insert and Ctrl+Shift+V bindings to paste Clipboard to terminal.
-- [ ] Add option to enable Putty style right-click paste in the terminal to the config.
-- [ ] Add swith -c to start the terminal with a custom config file path
-- [ ] Add options to enable text anti-aliasing and hinting if Qtermwidget supports it
 
-### Gui
+### General
+- [x] Add switch -c to start neobeam with a custom config file path
+- [x] Create example config file in the project root
+### Term
+- [ ] Enable sixel support for QTermWidget (blocked: upstream has no sixel support)
+- [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
+- [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
+- [x] Add options to enable text anti-aliasing and hinting for terminal font
 

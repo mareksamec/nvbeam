@@ -22,6 +22,9 @@ struct TerminalConfig {
     QString shell;            // empty = system default
     QStringList shellArgs;
     QString execCommand;      // run after shell starts
+    bool rightClickPaste = false;  // PuTTY-style right-click paste
+    bool antialiasing = true;
+    QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
 };
 
 /// VSCode-like embedded terminal panel with split support
@@ -48,6 +51,7 @@ private slots:
     void addTerminal();
     void splitHorizontal();
     void removeCurrentTerminal();
+    void pasteClipboard();
 
 private:
 #ifdef NEOBEAM_HAS_TERMINAL
