@@ -41,12 +41,17 @@ protected:
 
 private:
     int lineAtY(int y) const;
+    void rebuildImage();
 
     QVector<MinimapLine> m_lines;
     int m_totalLines = 0;
     int m_topLine = 0;
     int m_visibleLines = 0;
     int m_cursorLine = 0;
+
+    QImage m_cache;
+    bool m_contentDirty = true;
+    bool m_overlayDirty = true;
 
     static constexpr int kCharWidth = 2;   // pixels per character
     static constexpr int kLineHeight = 2;  // pixels per line

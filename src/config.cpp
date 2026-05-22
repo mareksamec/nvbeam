@@ -11,10 +11,10 @@ QString Config::configPath()
     return configDir + "/neobeam.toml";
 }
 
-Config Config::load()
+Config Config::load(const QString &customPath)
 {
     Config cfg;
-    QString path = configPath();
+    QString path = customPath.isEmpty() ? configPath() : customPath;
 
     if (!QFile::exists(path)) {
         // Write default config as commented-out reference
@@ -39,6 +39,9 @@ Config Config::load()
                 "# shell = \"\"  # shell program (empty = system default)\n"
                 "# shell_args = []  # arguments passed to shell\n"
                 "# exec_command = \"\"  # command to run after shell starts (e.g. \"tmux\")\n"
+                "# right_click_paste = false  # PuTTY-style right-click paste\n"
+                "# antialiasing = true  # font antialiasing in terminal\n"
+                "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "\n"
                 "# [ui]\n"
                 "# ext_cmdline = true\n"
@@ -100,6 +103,17 @@ Config Config::load()
             }
             if (term.contains("exec_command"))
                 cfg.terminalExecCommand = QString::fromStdString(toml::find<std::string>(term, "exec_command"));
+            if (term.contains("right_click_paste"))
+                cfg.terminalRightClickPaste = toml::find<bool>(term, "right_click_paste");
+            if (term.contains("antialiasing"))
+                cfg.terminalAntialiasing = toml::find<bool>(term, "antialiasing");
+            if (term.contains("hinting")) {
+                auto h = toml::find<std::string>(term, "hinting");
+                if (h == "none") cfg.terminalHinting = QFont::PreferNoHinting;
+                else if (h == "slight") cfg.terminalHinting = QFont::PreferVerticalHinting;
+                else if (h == "full") cfg.terminalHinting = QFont::PreferFullHinting;
+                else cfg.terminalHinting = QFont::PreferDefaultHinting;
+            }
         }
 
         if (data.contains("ui")) {

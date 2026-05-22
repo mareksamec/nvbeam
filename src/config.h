@@ -21,6 +21,9 @@ struct Config {
     QString terminalShell;                // empty = system default shell
     QStringList terminalShellArgs;        // args passed to shell
     QString terminalExecCommand;          // command executed after shell starts (e.g. "tmux")
+    bool terminalRightClickPaste = false; // PuTTY-style right-click paste
+    bool terminalAntialiasing = true;     // font antialiasing in terminal
+    QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
 
     // UI extensions (native chrome)
     bool extCmdline = true;
@@ -31,12 +34,12 @@ struct Config {
     bool extStatusline = true;        // native statusline widget
     QString accentColor = "#50fa7b";  // greenish accent for native elements
 
-    // Load config from standard path, returns default if not found
-    static Config load();
+    // Load config from given path, or standard path if empty
+    static Config load(const QString &path = {});
 
     // Returns the configured QFont
     QFont font() const;
 
-    // Returns the config file path
+    // Returns the default config file path
     static QString configPath();
 };

@@ -17,14 +17,16 @@ int main(int argc, char *argv[])
     QCommandLineOption fontOption({"f", "font"}, "Font family to use", "family");
     QCommandLineOption fontSizeOption("font-size", "Font size in points", "size");
     QCommandLineOption nativeUiOption("native-ui", "Enable all native UI elements");
+    QCommandLineOption configOption({"c", "config"}, "Path to config file", "path");
     parser.addOption(fontOption);
     parser.addOption(fontSizeOption);
     parser.addOption(nativeUiOption);
+    parser.addOption(configOption);
 
     // Parse known options, rest goes to nvim
     parser.parse(app.arguments());
 
-    Config cfg = Config::load();
+    Config cfg = Config::load(parser.value(configOption));
 
     if (parser.isSet(fontOption)) {
         cfg.fontFamily = parser.value(fontOption);
@@ -43,7 +45,7 @@ int main(int argc, char *argv[])
     QStringList nvimArgs = parser.unknownOptionNames();
     // Also pass positional args and raw unknown args
     QStringList allArgs = app.arguments().mid(1);
-    QStringList knownFlags = {"-f", "--font", "--font-size", "--native-ui", "-h", "--help", "-v", "--version"};
+    QStringList knownFlags = {"-f", "--font", "--font-size", "--native-ui", "-c", "--config", "-h", "--help", "-v", "--version"};
     QStringList filteredArgs;
     for (int i = 0; i < allArgs.size(); i++) {
         QString arg = allArgs[i];
@@ -52,7 +54,7 @@ int main(int argc, char *argv[])
             if (arg == flag) {
                 skip = true;
                 // Skip the value too if it's a value-taking option
-                if (arg == "-f" || arg == "--font" || arg == "--font-size") {
+                if (arg == "-f" || arg == "--font" || arg == "--font-size" || arg == "-c" || arg == "--config") {
                     i++; // skip next arg (the value)
                 }
                 break;
