@@ -5,7 +5,6 @@
 
 class GridWidget;
 class NvimProcess;
-class CmdlineWidget;
 class PopupmenuWidget;
 class TablineWidget;
 class MessageWidget;
@@ -26,7 +25,6 @@ public:
 private:
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
-    CmdlineWidget *m_cmdline = nullptr;
     PopupmenuWidget *m_popupmenu = nullptr;
     TablineWidget *m_tabline = nullptr;
     MessageWidget *m_messages = nullptr;

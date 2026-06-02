@@ -6,12 +6,33 @@
 #include "minimap.h"
 #include "imagerenderer.h"
 #include "config.h"
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QShortcut>
 #include <QTimer>
 #include <QVBoxLayout>
+
+/// Load a Lua script from the lua/ directory next to the executable
+static QString loadLua(const QString &name)
+{
+    // Try relative to executable first, then source tree fallback
+    QStringList searchPaths = {
+        QCoreApplication::applicationDirPath() + "/../lua/" + name,
+        QCoreApplication::applicationDirPath() + "/lua/" + name,
+    };
+    for (const auto &path : searchPaths) {
+        QFile f(path);
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
+            return QString::fromUtf8(f.readAll());
+    }
+    qWarning("Failed to load lua/%s", qPrintable(name));
+    return {};
+}
+
 MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *parent)
     : QMainWindow(parent)
     , m_cfg(cfg)
@@ -19,7 +40,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     setWindowTitle("neobeam");
     resize(800, 600);
 
-    // Central widget with layout for tabline + grid + cmdline/messages
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -38,9 +58,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     editorRow->addWidget(m_grid, 1);
     editorRow->addWidget(m_minimap);
     layout->addLayout(editorRow, 1);
-
-    m_cmdline = new CmdlineWidget(cfg.accentColor, central);
-    layout->addWidget(m_cmdline);
 
     m_messages = new MessageWidget(cfg.accentColor, central);
     layout->addWidget(m_messages);
@@ -130,7 +147,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             opts["ext_linegrid"] = true;
             opts["ext_hlstate"] = true;
             opts["ext_multigrid"] = true;
-            if (m_cfg.extCmdline) opts["ext_cmdline"] = true;
             if (m_cfg.extPopupmenu) opts["ext_popupmenu"] = true;
             if (m_cfg.extTabline) opts["ext_tabline"] = true;
             if (m_cfg.extMessages) opts["ext_messages"] = true;
@@ -149,10 +165,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     });
 
     // Externalized UI signals
-    connect(m_grid, &GridWidget::cmdlineShow, m_cmdline, &CmdlineWidget::show);
-    connect(m_grid, &GridWidget::cmdlineHide, m_cmdline, &CmdlineWidget::hide);
-    connect(m_grid, &GridWidget::cmdlinePos, m_cmdline, &CmdlineWidget::setPos);
-
     connect(m_grid, &GridWidget::popupmenuShow, this,
             [this](const QVariantList &items, int selected, int row, int col, int grid) {
         Q_UNUSED(grid)
@@ -173,8 +185,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Minimap click scrolls to line
     connect(m_minimap, &MinimapWidget::lineClicked, this, [this](int line) {
-        QString cmd = QString("nvim_win_set_cursor");
-        m_nvim->request(cmd, {0, QVariantList{line + 1, 0}});
+        m_nvim->request("nvim_win_set_cursor", {0, QVariantList{line + 1, 0}});
     });
 
     connect(m_grid, &GridWidget::msgShow, m_messages, &MessageWidget::showMsg);
@@ -188,20 +199,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         bufTimer->setSingleShot(true);
         bufTimer->setInterval(100);
         connect(bufTimer, &QTimer::timeout, this, [this]() {
-            QString lua = R"(
-                local bufs = {}
-                local cur = vim.api.nvim_get_current_buf()
-                for _, b in ipairs(vim.api.nvim_list_bufs()) do
-                    if vim.bo[b].buflisted then
-                        table.insert(bufs, {
-                            id = b,
-                            name = vim.api.nvim_buf_get_name(b),
-                            modified = vim.bo[b].modified
-                        })
-                    end
-                end
-                return {bufs = bufs, current = cur}
-            )";
+            QString lua = loadLua("bufferline.lua");
+            if (lua.isEmpty()) return;
             m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
                 int currentBuf = data["current"].toInt();
@@ -220,35 +219,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         statusTimer->setSingleShot(true);
         statusTimer->setInterval(100);
         connect(statusTimer, &QTimer::timeout, this, [this]() {
-            QString lua = R"(
-                local mode = vim.api.nvim_get_mode().mode
-                local mode_map = {
-                    n = "NORMAL", i = "INSERT", v = "VISUAL", V = "V-LINE",
-                    ["\22"] = "V-BLOCK", c = "COMMAND", R = "REPLACE",
-                    t = "TERMINAL", s = "SELECT", S = "S-LINE",
-                }
-                local buf = vim.api.nvim_get_current_buf()
-                local name = vim.api.nvim_buf_get_name(buf)
-                if name == "" then name = "[No Name]" end
-                local pos = vim.api.nvim_win_get_cursor(0)
-                local encoding = vim.o.fileencoding ~= "" and vim.o.fileencoding or vim.o.encoding
-                local branch = ""
-                if vim.b.gitsigns_head then branch = " " .. vim.b.gitsigns_head end
-                local diag = ""
-                local e = #vim.diagnostic.get(buf, {severity = vim.diagnostic.severity.ERROR})
-                local w = #vim.diagnostic.get(buf, {severity = vim.diagnostic.severity.WARN})
-                if e > 0 or w > 0 then
-                    diag = "E:" .. e .. " W:" .. w
-                end
-                return {
-                    mode = mode_map[mode] or mode,
-                    file = name,
-                    pos = pos[1] .. ":" .. pos[2],
-                    encoding = encoding,
-                    branch = branch,
-                    diagnostics = diag,
-                }
-            )";
+            QString lua = loadLua("statusline.lua");
+            if (lua.isEmpty()) return;
             m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
                 m_statusline->updateStatus(result.toMap());
             });
@@ -264,95 +236,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         minimapTimer->setSingleShot(true);
         minimapTimer->setInterval(250);
         connect(minimapTimer, &QTimer::timeout, this, [this]() {
-            QString lua = QStringLiteral(R"lua(
-                local buf = vim.api.nvim_get_current_buf()
-                local win = vim.api.nvim_get_current_win()
-                local total = vim.api.nvim_buf_line_count(buf)
-                local info = vim.fn.getwininfo(win)[1]
-                local top = info.topline
-                local bot = info.botline
-                local cursor = vim.api.nvim_win_get_cursor(win)[1]
-                local max_lines = math.min(total, 2000)
-                local max_col = 80
-
-                local lines = vim.api.nvim_buf_get_lines(buf, 0, max_lines, false)
-                local hl_lines = {}
-                for i = 1, max_lines do
-                    local len = math.min(#(lines[i] or ""), max_col)
-                    local row = {}
-                    for c = 1, len do row[c] = "" end
-                    hl_lines[i] = row
-                end
-
-                -- Try treesitter bulk capture via public API
-                local ok, parser = pcall(vim.treesitter.get_parser, buf)
-                if ok and parser then
-                    local fg_cache = {}
-                    local function get_fg(hl_name)
-                        local cached = fg_cache[hl_name]
-                        if cached ~= nil then return cached end
-                        local id = vim.fn.hlID(hl_name)
-                        if id == 0 then
-                            local base = hl_name:match("^@(.+)%..+$")
-                            if base then id = vim.fn.hlID("@" .. base) end
-                        end
-                        local fg = ""
-                        if id > 0 then
-                            fg = vim.fn.synIDattr(vim.fn.synIDtrans(id), "fg#") or ""
-                        end
-                        fg_cache[hl_name] = fg
-                        return fg
-                    end
-
-                    pcall(function()
-                        parser:for_each_tree(function(tstree, ltree)
-                            if not tstree then return end
-                            local lang = ltree:lang()
-                            local qok, query = pcall(vim.treesitter.query.get, lang, "highlights")
-                            if not qok or not query then return end
-                            local root = tstree:root()
-                            for id, node in query:iter_captures(root, buf, 0, max_lines) do
-                                local name = "@" .. query.captures[id] .. "." .. lang
-                                local fg = get_fg(name)
-                                if fg == "" then
-                                    fg = get_fg("@" .. query.captures[id])
-                                end
-                                if fg ~= "" then
-                                    local sr, sc, er, ec = node:range()
-                                    for r = sr, math.min(er, max_lines - 1) do
-                                        local row = hl_lines[r + 1]
-                                        if row then
-                                            local cs = (r == sr) and sc or 0
-                                            local ce = (r == er) and ec or #(lines[r + 1] or "")
-                                            ce = math.min(ce, max_col)
-                                            for c = cs + 1, ce do
-                                                if row[c] == "" then row[c] = fg end
-                                            end
-                                        end
-                                    end
-                                end
-                            end
-                        end)
-                    end)
-                else
-                    -- Fallback: no treesitter, use synID
-                    for i = 1, max_lines do
-                        local line = lines[i] or ""
-                        local len = math.min(#line, max_col)
-                        for c = 0, len - 1 do
-                            local id = vim.fn.synID(i, c + 1, true)
-                            if id > 0 then
-                                local fg = vim.fn.synIDattr(vim.fn.synIDtrans(id), "fg#")
-                                if fg and fg ~= "" then
-                                    hl_lines[i][c + 1] = fg
-                                end
-                            end
-                        end
-                    end
-                end
-
-                return {lines = hl_lines, total = total, top = top, bot = bot, cursor = cursor}
-            )lua");
+            QString lua = loadLua("minimap.lua");
+            if (lua.isEmpty()) return;
             m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
                 int total = data["total"].toInt();
@@ -374,9 +259,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                     lines.append(ml);
                 }
 
-                m_minimap->setContent(lines, total);
-                m_minimap->setViewport(top, bot - top);
-                m_minimap->setCursorLine(cursor);
+                m_minimap->updateContent(lines, total, top, bot - top, cursor);
             });
         });
         connect(m_grid, &GridWidget::flushed, minimapTimer, [minimapTimer]() {
