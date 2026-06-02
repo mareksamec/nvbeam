@@ -149,7 +149,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             opts["ext_multigrid"] = true;
             if (m_cfg.extPopupmenu) opts["ext_popupmenu"] = true;
             if (m_cfg.extTabline) opts["ext_tabline"] = true;
-            if (m_cfg.extMessages) opts["ext_messages"] = true;
             m_nvim->request("nvim_ui_attach", {cols, rows, opts});
         });
     });
@@ -234,7 +233,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     {
         auto *minimapTimer = new QTimer(this);
         minimapTimer->setSingleShot(true);
-        minimapTimer->setInterval(250);
+        minimapTimer->setInterval(20);
         connect(minimapTimer, &QTimer::timeout, this, [this]() {
             QString lua = loadLua("minimap.lua");
             if (lua.isEmpty()) return;
