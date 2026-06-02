@@ -53,3 +53,22 @@ if(NEOBEAM_TERMINAL)
     target_compile_definitions(neobeam PRIVATE NEOBEAM_HAS_TERMINAL)
     target_link_libraries(neobeam PRIVATE qtermwidget6)
 endif()
+
+# --- Install & packaging ---
+install(TARGETS neobeam RUNTIME DESTINATION bin)
+
+set(CPACK_PACKAGE_NAME "neobeam")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast native Neovim GUI client built with Qt6")
+set(CPACK_PACKAGE_CONTACT "marek@samec.me")
+set(CPACK_PACKAGE_LICENSE "MIT")
+
+# DEB
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, neovim (>= 0.10)")
+set(CPACK_DEBIAN_PACKAGE_SECTION "editors")
+
+# RPM
+set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, neovim >= 0.10")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+
+include(CPack)

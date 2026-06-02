@@ -59,7 +59,7 @@ jobs:
             gcc-c++ \
             qt6-qtbase-devel \
             mesa-libGL-devel \
-            qtermwidget-qt6-devel
+            qtermwidget
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=ON
