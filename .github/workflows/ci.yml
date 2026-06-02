@@ -21,8 +21,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install dependencies
         run: |
@@ -52,17 +50,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Install dependencies
         run: |
           dnf install -y \
+            git \
             cmake \
             gcc-c++ \
             qt6-qtbase-devel \
             mesa-libGL-devel \
-            qtermwidget-qt6-devel
+            qtermwidget
 
       - name: Configure
         run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=ON

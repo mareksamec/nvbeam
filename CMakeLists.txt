@@ -7,6 +7,15 @@ set(CMAKE_AUTOMOC ON)
 
 option(NEOBEAM_TERMINAL "Build with embedded terminal (requires qtermwidget6)" ON)
 
+include(FetchContent)
+FetchContent_Declare(
+    toml11
+    GIT_REPOSITORY https://github.com/ToruNiina/toml11.git
+    GIT_TAG        v4.2.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(toml11)
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
 if(NEOBEAM_TERMINAL)
@@ -31,16 +40,35 @@ add_executable(neobeam
 
 target_include_directories(neobeam PRIVATE
     src
-    third_party/toml11/include
 )
 
 target_link_libraries(neobeam PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    toml11::toml11
 )
 
 if(NEOBEAM_TERMINAL)
     target_compile_definitions(neobeam PRIVATE NEOBEAM_HAS_TERMINAL)
     target_link_libraries(neobeam PRIVATE qtermwidget6)
 endif()
+
+# --- Install & packaging ---
+install(TARGETS neobeam RUNTIME DESTINATION bin)
+
+set(CPACK_PACKAGE_NAME "neobeam")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast native Neovim GUI client built with Qt6")
+set(CPACK_PACKAGE_CONTACT "marek@samec.me")
+set(CPACK_PACKAGE_LICENSE "MIT")
+
+# DEB
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, neovim (>= 0.10)")
+set(CPACK_DEBIAN_PACKAGE_SECTION "editors")
+
+# RPM
+set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, neovim >= 0.10")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+
+include(CPack)
