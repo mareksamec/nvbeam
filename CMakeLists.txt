@@ -7,6 +7,15 @@ set(CMAKE_AUTOMOC ON)
 
 option(NEOBEAM_TERMINAL "Build with embedded terminal (requires qtermwidget6)" ON)
 
+include(FetchContent)
+FetchContent_Declare(
+    toml11
+    GIT_REPOSITORY https://github.com/ToruNiina/toml11.git
+    GIT_TAG        v4.2.0
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(toml11)
+
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 
 if(NEOBEAM_TERMINAL)
@@ -31,13 +40,13 @@ add_executable(neobeam
 
 target_include_directories(neobeam PRIVATE
     src
-    third_party/toml11/include
 )
 
 target_link_libraries(neobeam PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
+    toml11::toml11
 )
 
 if(NEOBEAM_TERMINAL)
