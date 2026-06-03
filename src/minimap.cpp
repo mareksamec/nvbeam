@@ -78,25 +78,29 @@ void MinimapWidget::rebuildPixmap()
     pix.setDevicePixelRatio(dpr);
     pix.fill(QColor::fromRgb(kBgColor));
 
-    if (!m_lines.isEmpty() && m_totalLines > 0) {
+    const int srcCount = m_lines.size(); // actual lines available (may be capped, e.g. 2000)
+    // virtualLines is what we spread across the widget — the full file length so the overlay
+    // coordinate system (which uses m_totalLines) stays consistent with the pixmap.
+    const int virtualLines = m_totalLines > 0 ? m_totalLines : srcCount;
+
+    if (srcCount > 0 && virtualLines > 0) {
         const int maxLinesInWidget = h / kLineHeight;
-
-        int lineIncrement = 1;
-        if (m_totalLines > maxLinesInWidget)
-            lineIncrement = (m_totalLines + maxLinesInWidget - 1) / maxLinesInWidget;
-
-        int drawnLineCount = qMin(maxLinesInWidget, (m_totalLines + lineIncrement - 1) / lineIncrement);
+        const int lineIncrement = virtualLines > maxLinesInWidget
+            ? (virtualLines + maxLinesInWidget - 1) / maxLinesInWidget
+            : 1;
+        const int drawnLineCount = qMin(maxLinesInWidget, (virtualLines + lineIncrement - 1) / lineIncrement);
 
         QPainter pp(&pix);
         for (int i = 0; i < drawnLineCount; ++i) {
-            int srcLine = i * lineIncrement;
-            if (srcLine >= m_lines.size())
-                break;
-
+            const int srcLine = i * lineIncrement;
             const int y = i * kLineHeight;
+            if (srcLine >= srcCount) {
+                // No highlight data for this region — draw a subtle placeholder so it's not black.
+                pp.fillRect(0, y, w, kLineHeight, QColor(0x2a, 0x2b, 0x3a));
+                continue;
+            }
             const auto &line = m_lines[srcLine];
             const int maxChars = qMin(line.colors.size(), w / kCharWidth);
-
             for (int c = 0; c < maxChars; ++c) {
                 if (line.colors[c].isValid())
                     pp.fillRect(c * kCharWidth, y, kCharWidth, kLineHeight, line.colors[c]);
@@ -128,9 +132,9 @@ void MinimapWidget::paintEvent(QPaintEvent *)
         return (int)((qint64)line * h / m_totalLines);
     };
 
-    // Viewport indicator
+    // Viewport indicator: height is the fraction of the file visible in the editor
     int vpY = lineToY(m_topLine);
-    int vpH = qMax(lineToY(m_topLine + m_visibleLines) - vpY, kLineHeight);
+    int vpH = qMax((int)(h * (float)m_visibleLines / m_totalLines), kLineHeight);
     p.fillRect(0, vpY, width(), vpH, QColor(255, 255, 255, 25));
 
     // Cursor line

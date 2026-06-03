@@ -229,7 +229,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         });
     }
 
-    // Minimap: poll buffer content and highlights (throttled)
+    // Minimap: poll buffer content and highlights (throttled).
+    // Passes last known changedtick to Lua so it can skip the treesitter scan when only scroll changed.
     {
         auto *minimapTimer = new QTimer(this);
         minimapTimer->setSingleShot(true);
@@ -237,14 +238,25 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         connect(minimapTimer, &QTimer::timeout, this, [this]() {
             QString lua = loadLua("minimap.lua");
             if (lua.isEmpty()) return;
-            m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
+            // Pass last tick as argument; Lua returns full data only when tick changed.
+            m_nvim->request("nvim_exec_lua", {lua, QVariantList{m_minimapLastTick}}, [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
-                int total = data["total"].toInt();
-                int top = data["top"].toInt() - 1;
-                int bot = data["bot"].toInt();
+                int tick   = data["tick"].toInt();
+                int total  = data["total"].toInt();
+                int top    = data["top"].toInt() - 1;
+                int bot    = data["bot"].toInt();
                 int cursor = data["cursor"].toInt() - 1;
-                QVariantList hlLines = data["lines"].toList();
+                int visibleLines = bot - top;
 
+                if (!data.contains("lines")) {
+                    // Tick unchanged: only scroll/cursor moved — cheap overlay-only repaint.
+                    m_minimap->setViewport(top, visibleLines, cursor);
+                    return;
+                }
+
+                // Tick changed: rebuild highlight pixmap.
+                m_minimapLastTick = tick;
+                QVariantList hlLines = data["lines"].toList();
                 QVector<MinimapLine> lines;
                 lines.reserve(hlLines.size());
                 for (const auto &lineVar : hlLines) {
@@ -257,8 +269,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                     }
                     lines.append(ml);
                 }
-
-                m_minimap->updateContent(lines, total, top, bot - top, cursor);
+                m_minimap->updateContent(lines, total, top, visibleLines, cursor);
             });
         });
         connect(m_grid, &GridWidget::flushed, minimapTimer, [minimapTimer]() {

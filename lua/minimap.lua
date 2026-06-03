@@ -1,3 +1,10 @@
+-- minimap.lua
+-- Called with one argument: the last changedtick seen by the GUI (or 0 on first call).
+-- Returns scroll/cursor position always.
+-- Returns full highlight data only when the buffer content has changed (changedtick differs).
+
+local last_tick = ...  -- passed via nvim_exec_lua args
+
 local buf = vim.api.nvim_get_current_buf()
 local win = vim.api.nvim_get_current_win()
 local total = vim.api.nvim_buf_line_count(buf)
@@ -5,6 +12,13 @@ local info = vim.fn.getwininfo(win)[1]
 local top = info.topline
 local bot = info.botline
 local cursor = vim.api.nvim_win_get_cursor(win)[1]
+local tick = vim.b[buf].changedtick
+
+-- If tick unchanged, return only scroll state — skip expensive highlight scan.
+if last_tick == tick then
+    return { tick = tick, top = top, bot = bot, cursor = cursor, total = total }
+end
+
 local max_lines = math.min(total, 2000)
 local max_col = 80
 
@@ -17,7 +31,7 @@ for i = 1, max_lines do
     hl_lines[i] = row
 end
 
--- Try treesitter bulk capture via public API
+-- Treesitter highlight pass
 local ok, parser = pcall(vim.treesitter.get_parser, buf)
 if ok and parser then
     local fg_cache = {}
@@ -68,7 +82,7 @@ if ok and parser then
         end)
     end)
 else
-    -- Fallback: no treesitter, use synID
+    -- Fallback: synID-based highlighting
     for i = 1, max_lines do
         local line = lines[i] or ""
         local len = math.min(#line, max_col)
@@ -84,4 +98,4 @@ else
     end
 end
 
-return {lines = hl_lines, total = total, top = top, bot = bot, cursor = cursor}
+return { tick = tick, lines = hl_lines, total = total, top = top, bot = bot, cursor = cursor }

@@ -33,4 +33,5 @@ private:
     MinimapWidget *m_minimap = nullptr;
     ImageRenderer *m_imageRenderer = nullptr;
     Config m_cfg;
+    int m_minimapLastTick = 0; // last changedtick seen from Neovim, used to skip highlight rebuilds on scroll
 };
