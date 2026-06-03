@@ -55,6 +55,7 @@ private:
 
     QPixmap m_pixmap;
     QTimer *m_rebuildTimer = nullptr;
+    int m_contentHeight = 0; // pixel height actually drawn into m_pixmap (may be less than widget height for short files)
 
     static constexpr int kCharWidth = 2;
     static constexpr int kLineHeight = 2;

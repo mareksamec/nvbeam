@@ -83,12 +83,14 @@ void MinimapWidget::rebuildPixmap()
     // coordinate system (which uses m_totalLines) stays consistent with the pixmap.
     const int virtualLines = m_totalLines > 0 ? m_totalLines : srcCount;
 
+    m_contentHeight = 0;
     if (srcCount > 0 && virtualLines > 0) {
         const int maxLinesInWidget = h / kLineHeight;
         const int lineIncrement = virtualLines > maxLinesInWidget
             ? (virtualLines + maxLinesInWidget - 1) / maxLinesInWidget
             : 1;
         const int drawnLineCount = qMin(maxLinesInWidget, (virtualLines + lineIncrement - 1) / lineIncrement);
+        m_contentHeight = drawnLineCount * kLineHeight;
 
         QPainter pp(&pix);
         for (int i = 0; i < drawnLineCount; ++i) {
@@ -123,24 +125,24 @@ void MinimapWidget::paintEvent(QPaintEvent *)
         p.fillRect(rect(), QColor::fromRgb(kBgColor));
     }
 
-    if (m_lines.isEmpty() || m_totalLines <= 0)
+    if (m_lines.isEmpty() || m_totalLines <= 0 || m_contentHeight <= 0)
         return;
 
-    const int h = height();
-
+    // lineToY maps a buffer line number to a pixel y within the pixmap's drawn content.
+    // m_contentHeight is the actual pixel height drawn (may be < widget height for short files).
     auto lineToY = [&](int line) -> int {
-        return (int)((qint64)line * h / m_totalLines);
+        return (int)((qint64)line * m_contentHeight / m_totalLines);
     };
 
-    // Viewport indicator: height is the fraction of the file visible in the editor
+    // Viewport indicator
     int vpY = lineToY(m_topLine);
-    int vpH = qMax((int)(h * (float)m_visibleLines / m_totalLines), kLineHeight);
+    int vpH = qMax((int)(m_contentHeight * (float)m_visibleLines / m_totalLines), kLineHeight);
     p.fillRect(0, vpY, width(), vpH, QColor(255, 255, 255, 25));
 
     // Cursor line
     int cursorY = lineToY(m_cursorLine);
-    if (cursorY >= 0 && cursorY < h)
-        p.fillRect(0, cursorY, width(), qMax(kLineHeight, h / m_totalLines), QColor(255, 255, 255, 50));
+    if (cursorY >= 0 && cursorY < m_contentHeight)
+        p.fillRect(0, cursorY, width(), qMax(kLineHeight, m_contentHeight / m_totalLines), QColor(255, 255, 255, 50));
 }
 
 void MinimapWidget::mousePressEvent(QMouseEvent *event)
@@ -156,8 +158,7 @@ void MinimapWidget::mouseMoveEvent(QMouseEvent *event)
 
 int MinimapWidget::lineAtY(int y) const
 {
-    if (m_totalLines <= 0)
+    if (m_totalLines <= 0 || m_contentHeight <= 0)
         return 0;
-    const int h = height();
-    return qBound(0, (int)((qint64)y * m_totalLines / h), m_totalLines - 1);
+    return qBound(0, (int)((qint64)y * m_totalLines / m_contentHeight), m_totalLines - 1);
 }
