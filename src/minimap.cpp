@@ -1,13 +1,24 @@
 #include "minimap.h"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QResizeEvent>
+#include <QTimer>
+#include <QSize>
+
+static constexpr QRgb kBgColor = qRgb(0x1a, 0x1b, 0x26);
 
 MinimapWidget::MinimapWidget(QWidget *parent)
     : QWidget(parent)
 {
     setFixedWidth(kMinWidth);
     setMouseTracking(true);
-    setStyleSheet("background: #1a1b26;");
+    setAttribute(Qt::WA_OpaquePaintEvent);
+    setAttribute(Qt::WA_NoSystemBackground);
+
+    m_rebuildTimer = new QTimer(this);
+    m_rebuildTimer->setSingleShot(true);
+    m_rebuildTimer->setInterval(0);
+    connect(m_rebuildTimer, &QTimer::timeout, this, &MinimapWidget::rebuildPixmap);
 }
 
 QSize MinimapWidget::sizeHint() const
@@ -15,109 +26,123 @@ QSize MinimapWidget::sizeHint() const
     return QSize(kMinWidth, 400);
 }
 
-void MinimapWidget::setContent(const QVector<MinimapLine> &lines, int totalLines)
+void MinimapWidget::updateContent(const QVector<MinimapLine> &lines, int totalLines,
+                                  int topLine, int visibleLines, int cursorLine)
 {
-    m_lines = lines;
-    m_totalLines = totalLines;
-    m_contentDirty = true;
-    m_overlayDirty = true;
-    update();
+    bool contentChanged = (m_lines != lines || m_totalLines != totalLines);
+    bool viewportChanged = (m_topLine != topLine || m_visibleLines != visibleLines || m_cursorLine != cursorLine);
+
+    if (!contentChanged && !viewportChanged)
+        return;
+
+    m_topLine = topLine;
+    m_visibleLines = visibleLines;
+    m_cursorLine = cursorLine;
+
+    if (contentChanged) {
+        m_lines = lines;
+        m_totalLines = totalLines;
+        rebuildPixmap();
+    } else {
+        update(); // overlay only
+    }
 }
 
-void MinimapWidget::setViewport(int topLine, int visibleLines)
+void MinimapWidget::setViewport(int topLine, int visibleLines, int cursorLine)
 {
-    if (m_topLine == topLine && m_visibleLines == visibleLines)
+    if (m_topLine == topLine && m_visibleLines == visibleLines && m_cursorLine == cursorLine)
         return;
     m_topLine = topLine;
     m_visibleLines = visibleLines;
-    m_overlayDirty = true;
-    update();
+    m_cursorLine = cursorLine;
+    update(); // only overlay changes — no pixmap rebuild
 }
 
-void MinimapWidget::setCursorLine(int line)
+void MinimapWidget::resizeEvent(QResizeEvent *event)
 {
-    if (m_cursorLine == line)
-        return;
-    m_cursorLine = line;
-    m_overlayDirty = true;
-    update();
+    QWidget::resizeEvent(event);
+    if (!m_rebuildTimer->isActive())
+        m_rebuildTimer->start();
 }
 
-void MinimapWidget::rebuildImage()
+void MinimapWidget::rebuildPixmap()
 {
-    int w = width();
-    int h = height();
-    if (w <= 0 || h <= 0)
-        return;
+    m_rebuildTimer->stop();
 
-    m_cache = QImage(w, h, QImage::Format_RGB32);
-    m_cache.fill(QColor(0x1a, 0x1b, 0x26));
+    const int w = width();
+    const int h = height();
+    if (w <= 0 || h <= 0) return;
 
-    if (m_lines.isEmpty())
-        return;
+    const qreal dpr = devicePixelRatioF();
+    QPixmap pix(w * dpr, h * dpr);
+    pix.setDevicePixelRatio(dpr);
+    pix.fill(QColor::fromRgb(kBgColor));
 
-    int maxVisibleLines = h / kLineHeight;
-    int startLine = 0;
-    if (m_totalLines > maxVisibleLines) {
-        startLine = m_topLine - maxVisibleLines / 4;
-        if (startLine < 0) startLine = 0;
-        if (startLine + maxVisibleLines > m_totalLines)
-            startLine = m_totalLines - maxVisibleLines;
-    }
+    const int srcCount = m_lines.size(); // actual lines available (may be capped, e.g. 2000)
+    // virtualLines is what we spread across the widget — the full file length so the overlay
+    // coordinate system (which uses m_totalLines) stays consistent with the pixmap.
+    const int virtualLines = m_totalLines > 0 ? m_totalLines : srcCount;
 
-    int endLine = qMin(startLine + maxVisibleLines, m_lines.size());
-    for (int i = startLine; i < endLine; ++i) {
-        int y = (i - startLine) * kLineHeight;
-        const auto &line = m_lines[i];
-        int maxChars = qMin(line.colors.size(), w / kCharWidth);
-        for (int c = 0; c < maxChars; ++c) {
-            if (line.colors[c].isValid()) {
-                QRgb rgb = line.colors[c].rgb();
-                int x = c * kCharWidth;
-                for (int py = y; py < y + kLineHeight; ++py) {
-                    auto *scanline = reinterpret_cast<QRgb *>(m_cache.scanLine(py));
-                    for (int px = x; px < x + kCharWidth; ++px)
-                        scanline[px] = rgb;
-                }
+    m_contentHeight = 0;
+    if (srcCount > 0 && virtualLines > 0) {
+        const int maxLinesInWidget = h / kLineHeight;
+        const int lineIncrement = virtualLines > maxLinesInWidget
+            ? (virtualLines + maxLinesInWidget - 1) / maxLinesInWidget
+            : 1;
+        const int drawnLineCount = qMin(maxLinesInWidget, (virtualLines + lineIncrement - 1) / lineIncrement);
+        m_contentHeight = drawnLineCount * kLineHeight;
+
+        QPainter pp(&pix);
+        for (int i = 0; i < drawnLineCount; ++i) {
+            const int srcLine = i * lineIncrement;
+            const int y = i * kLineHeight;
+            if (srcLine >= srcCount) {
+                // No highlight data for this region — draw a subtle placeholder so it's not black.
+                pp.fillRect(0, y, w, kLineHeight, QColor(0x2a, 0x2b, 0x3a));
+                continue;
+            }
+            const auto &line = m_lines[srcLine];
+            const int maxChars = qMin(line.colors.size(), w / kCharWidth);
+            for (int c = 0; c < maxChars; ++c) {
+                if (line.colors[c].isValid())
+                    pp.fillRect(c * kCharWidth, y, kCharWidth, kLineHeight, line.colors[c]);
             }
         }
+        pp.end();
     }
 
-    m_contentDirty = false;
+    m_pixmap = pix;
+    update();
 }
 
-void MinimapWidget::paintEvent(QPaintEvent * /*event*/)
+void MinimapWidget::paintEvent(QPaintEvent *)
 {
-    if (m_contentDirty || m_cache.size() != size())
-        rebuildImage();
-
     QPainter p(this);
-    p.drawImage(0, 0, m_cache);
 
-    if (m_lines.isEmpty())
-        return;
-
-    // Compute startLine (same logic as rebuildImage)
-    int maxVisibleLines = height() / kLineHeight;
-    int startLine = 0;
-    if (m_totalLines > maxVisibleLines) {
-        startLine = m_topLine - maxVisibleLines / 4;
-        if (startLine < 0) startLine = 0;
-        if (startLine + maxVisibleLines > m_totalLines)
-            startLine = m_totalLines - maxVisibleLines;
+    if (!m_pixmap.isNull()) {
+        p.drawPixmap(0, 0, m_pixmap);
+    } else {
+        p.fillRect(rect(), QColor::fromRgb(kBgColor));
     }
 
+    if (m_lines.isEmpty() || m_totalLines <= 0 || m_contentHeight <= 0)
+        return;
+
+    // lineToY maps a buffer line number to a pixel y within the pixmap's drawn content.
+    // m_contentHeight is the actual pixel height drawn (may be < widget height for short files).
+    auto lineToY = [&](int line) -> int {
+        return (int)((qint64)line * m_contentHeight / m_totalLines);
+    };
+
     // Viewport indicator
-    int vpY = (m_topLine - startLine) * kLineHeight;
-    int vpH = m_visibleLines * kLineHeight;
-    p.fillRect(0, vpY, width(), vpH, QColor(255, 255, 255, 20));
+    int vpY = lineToY(m_topLine);
+    int vpH = qMax((int)(m_contentHeight * (float)m_visibleLines / m_totalLines), kLineHeight);
+    p.fillRect(0, vpY, width(), vpH, QColor(255, 255, 255, 25));
 
-    // Cursor line indicator
-    int cursorY = (m_cursorLine - startLine) * kLineHeight;
-    if (cursorY >= 0 && cursorY < height())
-        p.fillRect(0, cursorY, width(), kLineHeight, QColor(255, 255, 255, 40));
-
-    m_overlayDirty = false;
+    // Cursor line
+    int cursorY = lineToY(m_cursorLine);
+    if (cursorY >= 0 && cursorY < m_contentHeight)
+        p.fillRect(0, cursorY, width(), qMax(kLineHeight, m_contentHeight / m_totalLines), QColor(255, 255, 255, 50));
 }
 
 void MinimapWidget::mousePressEvent(QMouseEvent *event)
@@ -133,14 +158,7 @@ void MinimapWidget::mouseMoveEvent(QMouseEvent *event)
 
 int MinimapWidget::lineAtY(int y) const
 {
-    int maxVisibleLines = height() / kLineHeight;
-    int startLine = 0;
-    if (m_totalLines > maxVisibleLines) {
-        startLine = m_topLine - maxVisibleLines / 4;
-        if (startLine < 0) startLine = 0;
-        if (startLine + maxVisibleLines > m_totalLines)
-            startLine = m_totalLines - maxVisibleLines;
-    }
-    int line = startLine + y / kLineHeight;
-    return qBound(0, line, m_totalLines - 1);
+    if (m_totalLines <= 0 || m_contentHeight <= 0)
+        return 0;
+    return qBound(0, (int)((qint64)y * m_totalLines / m_contentHeight), m_totalLines - 1);
 }

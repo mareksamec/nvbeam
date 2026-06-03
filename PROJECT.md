@@ -47,6 +47,10 @@
 - [ ] Graceful fallback (no-op when file is not an image)
 - [ ] Config option `[preview]` section: enable/disable, max size, position preference
 
+## Phase 7: Improvements
+- [ ] Improve the statusline (dividers, etc)
+- [ ] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
+- [ ] Consider adding mouse behaviour to .toml config
 
 ## Fixes/Adjustments
 

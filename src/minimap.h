@@ -3,15 +3,19 @@
 #include <QWidget>
 #include <QVector>
 #include <QColor>
-#include <QImage>
-#include <QString>
+#include <QPixmap>
+
+class QTimer;
 
 /// Minimap data for a single line: per-character highlight colors
 struct MinimapLine {
     QVector<QColor> colors; // one color per character
+    bool operator==(const MinimapLine &o) const { return colors == o.colors; }
 };
 
-/// Native VSCode-like minimap widget showing zoomed-out buffer content
+/// Native VSCode-like minimap widget showing zoomed-out buffer content.
+/// Uses Kate/KTextEditor's approach: pixmap rebuilt asynchronously,
+/// paintEvent only blits + draws overlay. No rebuild during paint.
 class MinimapWidget : public QWidget
 {
     Q_OBJECT
@@ -19,29 +23,29 @@ class MinimapWidget : public QWidget
 public:
     explicit MinimapWidget(QWidget *parent = nullptr);
 
-    /// Update minimap content from buffer lines and highlight data
-    void setContent(const QVector<MinimapLine> &lines, int totalLines);
+    /// Full content + viewport update (schedules pixmap rebuild)
+    void updateContent(const QVector<MinimapLine> &lines, int totalLines,
+                       int topLine, int visibleLines, int cursorLine);
 
-    /// Set the visible viewport range (top line, visible count)
-    void setViewport(int topLine, int visibleLines);
-
-    /// Set the cursor line for indicator
-    void setCursorLine(int line);
+    /// Lightweight viewport-only update (overlay repaint only)
+    void setViewport(int topLine, int visibleLines, int cursorLine);
 
     QSize sizeHint() const override;
 
 signals:
-    /// Emitted when user clicks minimap to scroll to a line
     void lineClicked(int line);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void resizeEvent(QResizeEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
 
+private slots:
+    void rebuildPixmap();
+
 private:
     int lineAtY(int y) const;
-    void rebuildImage();
 
     QVector<MinimapLine> m_lines;
     int m_totalLines = 0;
@@ -49,11 +53,11 @@ private:
     int m_visibleLines = 0;
     int m_cursorLine = 0;
 
-    QImage m_cache;
-    bool m_contentDirty = true;
-    bool m_overlayDirty = true;
+    QPixmap m_pixmap;
+    QTimer *m_rebuildTimer = nullptr;
+    int m_contentHeight = 0; // pixel height actually drawn into m_pixmap (may be less than widget height for short files)
 
-    static constexpr int kCharWidth = 2;   // pixels per character
-    static constexpr int kLineHeight = 2;  // pixels per line
-    static constexpr int kMinWidth = 80;   // minimum widget width in pixels
+    static constexpr int kCharWidth = 2;
+    static constexpr int kLineHeight = 2;
+    static constexpr int kMinWidth = 80;
 };

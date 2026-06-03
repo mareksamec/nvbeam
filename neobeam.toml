@@ -2,7 +2,8 @@
 # Copy this file to ~/.config/neobeam/neobeam.toml
 
 [font]
-# family = "Monospace"
+#family = "Monospace"
+family = "Hack Nerd Font Mono"
 # size = 10
 # hinting = "default"  # none, slight, medium, full, default
 # antialiasing = true
