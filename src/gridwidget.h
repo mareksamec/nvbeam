@@ -60,6 +60,9 @@ public:
     int cellWidth() const { return m_cellWidth; }
     int cellHeight() const { return m_cellHeight; }
 
+    /// Configure terminal-style mouse selection behavior
+    void setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor);
+
 public slots:
     void handleRedraw(const QVariantList &events);
 
@@ -70,10 +73,6 @@ signals:
                     const QString &modifier, int grid, int row, int col);
 
     // Externalized UI events
-    void cmdlineShow(const QVariantList &content, int pos, const QString &firstc,
-                     const QString &prompt, int indent, int level);
-    void cmdlineHide(int level);
-    void cmdlinePos(int pos, int level);
     void popupmenuShow(const QVariantList &items, int selected, int row, int col, int grid);
     void popupmenuSelect(int selected);
     void popupmenuHide();
@@ -85,6 +84,7 @@ signals:
     void flushed();
 
 protected:
+    bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
@@ -110,9 +110,6 @@ private:
     void handleWinHide(const QVariantList &args);
     void handleWinClose(const QVariantList &args);
     void handleMsgSetPos(const QVariantList &args);
-    void handleCmdlineShow(const QVariantList &args);
-    void handleCmdlineHide(const QVariantList &args);
-    void handleCmdlinePos(const QVariantList &args);
     void handlePopupmenuShow(const QVariantList &args);
     void handlePopupmenuSelect(const QVariantList &args);
     void handlePopupmenuHide(const QVariantList &args);
@@ -121,7 +118,13 @@ private:
     void handleMsgClear(const QVariantList &args);
     void handleMsgShowmode(const QVariantList &args);
     void handleMsgRuler(const QVariantList &args);
+    void handleOptionSet(const QVariantList &args);
     void recalculateGrid();
+    QString extractSelectedText() const;
+    void paintSelection(QPainter &p) const;
+    bool hasSelection() const {
+        return m_selStartRow != m_selEndRow || m_selStartCol != m_selEndCol;
+    }
     QString keyToNvim(QKeyEvent *event);
     QString modifierPrefix(Qt::KeyboardModifiers mods, bool isSpecial);
 
@@ -151,6 +154,20 @@ private:
 
     bool m_mousePressed = false;
     int m_mouseGrid = 0;
+
+    // Neovim mouse option tracking
+    QString m_nvimMouseOpt = "a"; // tracks vim's 'mouse' option value
+
+    // Terminal-style mouse selection state
+    bool m_terminalSelectionEnabled = false;
+    bool m_mouseAutoCopy = true;
+    QColor m_selectionColor = QColor("#44475a");
+    bool m_selecting = false;
+    int m_selStartGrid = 0;
+    int m_selStartRow = 0;
+    int m_selStartCol = 0;
+    int m_selEndRow = 0;
+    int m_selEndCol = 0;
 
     // Multi-grid state
     QHash<int, Grid> m_grids;

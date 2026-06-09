@@ -35,7 +35,6 @@ int main(int argc, char *argv[])
         cfg.fontSize = parser.value(fontSizeOption).toInt();
     }
     if (parser.isSet(nativeUiOption)) {
-        cfg.extCmdline = true;
         cfg.extPopupmenu = true;
         cfg.extTabline = true;
         cfg.extMessages = true;

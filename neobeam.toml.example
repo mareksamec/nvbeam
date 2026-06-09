@@ -21,10 +21,15 @@
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 
 [ui]
-# ext_cmdline = true
 # ext_popupmenu = true
 # ext_tabline = true
 # ext_messages = true
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # accent_color = "#50fa7b"
+# statusline_divider = "powerline"  # "powerline", "pipe", "none"
+
+[mouse]
+# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty
+# auto_copy = true            # auto-copy selection to clipboard on release
+# selection_color = "#44475a" # selection highlight color

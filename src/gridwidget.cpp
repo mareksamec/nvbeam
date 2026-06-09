@@ -5,6 +5,8 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <QDebug>
 #include <cmath>
 #include <algorithm>
@@ -55,9 +57,6 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
     else if (name == "win_hide") handleWinHide(args);
     else if (name == "win_close") handleWinClose(args);
     else if (name == "msg_set_pos") handleMsgSetPos(args);
-    else if (name == "cmdline_show") handleCmdlineShow(args);
-    else if (name == "cmdline_hide") handleCmdlineHide(args);
-    else if (name == "cmdline_pos") handleCmdlinePos(args);
     else if (name == "popupmenu_show") handlePopupmenuShow(args);
     else if (name == "popupmenu_select") handlePopupmenuSelect(args);
     else if (name == "popupmenu_hide") handlePopupmenuHide(args);
@@ -68,6 +67,7 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
     else if (name == "msg_ruler") handleMsgRuler(args);
     else if (name == "busy_start") m_busy = true;
     else if (name == "busy_stop") m_busy = false;
+    else if (name == "option_set") handleOptionSet(args);
     else if (name == "flush") emit flushed();
 }
 
@@ -287,27 +287,6 @@ void GridWidget::handleModeChange(const QVariantList &args)
 
 // --- Externalized UI event handlers ---
 
-void GridWidget::handleCmdlineShow(const QVariantList &args)
-{
-    if (args.size() < 6) return;
-    // [content, pos, firstc, prompt, indent, level]
-    emit cmdlineShow(args[0].toList(), args[1].toInt(),
-                     args[2].toString(), args[3].toString(),
-                     args[4].toInt(), args[5].toInt());
-}
-
-void GridWidget::handleCmdlineHide(const QVariantList &args)
-{
-    int level = (args.size() >= 1) ? args[0].toInt() : 0;
-    emit cmdlineHide(level);
-}
-
-void GridWidget::handleCmdlinePos(const QVariantList &args)
-{
-    if (args.size() < 2) return;
-    emit cmdlinePos(args[0].toInt(), args[1].toInt());
-}
-
 void GridWidget::handlePopupmenuShow(const QVariantList &args)
 {
     if (args.size() < 5) return;
@@ -428,6 +407,9 @@ void GridWidget::paintEvent(QPaintEvent *event)
         }
     }
 
+    // Draw selection overlay
+    paintSelection(painter);
+
     // Draw cursor
     if (!m_busy && m_grids.contains(m_cursorGrid)) {
         const Grid &cg = m_grids[m_cursorGrid];
@@ -541,6 +523,19 @@ QString GridWidget::keyToNvim(QKeyEvent *event)
     return {};
 }
 
+/// Intercept Tab/Backtab before Qt uses them for focus navigation
+bool GridWidget::event(QEvent *ev)
+{
+    if (ev->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(ev);
+        if (ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab) {
+            keyPressEvent(ke);
+            return true;
+        }
+    }
+    return QWidget::event(ev);
+}
+
 void GridWidget::keyPressEvent(QKeyEvent *event)
 {
     QString keys = keyToNvim(event);
@@ -593,6 +588,22 @@ void GridWidget::mousePressEvent(QMouseEvent *event)
     m_mousePressed = true;
     m_mouseGrid = hit.gridId;
 
+    // Terminal-style selection: intercept left-click when nvim mouse is empty
+    bool useTerminalSelection = m_terminalSelectionEnabled &&
+                                m_nvimMouseOpt.isEmpty() &&
+                                event->button() == Qt::LeftButton;
+
+    if (useTerminalSelection) {
+        m_selecting = true;
+        m_selStartGrid = hit.gridId;
+        m_selStartRow = hit.row;
+        m_selStartCol = hit.col;
+        m_selEndRow = hit.row;
+        m_selEndCol = hit.col;
+        update();
+        return;
+    }
+
     QString button;
     if (event->button() == Qt::LeftButton) button = "left";
     else if (event->button() == Qt::RightButton) button = "right";
@@ -608,6 +619,22 @@ void GridWidget::mouseReleaseEvent(QMouseEvent *event)
     auto hit = gridAt(event->pos());
     m_mousePressed = false;
 
+    if (m_selecting && event->button() == Qt::LeftButton) {
+        m_selecting = false;
+        m_selEndRow = hit.row;
+        m_selEndCol = hit.col;
+
+        // Extract selected text from grid cells and copy to clipboard
+        if (m_mouseAutoCopy) {
+            QString text = extractSelectedText();
+            if (!text.isEmpty()) {
+                QGuiApplication::clipboard()->setText(text);
+            }
+        }
+        update();
+        return;
+    }
+
     QString button;
     if (event->button() == Qt::LeftButton) button = "left";
     else if (event->button() == Qt::RightButton) button = "right";
@@ -621,7 +648,16 @@ void GridWidget::mouseReleaseEvent(QMouseEvent *event)
 void GridWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (!m_mousePressed) return;
+
     auto hit = gridAt(event->pos());
+
+    if (m_selecting) {
+        m_selEndRow = hit.row;
+        m_selEndCol = hit.col;
+        update();
+        return;
+    }
+
     QString mod = modifierPrefix(event->modifiers(), false);
     emit inputMouse("left", "drag", mod, m_mouseGrid, hit.row, hit.col);
 }
@@ -632,4 +668,90 @@ void GridWidget::wheelEvent(QWheelEvent *event)
     QString mod = modifierPrefix(event->modifiers(), false);
     QString dir = event->angleDelta().y() > 0 ? "up" : "down";
     emit inputMouse("wheel", dir, mod, hit.gridId, hit.row, hit.col);
+}
+
+void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor)
+{
+    m_terminalSelectionEnabled = terminalSelection;
+    m_mouseAutoCopy = autoCopy;
+    m_selectionColor = selColor;
+}
+
+void GridWidget::handleOptionSet(const QVariantList &args)
+{
+    // option_set events come as: [name, value] pairs
+    if (args.size() < 2) return;
+    QString name = args[0].toString();
+    if (name == "mouse")
+        m_nvimMouseOpt = args[1].toString();
+}
+
+QString GridWidget::extractSelectedText() const
+{
+    if (!m_grids.contains(m_selStartGrid)) return {};
+    const Grid &grid = m_grids[m_selStartGrid];
+
+    // Normalize selection bounds (start before end)
+    int r1 = m_selStartRow, c1 = m_selStartCol;
+    int r2 = m_selEndRow, c2 = m_selEndCol;
+    if (r1 > r2 || (r1 == r2 && c1 > c2)) {
+        std::swap(r1, r2);
+        std::swap(c1, c2);
+    }
+
+    QString result;
+    for (int r = r1; r <= r2; ++r) {
+        if (r < 0 || r >= grid.rows) continue;
+        int startCol = (r == r1) ? c1 : 0;
+        int endCol = (r == r2) ? c2 : grid.cols - 1;
+        startCol = qBound(0, startCol, grid.cols - 1);
+        endCol = qBound(0, endCol, grid.cols - 1);
+
+        QString line;
+        for (int c = startCol; c <= endCol; ++c)
+            line += grid.cells[r][c].text;
+
+        // Trim trailing spaces from each line
+        while (line.endsWith(' ')) line.chop(1);
+        if (r > r1) result += '\n';
+        result += line;
+    }
+    return result;
+}
+
+void GridWidget::paintSelection(QPainter &p) const
+{
+    if (!hasSelection()) return;
+    if (!m_grids.contains(m_selStartGrid)) return;
+    const Grid &grid = m_grids[m_selStartGrid];
+
+    int r1 = m_selStartRow, c1 = m_selStartCol;
+    int r2 = m_selEndRow, c2 = m_selEndCol;
+    if (r1 > r2 || (r1 == r2 && c1 > c2)) {
+        std::swap(r1, r2);
+        std::swap(c1, c2);
+    }
+
+    // Grid pixel offset
+    int gx = grid.x * m_cellWidth;
+    int gy = grid.y * m_cellHeight;
+
+    p.save();
+    p.setBrush(m_selectionColor);
+    p.setPen(Qt::NoPen);
+    p.setOpacity(0.5);
+
+    for (int r = r1; r <= r2; ++r) {
+        if (r < 0 || r >= grid.rows) continue;
+        int startCol = (r == r1) ? c1 : 0;
+        int endCol = (r == r2) ? c2 : grid.cols - 1;
+        startCol = qBound(0, startCol, grid.cols - 1);
+        endCol = qBound(0, endCol, grid.cols - 1);
+
+        int x = gx + startCol * m_cellWidth;
+        int y = gy + r * m_cellHeight;
+        int w = (endCol - startCol + 1) * m_cellWidth;
+        p.drawRect(x, y, w, m_cellHeight);
+    }
+    p.restore();
 }

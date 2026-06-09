@@ -48,9 +48,9 @@
 - [ ] Config option `[preview]` section: enable/disable, max size, position preference
 
 ## Phase 7: Improvements
-- [ ] Improve the statusline (dividers, etc)
-- [ ] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
-- [ ] Consider adding mouse behaviour to .toml config
+- [x] Improve the statusline (dividers, etc)
+- [x] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
+- [x] Consider adding mouse behaviour to .toml config
 
 ## Fixes/Adjustments
 
@@ -62,4 +62,3 @@
 - [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
-

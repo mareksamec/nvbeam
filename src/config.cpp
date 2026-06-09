@@ -44,13 +44,18 @@ Config Config::load(const QString &customPath)
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "\n"
                 "# [ui]\n"
-                "# ext_cmdline = true\n"
                 "# ext_popupmenu = true\n"
                 "# ext_tabline = true\n"
                 "# ext_messages = true\n"
                 "# bufferline = true  # show open buffers instead of tabpages\n"
                 "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
                 "# accent_color = \"#50fa7b\"\n"
+                "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
+                "\n"
+                "# [mouse]\n"
+                "# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty\n"
+                "# auto_copy = true            # auto-copy selection to clipboard on release\n"
+                "# selection_color = \"#44475a\" # selection highlight color\n"
             );
             file.close();
             qDebug() << "Created default config at:" << path;
@@ -118,8 +123,6 @@ Config Config::load(const QString &customPath)
 
         if (data.contains("ui")) {
             auto &ui = data.at("ui");
-            if (ui.contains("ext_cmdline"))
-                cfg.extCmdline = toml::find<bool>(ui, "ext_cmdline");
             if (ui.contains("ext_popupmenu"))
                 cfg.extPopupmenu = toml::find<bool>(ui, "ext_popupmenu");
             if (ui.contains("ext_tabline"))
@@ -132,6 +135,18 @@ Config Config::load(const QString &customPath)
                 cfg.bufferline = toml::find<bool>(ui, "bufferline");
             if (ui.contains("statusline"))
                 cfg.extStatusline = toml::find<bool>(ui, "statusline");
+            if (ui.contains("statusline_divider"))
+                cfg.statuslineDivider = QString::fromStdString(toml::find<std::string>(ui, "statusline_divider"));
+        }
+
+        if (data.contains("mouse")) {
+            auto &mouse = data.at("mouse");
+            if (mouse.contains("terminal_selection"))
+                cfg.mouseTerminalSelection = toml::find<bool>(mouse, "terminal_selection");
+            if (mouse.contains("auto_copy"))
+                cfg.mouseAutoCopy = toml::find<bool>(mouse, "auto_copy");
+            if (mouse.contains("selection_color"))
+                cfg.mouseSelectionColor = QString::fromStdString(toml::find<std::string>(mouse, "selection_color"));
         }
     } catch (const std::exception &e) {
         qWarning() << "Failed to parse config:" << e.what();
