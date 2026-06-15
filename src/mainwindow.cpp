@@ -124,6 +124,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
     connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
 
+    // Optionally start with the terminal panel expanded. Toggling the button
+    // (after its connections are wired) keeps the panel and button in sync and
+    // triggers TerminalPanel::showEvent, which starts the shell program.
+    if (cfg.terminalStartExpanded)
+        termBtn->setChecked(true);
+
     setCentralWidget(central);
 
     // Popupmenu is a floating child of the grid

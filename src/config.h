@@ -14,6 +14,7 @@ struct Config {
 
     // Terminal settings
     bool terminalFollowCwd = true;
+    bool terminalStartExpanded = false;   // open with terminal panel visible
     int terminalHeight = 300;             // startup height in pixels
     QString terminalFont;                 // empty = use global font
     int terminalFontSize = 0;             // 0 = use global fontSize
