@@ -55,6 +55,9 @@ public:
     /// present), then optionally reapply saved split proportions.
     void restoreSplits(int count, const QByteArray &splitterState);
 
+    /// Paste system clipboard into the active terminal widget
+    void pasteClipboard();
+
 signals:
     void visibilityChanged(bool visible);
 
@@ -65,7 +68,6 @@ private slots:
     void addTerminal();
     void splitHorizontal();
     void removeCurrentTerminal();
-    void pasteClipboard();
 
 private:
 #ifdef NEOBEAM_HAS_TERMINAL

@@ -88,8 +88,8 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Shortcut | Action |
 |----------|--------|
 | Ctrl+\` | Toggle terminal panel |
-| Shift+Insert | Paste clipboard into terminal |
-| Ctrl+Shift+V | Paste clipboard into terminal |
+| Shift+Insert | Paste clipboard (into terminal when focused, into Neovim otherwise) |
+| Ctrl+Shift+V | Paste clipboard (into terminal when focused, into Neovim otherwise) |
 
 ## Configuration
 
