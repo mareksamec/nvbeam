@@ -1,0 +1,46 @@
+#pragma once
+
+#include <QByteArray>
+#include <QString>
+
+class QSettings;
+
+/// Persists app-managed session state (window geometry, terminal layout) to an
+/// INI file alongside the user config, at AppConfigLocation/session.ini.
+///
+/// This is intentionally separate from Config (neobeam.toml): the TOML file is
+/// user-authored and generated with everything commented out, so writing opaque
+/// binary blobs (QSplitter/geometry state) back into it would clobber the user's
+/// formatting. Session state is machine-written and lives in its own file.
+class Session
+{
+public:
+    Session();
+    ~Session();
+
+    /// Absolute path to the session INI file.
+    static QString filePath();
+
+    // --- Window geometry (best-effort; WM/compositor may override) ---
+    QByteArray windowGeometry() const;
+    void setWindowGeometry(const QByteArray &geometry);
+
+    // --- Editor/terminal vertical splitter proportions ---
+    QByteArray verticalSplitterState() const;
+    void setVerticalSplitterState(const QByteArray &state);
+
+    // --- Terminal panel layout ---
+    bool hasTerminalState() const;          // false until first save
+    int terminalSplitCount() const;         // number of terminal splits (>= 1)
+    void setTerminalSplitCount(int count);
+    QByteArray terminalSplitterState() const;
+    void setTerminalSplitterState(const QByteArray &state);
+    bool terminalExpanded() const;          // whether panel was visible
+    void setTerminalExpanded(bool expanded);
+
+    /// Flush pending writes to disk.
+    void sync();
+
+private:
+    QSettings *m_settings = nullptr;
+};

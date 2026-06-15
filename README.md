@@ -8,10 +8,11 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 
 - **Full Neovim integration** — ext_linegrid, ext_multigrid, ext_hlstate, ext_cmdline, ext_popupmenu, ext_tabline, ext_messages
 - **Native statusline** — mode indicator, file, git branch, diagnostics, position
-- **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle)
+- **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
 - **TOML configuration** — sensible defaults, all options commented out in the generated config
+- **Session restore** — remembers window size, terminal splits/proportions, panel height, and expanded state
 - **Wayland native** — via qt6-wayland
 - **Image rendering** — *(Planned)* placeholder for upcoming `vim.ui.img` API
 
@@ -130,6 +131,11 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # terminal_selection = true   # terminal-style select/copy when vim mouse= is empty
 # auto_copy = true            # auto-copy selection to clipboard on release
 # selection_color = "#44475a" # selection highlight color
+
+# [session]
+# restore = true           # remember and restore last session on startup
+# restore_window = true    # best-effort window size/state (WM/Wayland may override)
+# restore_terminal = true  # terminal split count, proportions, height, expanded state
 ```
 
 A ready-to-copy `neobeam.toml.example` is also included in the project root.
@@ -169,6 +175,13 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `terminal_selection` — Terminal-style select/copy in nvim buffers when vim `mouse=` is empty (default: `true`)
 - `auto_copy` — Auto-copy the selection to the clipboard on release (default: `true`)
 - `selection_color` — Selection highlight color (default: `"#44475a"`)
+
+**`[session]`**
+- `restore` — Remember and restore the last session on startup; master switch for the options below (default: `true`)
+- `restore_window` — Restore window size/state. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
+- `restore_terminal` — Restore the terminal split count, split proportions, panel height, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`)
+
+Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it).
 
 ## License
 

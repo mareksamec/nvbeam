@@ -41,6 +41,19 @@ public:
     /// Toggle panel visibility
     void toggle();
 
+    /// Whether the panel is currently expanded (visible).
+    bool isExpanded() const { return isVisible(); }
+
+    // --- Session save/restore of the split layout ---
+
+    /// Number of terminal splits currently open (>= 1).
+    int splitCount() const;
+    /// Opaque QSplitter state capturing split proportions.
+    QByteArray splitterState() const;
+    /// Recreate {count} terminal splits (in addition to the initial one already
+    /// present), then optionally reapply saved split proportions.
+    void restoreSplits(int count, const QByteArray &splitterState);
+
 signals:
     void visibilityChanged(bool visible);
 
@@ -64,4 +77,6 @@ private:
     QToolBar *m_toolbar = nullptr;
     TerminalConfig m_cfg;
     QString m_cwd;
+
+    static constexpr int kMinHeight = 80; // minimum panel height in pixels when resizing
 };

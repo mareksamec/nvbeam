@@ -40,6 +40,11 @@ struct Config {
     bool mouseAutoCopy = true;           // auto-copy selection to clipboard on release
     QString mouseSelectionColor = "#44475a"; // selection highlight color
 
+    // Session restore
+    bool sessionRestore = true;          // master switch for restoring last session
+    bool sessionRestoreWindow = true;    // best-effort window size/state (WM may override)
+    bool sessionRestoreTerminal = true;  // terminal split count, proportions, height, expanded state
+
     // Load config from given path, or standard path if empty
     static Config load(const QString &path = {});
 
