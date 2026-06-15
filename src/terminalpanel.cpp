@@ -174,6 +174,7 @@ QTermWidget *TerminalPanel::createTermWidget()
     // Color scheme (default "Linux" = white on black)
     term->setColorScheme(m_cfg.colorScheme);
     term->setScrollBarPosition(QTermWidgetInterface::ScrollBarRight);
+    term->setHistorySize(m_cfg.scrollback); // scrollback lines (in-memory buffer)
     term->setWorkingDirectory(m_cwd);
     term->setTerminalOpacity(1.0);
 

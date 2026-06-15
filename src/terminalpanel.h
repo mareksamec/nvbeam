@@ -25,6 +25,7 @@ struct TerminalConfig {
     bool rightClickPaste = false;  // PuTTY-style right-click paste
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
+    int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
 };
 
 /// VSCode-like embedded terminal panel with split support

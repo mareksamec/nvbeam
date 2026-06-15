@@ -98,6 +98,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
+    termCfg.scrollback = cfg.terminalScrollback;
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
     // Assemble the vertical splitter: editor area on top, terminal below.

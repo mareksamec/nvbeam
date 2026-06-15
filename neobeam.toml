@@ -21,6 +21,7 @@ shell = "/usr/bin/zsh"  # shell program (empty = system default)
 right_click_paste = true  # PuTTY-style right-click paste
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
+# scrollback = 1000  # scrollback buffer size in lines
 
 [ui]
 # ext_cmdline = true
