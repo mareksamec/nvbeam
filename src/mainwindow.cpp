@@ -6,6 +6,8 @@
 #include "minimap.h"
 #include "imagerenderer.h"
 #include "config.h"
+#include "session.h"
+#include <QCloseEvent>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
@@ -13,6 +15,7 @@
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QShortcut>
+#include <QSplitter>
 #include <QTimer>
 #include <QVBoxLayout>
 
@@ -40,33 +43,47 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     setWindowTitle("neobeam");
     resize(800, 600);
 
+    m_session = new Session();
+
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
-    m_tabline = new TablineWidget(cfg.accentColor, central);
-    layout->addWidget(m_tabline);
+    // Vertical splitter: the editor area (top) and the terminal panel (bottom)
+    // are resizable relative to each other by dragging the handle.
+    m_vsplitter = new QSplitter(Qt::Vertical, central);
+    m_vsplitter->setStyleSheet("QSplitter::handle { background: #333; height: 2px; }");
+    m_vsplitter->setChildrenCollapsible(false);
 
-    m_grid = new GridWidget(cfg.font(), central);
+    // Editor area container: tabline, grid+minimap row, messages, statusline.
+    auto *editorArea = new QWidget(m_vsplitter);
+    auto *editorLayout = new QVBoxLayout(editorArea);
+    editorLayout->setContentsMargins(0, 0, 0, 0);
+    editorLayout->setSpacing(0);
+
+    m_tabline = new TablineWidget(cfg.accentColor, editorArea);
+    editorLayout->addWidget(m_tabline);
+
+    m_grid = new GridWidget(cfg.font(), editorArea);
     m_grid->setMouseConfig(cfg.mouseTerminalSelection, cfg.mouseAutoCopy,
                            QColor(cfg.mouseSelectionColor));
 
     // Grid + minimap side by side
-    m_minimap = new MinimapWidget(central);
+    m_minimap = new MinimapWidget(editorArea);
     auto *editorRow = new QHBoxLayout();
     editorRow->setContentsMargins(0, 0, 0, 0);
     editorRow->setSpacing(0);
     editorRow->addWidget(m_grid, 1);
     editorRow->addWidget(m_minimap);
-    layout->addLayout(editorRow, 1);
+    editorLayout->addLayout(editorRow, 1);
 
-    m_messages = new MessageWidget(cfg.accentColor, central);
-    layout->addWidget(m_messages);
+    m_messages = new MessageWidget(cfg.accentColor, editorArea);
+    editorLayout->addWidget(m_messages);
 
-    m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, central);
+    m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
     if (cfg.extStatusline)
-        layout->addWidget(m_statusline);
+        editorLayout->addWidget(m_statusline);
 
     // Embedded terminal panel (VSCode-like, below statusline)
     TerminalConfig termCfg;
@@ -81,8 +98,14 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
-    m_terminal = new TerminalPanel(termCfg, central);
-    layout->addWidget(m_terminal);
+    m_terminal = new TerminalPanel(termCfg, m_vsplitter);
+
+    // Assemble the vertical splitter: editor area on top, terminal below.
+    m_vsplitter->addWidget(editorArea);
+    m_vsplitter->addWidget(m_terminal);
+    m_vsplitter->setStretchFactor(0, 1); // editor area takes extra space
+    m_vsplitter->setStretchFactor(1, 0);
+    layout->addWidget(m_vsplitter, 1);
 
     // Ctrl+` toggles terminal panel
     auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
@@ -124,13 +147,41 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
     connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
 
-    // Optionally start with the terminal panel expanded. Toggling the button
-    // (after its connections are wired) keeps the panel and button in sync and
-    // triggers TerminalPanel::showEvent, which starts the shell program.
-    if (cfg.terminalStartExpanded)
+    setCentralWidget(central);
+
+    // --- Session restore ---
+    // Terminal layout: restore split count + proportions before deciding
+    // visibility, so the panel comes back exactly as it was left.
+    const bool restoreTerm = cfg.sessionRestore && cfg.sessionRestoreTerminal
+                             && m_session->hasTerminalState();
+    if (restoreTerm)
+        m_terminal->restoreSplits(m_session->terminalSplitCount(),
+                                  m_session->terminalSplitterState());
+
+    // Expanded state: when session restore is active it takes precedence over
+    // the start_expanded config default; otherwise fall back to the config.
+    const bool startExpanded = restoreTerm ? m_session->terminalExpanded()
+                                           : cfg.terminalStartExpanded;
+    // Toggling the button (after connections are wired) keeps panel and button
+    // in sync and triggers TerminalPanel::showEvent, which starts the shell.
+    if (startExpanded)
         termBtn->setChecked(true);
 
-    setCentralWidget(central);
+    // Editor/terminal split proportions. If no saved state, seed the terminal
+    // with its configured startup height.
+    if (cfg.sessionRestore && !m_session->verticalSplitterState().isEmpty()) {
+        m_vsplitter->restoreState(m_session->verticalSplitterState());
+    } else {
+        const int h = qMax(1, height());
+        m_vsplitter->setSizes({ qMax(1, h - cfg.terminalHeight), cfg.terminalHeight });
+    }
+
+    // Window geometry (best-effort; the window manager / Wayland compositor may
+    // override size and will ignore position on Wayland). Applied before show().
+    if (cfg.sessionRestore && cfg.sessionRestoreWindow
+        && !m_session->windowGeometry().isEmpty()) {
+        restoreGeometry(m_session->windowGeometry());
+    }
 
     // Popupmenu is a floating child of the grid
     m_popupmenu = new PopupmenuWidget(cfg.accentColor, m_grid);
@@ -312,4 +363,24 @@ MainWindow::~MainWindow()
     if (m_nvim) {
         m_nvim->stop();
     }
+    delete m_session;
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    // Persist session state. We always write it; the restore side is gated by
+    // config, so saving unconditionally keeps the file ready if the user later
+    // enables restore.
+    if (m_session) {
+        m_session->setWindowGeometry(saveGeometry());
+        if (m_vsplitter)
+            m_session->setVerticalSplitterState(m_vsplitter->saveState());
+        if (m_terminal) {
+            m_session->setTerminalSplitCount(m_terminal->splitCount());
+            m_session->setTerminalSplitterState(m_terminal->splitterState());
+            m_session->setTerminalExpanded(m_terminal->isExpanded());
+        }
+        m_session->sync();
+    }
+    QMainWindow::closeEvent(event);
 }

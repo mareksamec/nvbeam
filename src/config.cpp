@@ -57,6 +57,11 @@ Config Config::load(const QString &customPath)
                 "# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty\n"
                 "# auto_copy = true            # auto-copy selection to clipboard on release\n"
                 "# selection_color = \"#44475a\" # selection highlight color\n"
+                "\n"
+                "# [session]\n"
+                "# restore = true           # remember and restore last session on startup\n"
+                "# restore_window = true    # best-effort window size/state (WM/Wayland may override)\n"
+                "# restore_terminal = true  # terminal split count, proportions, height, expanded state\n"
             );
             file.close();
             qDebug() << "Created default config at:" << path;
@@ -150,6 +155,16 @@ Config Config::load(const QString &customPath)
                 cfg.mouseAutoCopy = toml::find<bool>(mouse, "auto_copy");
             if (mouse.contains("selection_color"))
                 cfg.mouseSelectionColor = QString::fromStdString(toml::find<std::string>(mouse, "selection_color"));
+        }
+
+        if (data.contains("session")) {
+            auto &session = data.at("session");
+            if (session.contains("restore"))
+                cfg.sessionRestore = toml::find<bool>(session, "restore");
+            if (session.contains("restore_window"))
+                cfg.sessionRestoreWindow = toml::find<bool>(session, "restore_window");
+            if (session.contains("restore_terminal"))
+                cfg.sessionRestoreTerminal = toml::find<bool>(session, "restore_terminal");
         }
     } catch (const std::exception &e) {
         qWarning() << "Failed to parse config:" << e.what();

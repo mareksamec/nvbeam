@@ -32,6 +32,7 @@ add_executable(neobeam
     src/nvimprocess.cpp
     src/gridwidget.cpp
     src/config.cpp
+    src/session.cpp
     src/uiwidgets.cpp
     src/terminalpanel.cpp
     src/minimap.cpp

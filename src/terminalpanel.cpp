@@ -40,7 +40,10 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     layout->addWidget(m_splitter, 1);
 
     setStyleSheet("background: #000; border-top: 1px solid #333;");
-    setFixedHeight(cfg.height);
+    // Resizable: enforce a sensible minimum rather than a fixed height so the
+    // user can drag the editor/terminal splitter. The initial height is applied
+    // by MainWindow via the vertical splitter's sizes.
+    setMinimumHeight(kMinHeight);
     hide();
 
     // Create initial terminal
@@ -57,6 +60,35 @@ void TerminalPanel::toggle()
 {
     setVisible(!isVisible());
     emit visibilityChanged(isVisible());
+}
+
+int TerminalPanel::splitCount() const
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    return m_terminals.size();
+#else
+    return m_splitter ? m_splitter->count() : 0;
+#endif
+}
+
+QByteArray TerminalPanel::splitterState() const
+{
+    return m_splitter ? m_splitter->saveState() : QByteArray();
+}
+
+void TerminalPanel::restoreSplits(int count, const QByteArray &splitterState)
+{
+    // The constructor already created one terminal, so add the remainder.
+    // Clamp to a sane upper bound to avoid pathological restores.
+    constexpr int kMaxSplits = 16;
+    const int target = qBound(1, count, kMaxSplits);
+    for (int i = splitCount(); i < target; ++i)
+        addTerminal();
+
+    // Reapply proportions after the widgets exist. QSplitter::restoreState only
+    // takes effect once the handle count matches the saved state.
+    if (!splitterState.isEmpty() && m_splitter)
+        m_splitter->restoreState(splitterState);
 }
 
 void TerminalPanel::showEvent(QShowEvent *event)
