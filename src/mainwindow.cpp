@@ -49,6 +49,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     layout->addWidget(m_tabline);
 
     m_grid = new GridWidget(cfg.font(), central);
+    m_grid->setMouseConfig(cfg.mouseTerminalSelection, cfg.mouseAutoCopy,
+                           QColor(cfg.mouseSelectionColor));
 
     // Grid + minimap side by side
     m_minimap = new MinimapWidget(central);
@@ -62,7 +64,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_messages = new MessageWidget(cfg.accentColor, central);
     layout->addWidget(m_messages);
 
-    m_statusline = new StatuslineWidget(cfg.accentColor, central);
+    m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, central);
     if (cfg.extStatusline)
         layout->addWidget(m_statusline);
 

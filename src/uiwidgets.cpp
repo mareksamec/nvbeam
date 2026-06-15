@@ -1,44 +1,7 @@
 #include "uiwidgets.h"
 #include <QHBoxLayout>
-
-// --- CmdlineWidget ---
-
-CmdlineWidget::CmdlineWidget(const QString &accent, QWidget *parent)
-    : QWidget(parent)
-{
-    auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(12, 6, 12, 6);
-    m_label = new QLabel(this);
-    m_label->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 11pt;").arg(accent));
-    layout->addWidget(m_label);
-    setStyleSheet(QString("background-color: #1a1b26; border-top: 2px solid %1;").arg(accent));
-    setFixedHeight(32);
-    setVisible(false);
-}
-
-void CmdlineWidget::show(const QVariantList &content, int pos, const QString &firstc,
-                          const QString &prompt, int indent, int level)
-{
-    Q_UNUSED(pos) Q_UNUSED(indent) Q_UNUSED(level)
-    QString text = prompt + firstc;
-    for (const auto &chunk : content) {
-        QVariantList c = chunk.toList();
-        if (c.size() >= 2) text += c[1].toString();
-    }
-    m_label->setText(text);
-    setVisible(true);
-}
-
-void CmdlineWidget::hide(int level)
-{
-    Q_UNUSED(level)
-    setVisible(false);
-}
-
-void CmdlineWidget::setPos(int pos, int level)
-{
-    Q_UNUSED(pos) Q_UNUSED(level)
-}
+#include <QFontMetrics>
+#include <QPainterPath>
 
 // --- PopupmenuWidget ---
 
@@ -49,6 +12,7 @@ PopupmenuWidget::PopupmenuWidget(const QString &accent, QWidget *parent)
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     m_list = new QListWidget(this);
+    m_list->setFocusPolicy(Qt::NoFocus);
     m_list->setStyleSheet(QString(
         "QListWidget { background-color: #1a1b26; color: #c0caf5; border: 1px solid %1; "
         "font-family: monospace; font-size: 10pt; border-radius: 4px; }"
@@ -58,6 +22,7 @@ PopupmenuWidget::PopupmenuWidget(const QString &accent, QWidget *parent)
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     layout->addWidget(m_list);
+    setFocusPolicy(Qt::NoFocus);
     setVisible(false);
 }
 
@@ -231,80 +196,151 @@ void MessageWidget::showRuler(const QVariantList &content)
 
 // --- StatuslineWidget ---
 
-StatuslineWidget::StatuslineWidget(const QString &accent, QWidget *parent)
+StatuslineWidget::StatuslineWidget(const QString &accent, const QString &dividerStyle,
+                                   QWidget *parent)
     : QWidget(parent)
+    , m_dividerStyle(dividerStyle)
     , m_accent(accent)
 {
-    auto *layout = new QHBoxLayout(this);
-    layout->setContentsMargins(8, 0, 8, 0);
-    layout->setSpacing(12);
-
-    m_modeLabel = new QLabel(this);
-    m_modeLabel->setStyleSheet(QString(
-        "color: #1a1b26; background-color: %1; font-family: monospace; "
-        "font-size: 10pt; font-weight: bold; padding: 2px 8px; border-radius: 3px;"
-    ).arg(accent));
-
-    m_branchLabel = new QLabel(this);
-    m_branchLabel->setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;");
-
-    m_fileLabel = new QLabel(this);
-    m_fileLabel->setStyleSheet("color: #c0caf5; font-family: monospace; font-size: 10pt;");
-
-    m_diagLabel = new QLabel(this);
-    m_diagLabel->setStyleSheet("color: #f7768e; font-family: monospace; font-size: 10pt;");
-
-    m_encodingLabel = new QLabel(this);
-    m_encodingLabel->setStyleSheet("color: #888; font-family: monospace; font-size: 10pt;");
-
-    m_posLabel = new QLabel(this);
-    m_posLabel->setStyleSheet(QString(
-        "color: %1; font-family: monospace; font-size: 10pt;"
-    ).arg(accent));
-
-    layout->addWidget(m_modeLabel);
-    layout->addWidget(m_branchLabel);
-    layout->addWidget(m_fileLabel, 1); // stretch
-    layout->addWidget(m_diagLabel);
-    layout->addWidget(m_encodingLabel);
-    layout->addWidget(m_posLabel);
-
-    setStyleSheet("background-color: #1a1b26; border-top: 1px solid #333;");
     setFixedHeight(28);
-    setMode("NORMAL");
+    rebuildSegments();
+}
+
+QColor StatuslineWidget::modeColor() const
+{
+    if (m_mode.startsWith("I", Qt::CaseInsensitive))
+        return QColor("#c678dd"); // violet — Insert
+    if (m_mode.startsWith("V", Qt::CaseInsensitive) ||
+        m_mode.startsWith("S", Qt::CaseInsensitive) ||
+        m_mode.contains("BLOCK", Qt::CaseInsensitive))
+        return QColor("#56b6c2"); // cyan — Visual/Select
+    if (m_mode.startsWith("C", Qt::CaseInsensitive))
+        return QColor("#e5c07b"); // yellow — Command
+    if (m_mode.startsWith("R", Qt::CaseInsensitive))
+        return QColor("#f7768e"); // red — Replace
+    return QColor(m_accent); // Normal
+}
+
+void StatuslineWidget::rebuildSegments()
+{
+    m_segments.clear();
+    QColor modeBg = modeColor();
+    QColor dark("#1a1b26");
+    QColor mid("#24283b");
+    QColor dim("#565f89");
+
+    // Mode segment
+    m_segments.append({" " + m_mode + " ", dark, modeBg});
+
+    // Branch segment
+    if (!m_branch.isEmpty())
+        m_segments.append({" " + m_branch + " ", QColor("#c0caf5"), mid});
+
+    // File segment (this one stretches — index tracked below)
+    m_stretchIndex = m_segments.size();
+    m_segments.append({" " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ",
+                       QColor("#c0caf5"), dark});
+
+    // Diagnostics
+    if (!m_diag.isEmpty())
+        m_segments.append({" " + m_diag + " ", QColor("#f7768e"), mid});
+
+    // Encoding
+    if (!m_encoding.isEmpty())
+        m_segments.append({" " + m_encoding + " ", dim, mid});
+
+    // Position
+    if (!m_pos.isEmpty())
+        m_segments.append({" " + m_pos + " ", dark, modeBg});
 }
 
 void StatuslineWidget::setMode(const QString &mode)
 {
-    m_modeLabel->setText(mode.toUpper());
-
-    // Per-mode indicator colors (One Dark theme)
-    QString bg = m_accent; // default (NORMAL etc.)
-    if (mode.startsWith("i", Qt::CaseInsensitive))
-        bg = "#c678dd"; // violet — Insert
-    else if (mode.startsWith("v", Qt::CaseInsensitive) ||
-             mode.startsWith("s", Qt::CaseInsensitive) ||
-             mode.contains("block", Qt::CaseInsensitive))
-        bg = "#56b6c2"; // cyan — Visual/Select/V-Block
-
-    m_modeLabel->setStyleSheet(QString(
-        "color: #1a1b26; background-color: %1; font-family: monospace; "
-        "font-size: 10pt; font-weight: bold; padding: 2px 8px; border-radius: 3px;"
-    ).arg(bg));
+    m_mode = mode.toUpper();
+    rebuildSegments();
+    update();
 }
 
 void StatuslineWidget::updateStatus(const QVariantMap &data)
 {
-    if (data.contains("mode"))
-        setMode(data["mode"].toString());
-    if (data.contains("file"))
-        m_fileLabel->setText(data["file"].toString());
-    if (data.contains("branch"))
-        m_branchLabel->setText(data["branch"].toString());
-    if (data.contains("pos"))
-        m_posLabel->setText(data["pos"].toString());
-    if (data.contains("encoding"))
-        m_encodingLabel->setText(data["encoding"].toString());
-    if (data.contains("diagnostics"))
-        m_diagLabel->setText(data["diagnostics"].toString());
+    if (data.contains("mode")) m_mode = data["mode"].toString().toUpper();
+    if (data.contains("file")) m_file = data["file"].toString();
+    if (data.contains("branch")) m_branch = data["branch"].toString();
+    if (data.contains("pos")) m_pos = data["pos"].toString();
+    if (data.contains("encoding")) m_encoding = data["encoding"].toString();
+    if (data.contains("diagnostics")) m_diag = data["diagnostics"].toString();
+    rebuildSegments();
+    update();
+}
+
+void StatuslineWidget::paintEvent(QPaintEvent * /*event*/)
+{
+    QPainter p(this);
+    p.setRenderHint(QPainter::Antialiasing, true);
+
+    QFont font("monospace", 10);
+    font.setBold(true);
+    p.setFont(font);
+    QFontMetrics fm(font);
+
+    QColor bgDefault("#1a1b26");
+    p.fillRect(rect(), bgDefault);
+
+    if (m_segments.isEmpty()) return;
+
+    // Calculate segment widths; the file segment (index 2) stretches
+    int divW = (m_dividerStyle == "powerline") ? 12 : 0;
+    if (m_dividerStyle == "pipe") divW = fm.horizontalAdvance("|") + 4;
+
+    QVector<int> widths(m_segments.size());
+    int fixedWidth = 0;
+    for (int i = 0; i < m_segments.size(); ++i) {
+        widths[i] = fm.horizontalAdvance(m_segments[i].text) + 4;
+        if (i != m_stretchIndex) fixedWidth += widths[i];
+    }
+    fixedWidth += divW * (m_segments.size() - 1);
+    widths[m_stretchIndex] = qMax(widths[m_stretchIndex], width() - fixedWidth);
+
+    int x = 0;
+    for (int i = 0; i < m_segments.size(); ++i) {
+        const auto &seg = m_segments[i];
+        int w = widths[i];
+
+        // Draw segment background
+        p.fillRect(x, 0, w, height(), seg.bg);
+
+        // Draw text
+        p.setPen(seg.fg);
+        QFont textFont = font;
+        textFont.setBold(i == 0);
+        p.setFont(textFont);
+        p.drawText(x, 0, w, height(), Qt::AlignVCenter | Qt::AlignLeft, seg.text);
+        x += w;
+
+        // Draw divider between segments
+        if (i < m_segments.size() - 1 && divW > 0) {
+            QColor prevBg = seg.bg;
+            QColor nextBg = m_segments[i + 1].bg;
+
+            if (m_dividerStyle == "powerline") {
+                // Fill divider area with next segment's bg
+                p.fillRect(x, 0, divW, height(), nextBg);
+                // Draw triangle pointing right with prev segment's color
+                QPainterPath tri;
+                tri.moveTo(x, 0);
+                tri.lineTo(x + divW, height() / 2.0);
+                tri.lineTo(x, height());
+                tri.closeSubpath();
+                p.setPen(Qt::NoPen);
+                p.setBrush(prevBg);
+                p.drawPath(tri);
+            } else if (m_dividerStyle == "pipe") {
+                p.fillRect(x, 0, divW, height(), nextBg);
+                p.setPen(QColor("#565f89"));
+                p.setFont(font);
+                p.drawText(x, 0, divW, height(), Qt::AlignCenter, QStringLiteral("\u2502"));
+            }
+            x += divW;
+        }
+    }
 }

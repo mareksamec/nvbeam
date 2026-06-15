@@ -26,13 +26,18 @@ struct Config {
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
 
     // UI extensions (native chrome)
-    bool extCmdline = true;
     bool extPopupmenu = true;
     bool extTabline = true;
     bool extMessages = true;
     bool bufferline = true;           // show open buffers instead of tabpages
     bool extStatusline = true;        // native statusline widget
     QString accentColor = "#50fa7b";  // greenish accent for native elements
+    QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
+
+    // Mouse settings
+    bool mouseTerminalSelection = true;  // terminal-style selection when vim mouse= empty
+    bool mouseAutoCopy = true;           // auto-copy selection to clipboard on release
+    QString mouseSelectionColor = "#44475a"; // selection highlight color
 
     // Load config from given path, or standard path if empty
     static Config load(const QString &path = {});

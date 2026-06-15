@@ -6,21 +6,8 @@
 #include <QTabBar>
 #include <QVBoxLayout>
 #include <QVariant>
-
-/// Native command line widget
-class CmdlineWidget : public QWidget
-{
-    Q_OBJECT
-public:
-    explicit CmdlineWidget(const QString &accent, QWidget *parent = nullptr);
-    void show(const QVariantList &content, int pos, const QString &firstc,
-              const QString &prompt, int indent, int level);
-    void hide(int level);
-    void setPos(int pos, int level);
-
-private:
-    QLabel *m_label;
-};
+#include <QPainter>
+#include <QPaintEvent>
 
 /// Native popup menu widget
 class PopupmenuWidget : public QWidget
@@ -77,7 +64,8 @@ class StatuslineWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit StatuslineWidget(const QString &accent, QWidget *parent = nullptr);
+    explicit StatuslineWidget(const QString &accent, const QString &dividerStyle = "powerline",
+                              QWidget *parent = nullptr);
 
     /// Update all statusline segments from Neovim state
     void updateStatus(const QVariantMap &data);
@@ -85,12 +73,25 @@ public:
     /// Update the current mode display
     void setMode(const QString &mode);
 
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
 private:
-    QLabel *m_modeLabel;
-    QLabel *m_fileLabel;
-    QLabel *m_branchLabel;
-    QLabel *m_diagLabel;
-    QLabel *m_posLabel;
-    QLabel *m_encodingLabel;
+    struct Segment {
+        QString text;
+        QColor fg;
+        QColor bg;
+    };
+    QVector<Segment> m_segments;
+    int m_stretchIndex = 0;
+    QString m_dividerStyle;
     QString m_accent;
+    QString m_mode = "NORMAL";
+    QString m_file;
+    QString m_branch;
+    QString m_diag;
+    QString m_pos;
+    QString m_encoding;
+    QColor modeColor() const;
+    void rebuildSegments();
 };
