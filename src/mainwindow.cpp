@@ -257,7 +257,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 }
 
                 // Tick changed: rebuild highlight pixmap.
-                m_minimapLastTick = tick;
+                // Only "lock in" this tick once the scan covered the whole capped
+                // span (max 2000 lines, matching minimap.lua). This prevents a
+                // partial scan from suppressing future refreshes via the tick gate.
+                int scanned = data["scanned"].toInt();
+                if (scanned >= qMin(total, 2000))
+                    m_minimapLastTick = tick;
                 QVariantList hlLines = data["lines"].toList();
                 QVector<MinimapLine> lines;
                 lines.reserve(hlLines.size());
