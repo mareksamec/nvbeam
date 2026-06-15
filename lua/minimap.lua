@@ -34,6 +34,16 @@ end
 -- Treesitter highlight pass
 local ok, parser = pcall(vim.treesitter.get_parser, buf)
 if ok and parser then
+    -- Force a synchronous, complete parse of the region we scan.
+    -- get_parser() alone does NOT parse the buffer; for_each_tree/iter_captures
+    -- would otherwise only see the viewport region that Neovim's async
+    -- highlighter has parsed so far, leaving middle/bottom rows blank until a
+    -- later redraw (the "flashing minimap" symptom). parse() called without an
+    -- on_parse callback runs to completion synchronously. Bounding it to
+    -- {0, max_lines} keeps injected-language scanning limited to the lines the
+    -- minimap actually draws.
+    pcall(function() parser:parse({ 0, max_lines }) end)
+
     local fg_cache = {}
     local function get_fg(hl_name)
         local cached = fg_cache[hl_name]
@@ -98,4 +108,6 @@ else
     end
 end
 
-return { tick = tick, lines = hl_lines, total = total, top = top, bot = bot, cursor = cursor }
+-- `scanned` lets the GUI know how many lines this scan actually covered, so it
+-- can avoid caching this tick (and suppressing future refreshes) on a partial scan.
+return { tick = tick, lines = hl_lines, total = total, top = top, bot = bot, cursor = cursor, scanned = max_lines }
