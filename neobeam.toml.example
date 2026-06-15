@@ -9,6 +9,7 @@
 
 [terminal]
 # follow_cwd = true  # terminal follows nvim working directory
+# start_expanded = false  # open with the terminal panel visible
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)

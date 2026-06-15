@@ -32,6 +32,7 @@ Config Config::load(const QString &customPath)
                 "\n"
                 "# [terminal]\n"
                 "# follow_cwd = true  # terminal follows nvim working directory\n"
+                "# start_expanded = false  # open with the terminal panel visible\n"
                 "# height = 300  # startup height in pixels\n"
                 "# font = \"\"  # terminal font (empty = use global font)\n"
                 "# font_size = 0  # terminal font size (0 = use global)\n"
@@ -91,6 +92,8 @@ Config Config::load(const QString &customPath)
             if (term.contains("follow_cwd")) {
                 cfg.terminalFollowCwd = toml::find<bool>(term, "follow_cwd");
             }
+            if (term.contains("start_expanded"))
+                cfg.terminalStartExpanded = toml::find<bool>(term, "start_expanded");
             if (term.contains("height"))
                 cfg.terminalHeight = toml::find<int>(term, "height");
             if (term.contains("font"))
