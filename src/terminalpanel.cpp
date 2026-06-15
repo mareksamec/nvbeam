@@ -2,7 +2,6 @@
 #include <QShowEvent>
 #include <QVBoxLayout>
 #include <QDir>
-#include <QShortcut>
 #include <QMouseEvent>
 #include <QApplication>
 #include <QClipboard>
@@ -48,12 +47,6 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     // Create initial terminal
     addTerminal();
-
-    // Paste shortcuts: Shift+Insert and Ctrl+Shift+V
-    auto *pasteShortcut1 = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Insert), this);
-    connect(pasteShortcut1, &QShortcut::activated, this, &TerminalPanel::pasteClipboard);
-    auto *pasteShortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this);
-    connect(pasteShortcut2, &QShortcut::activated, this, &TerminalPanel::pasteClipboard);
 }
 
 void TerminalPanel::toggle()

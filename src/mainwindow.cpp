@@ -8,10 +8,12 @@
 #include "config.h"
 #include "session.h"
 #include <QCloseEvent>
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFontMetrics>
+#include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QShortcut>
@@ -111,6 +113,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Ctrl+` toggles terminal panel
     auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
     connect(termShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::toggle);
+
+    // Paste shortcuts: route to terminal or nvim depending on focus
+    auto pasteHandler = [this]() {
+        if (m_terminal->isVisible() && m_terminal->isAncestorOf(focusWidget())) {
+            m_terminal->pasteClipboard();
+        } else {
+            QString text = QGuiApplication::clipboard()->text();
+            if (!text.isEmpty())
+                m_nvim->request("nvim_paste", {text, true, -1});
+        }
+    };
+    auto *pasteShortcut1 = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Insert), this);
+    connect(pasteShortcut1, &QShortcut::activated, this, pasteHandler);
+    auto *pasteShortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this);
+    connect(pasteShortcut2, &QShortcut::activated, this, pasteHandler);
 
     // Bottom-right toggle buttons (minimap, terminal)
     auto *btnBar = new QWidget(central);
