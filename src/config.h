@@ -25,6 +25,7 @@ struct Config {
     bool terminalRightClickPaste = false; // PuTTY-style right-click paste
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
+    int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
 
     // UI extensions (native chrome)
     bool extPopupmenu = true;

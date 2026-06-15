@@ -117,6 +117,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # right_click_paste = false  # PuTTY-style right-click paste
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
+# scrollback = 1000  # scrollback buffer size in lines
 
 # [ui]
 # ext_popupmenu = true
@@ -161,6 +162,7 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `right_click_paste` — PuTTY-style right-click paste in the terminal (default: `false`)
 - `antialiasing` — Enable font antialiasing in the terminal (default: `true`)
 - `hinting` — Terminal font hinting: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
+- `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
 
 **`[ui]`**
 - `ext_popupmenu` — Native completion popup (default: `true`)

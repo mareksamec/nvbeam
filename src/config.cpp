@@ -43,6 +43,7 @@ Config Config::load(const QString &customPath)
                 "# right_click_paste = false  # PuTTY-style right-click paste\n"
                 "# antialiasing = true  # font antialiasing in terminal\n"
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
+                "# scrollback = 1000  # scrollback buffer size in lines\n"
                 "\n"
                 "# [ui]\n"
                 "# ext_popupmenu = true\n"
@@ -126,6 +127,11 @@ Config Config::load(const QString &customPath)
                 else if (h == "slight") cfg.terminalHinting = QFont::PreferVerticalHinting;
                 else if (h == "full") cfg.terminalHinting = QFont::PreferFullHinting;
                 else cfg.terminalHinting = QFont::PreferDefaultHinting;
+            }
+            if (term.contains("scrollback")) {
+                // Clamp to >= 1: the unlimited (-1) and disabled (0) history
+                // modes are intentionally not exposed yet.
+                cfg.terminalScrollback = qMax(1, toml::find<int>(term, "scrollback"));
             }
         }
 
