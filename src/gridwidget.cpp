@@ -5,6 +5,10 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QDebug>
@@ -24,6 +28,7 @@ GridWidget::GridWidget(const QFont &font, QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
+    setAcceptDrops(true); // accept file drops onto the buffer area
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -668,6 +673,39 @@ void GridWidget::wheelEvent(QWheelEvent *event)
     QString mod = modifierPrefix(event->modifiers(), false);
     QString dir = event->angleDelta().y() > 0 ? "up" : "down";
     emit inputMouse("wheel", dir, mod, hit.gridId, hit.row, hit.col);
+}
+
+void GridWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    // Only accept drags that carry at least one local file path (e.g. from a
+    // file manager). Non-file drags are left for other widgets / ignored.
+    if (!event->mimeData()->hasUrls())
+        return;
+
+    for (const QUrl &url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) {
+            event->acceptProposedAction();
+            return;
+        }
+    }
+}
+
+void GridWidget::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls())
+        return;
+
+    // Collect local file paths; remote URLs are ignored here.
+    QStringList paths;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        if (url.isLocalFile())
+            paths << url.toLocalFile();
+    }
+
+    if (!paths.isEmpty()) {
+        event->acceptProposedAction();
+        emit filesDropped(paths);
+    }
 }
 
 void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor)

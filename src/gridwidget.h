@@ -83,6 +83,9 @@ signals:
     void msgRuler(const QVariantList &content);
     void flushed();
 
+    /// Emitted when local files are dropped onto the buffer area.
+    void filesDropped(const QStringList &paths);
+
 protected:
     bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
@@ -92,6 +95,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void processEvent(const QString &name, const QVariantList &args);

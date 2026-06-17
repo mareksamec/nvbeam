@@ -240,6 +240,18 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_input_mouse", {button, action, mod, grid, row, col});
     });
 
+    // File drops onto the buffer area: open each dropped file in nvim. Using
+    // nvim_cmd with a list of args lets Neovim handle path escaping (spaces,
+    // %, # etc.) instead of building a fragile ":edit <path>" string.
+    connect(m_grid, &GridWidget::filesDropped, this, [this](const QStringList &paths) {
+        for (const QString &path : paths) {
+            QVariantMap cmd;
+            cmd["cmd"] = "edit";
+            cmd["args"] = QVariantList{ path };
+            m_nvim->request("nvim_cmd", { cmd, QVariantMap{} });
+        }
+    });
+
     // Externalized UI signals
     connect(m_grid, &GridWidget::popupmenuShow, this,
             [this](const QVariantList &items, int selected, int row, int col, int grid) {
