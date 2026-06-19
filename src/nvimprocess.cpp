@@ -125,9 +125,12 @@ void NvimProcess::parseMessages(const QByteArray &data)
     int offset = 0;
     while (offset < data.size()) {
         int startOffset = offset;
+        m_decodeIncomplete = false;
         QVariant msg = decodeMsgpack(data, offset);
-        if (msg.isNull() && offset == startOffset) {
-            // Incomplete message, keep buffer
+        if (m_decodeIncomplete) {
+            // The message was only partially received (decoder ran out of bytes
+            // mid-value, possibly deep inside a nested container). Keep the
+            // unconsumed tail and wait for the next read to complete it.
             m_buffer = data.mid(startOffset);
             return;
         }
@@ -302,7 +305,7 @@ QByteArray NvimProcess::encodeMsgpack(const QVariant &value)
 
 QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
 {
-    if (offset >= data.size()) return QVariant();
+    if (offset >= data.size()) { m_decodeIncomplete = true; return QVariant(); }
 
     uint8_t byte = static_cast<uint8_t>(data[offset]);
 
@@ -324,6 +327,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         for (int i = 0; i < len; i++) {
             QVariant key = decodeMsgpack(data, offset);
             QVariant val = decodeMsgpack(data, offset);
+            if (m_decodeIncomplete) return QVariant();
             map[key.toString()] = val;
         }
         return QVariant(map);
@@ -336,6 +340,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         list.reserve(len);
         for (int i = 0; i < len; i++) {
             list.append(decodeMsgpack(data, offset));
+            if (m_decodeIncomplete) return QVariant();
         }
         return QVariant(list);
     }
@@ -343,7 +348,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
     if ((byte & 0xe0) == msgpack::FIXSTR_PREFIX) {
         int len = byte & 0x1f;
         offset++;
-        if (offset + len > data.size()) { offset--; return QVariant(); }
+        if (offset + len > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         QString str = QString::fromUtf8(data.mid(offset, len));
         offset += len;
         return QVariant(str);
@@ -358,49 +363,49 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
     case msgpack::TRUE_VAL:
         return QVariant(true);
     case msgpack::UINT8:
-        if (offset + 1 > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         return QVariant(static_cast<int>(static_cast<uint8_t>(data[offset++])));
     case msgpack::UINT16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t v = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
         return QVariant(static_cast<int>(v));
     }
     case msgpack::UINT32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t v = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
         return QVariant(static_cast<qint64>(v));
     }
     case msgpack::UINT64: {
-        if (offset + 8 > data.size()) { offset--; return QVariant(); }
+        if (offset + 8 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint64_t v = qFromBigEndian<uint64_t>(data.constData() + offset);
         offset += 8;
         return QVariant(static_cast<qulonglong>(v));
     }
     case msgpack::INT8:
-        if (offset + 1 > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         return QVariant(static_cast<int>(static_cast<int8_t>(data[offset++])));
     case msgpack::INT16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int16_t v = qFromBigEndian<int16_t>(data.constData() + offset);
         offset += 2;
         return QVariant(static_cast<int>(v));
     }
     case msgpack::INT32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int32_t v = qFromBigEndian<int32_t>(data.constData() + offset);
         offset += 4;
         return QVariant(static_cast<int>(v));
     }
     case msgpack::INT64: {
-        if (offset + 8 > data.size()) { offset--; return QVariant(); }
+        if (offset + 8 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int64_t v = qFromBigEndian<int64_t>(data.constData() + offset);
         offset += 8;
         return QVariant(static_cast<qlonglong>(v));
     }
     case msgpack::FLOAT32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t raw = qFromBigEndian<uint32_t>(data.constData() + offset);
         float f;
         memcpy(&f, &raw, 4);
@@ -408,7 +413,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         return QVariant(static_cast<double>(f));
     }
     case msgpack::FLOAT64: {
-        if (offset + 8 > data.size()) { offset--; return QVariant(); }
+        if (offset + 8 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint64_t raw = qFromBigEndian<uint64_t>(data.constData() + offset);
         double d;
         memcpy(&d, &raw, 8);
@@ -416,99 +421,103 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         return QVariant(d);
     }
     case msgpack::STR8: {
-        if (offset + 1 > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int len = static_cast<uint8_t>(data[offset++]);
-        if (offset + len > data.size()) { offset -= 2; return QVariant(); }
+        if (offset + len > data.size()) { offset -= 2; m_decodeIncomplete = true; return QVariant(); }
         QString str = QString::fromUtf8(data.mid(offset, len));
         offset += len;
         return QVariant(str);
     }
     case msgpack::STR16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
-        if (offset + len > data.size()) { offset -= 3; return QVariant(); }
+        if (offset + len > data.size()) { offset -= 3; m_decodeIncomplete = true; return QVariant(); }
         QString str = QString::fromUtf8(data.mid(offset, len));
         offset += len;
         return QVariant(str);
     }
     case msgpack::STR32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
-        if (offset + static_cast<int>(len) > data.size()) { offset -= 5; return QVariant(); }
+        if (offset + static_cast<int>(len) > data.size()) { offset -= 5; m_decodeIncomplete = true; return QVariant(); }
         QString str = QString::fromUtf8(data.mid(offset, len));
         offset += len;
         return QVariant(str);
     }
     case msgpack::BIN8: {
-        if (offset + 1 > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int len = static_cast<uint8_t>(data[offset++]);
-        if (offset + len > data.size()) { offset -= 2; return QVariant(); }
+        if (offset + len > data.size()) { offset -= 2; m_decodeIncomplete = true; return QVariant(); }
         QByteArray bin = data.mid(offset, len);
         offset += len;
         return QVariant(bin);
     }
     case msgpack::BIN16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
-        if (offset + len > data.size()) { offset -= 3; return QVariant(); }
+        if (offset + len > data.size()) { offset -= 3; m_decodeIncomplete = true; return QVariant(); }
         QByteArray bin = data.mid(offset, len);
         offset += len;
         return QVariant(bin);
     }
     case msgpack::BIN32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
-        if (offset + static_cast<int>(len) > data.size()) { offset -= 5; return QVariant(); }
+        if (offset + static_cast<int>(len) > data.size()) { offset -= 5; m_decodeIncomplete = true; return QVariant(); }
         QByteArray bin = data.mid(offset, len);
         offset += len;
         return QVariant(bin);
     }
     case msgpack::ARRAY16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
         QVariantList list;
         list.reserve(len);
         for (int i = 0; i < len; i++) {
             list.append(decodeMsgpack(data, offset));
+            if (m_decodeIncomplete) return QVariant();
         }
         return QVariant(list);
     }
     case msgpack::ARRAY32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
         QVariantList list;
         list.reserve(len);
         for (uint32_t i = 0; i < len; i++) {
             list.append(decodeMsgpack(data, offset));
+            if (m_decodeIncomplete) return QVariant();
         }
         return QVariant(list);
     }
     case msgpack::MAP16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
         QVariantMap map;
         for (int i = 0; i < len; i++) {
             QVariant key = decodeMsgpack(data, offset);
             QVariant val = decodeMsgpack(data, offset);
+            if (m_decodeIncomplete) return QVariant();
             map[key.toString()] = val;
         }
         return QVariant(map);
     }
     case msgpack::MAP32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
         QVariantMap map;
         for (uint32_t i = 0; i < len; i++) {
             QVariant key = decodeMsgpack(data, offset);
             QVariant val = decodeMsgpack(data, offset);
+            if (m_decodeIncomplete) return QVariant();
             map[key.toString()] = val;
         }
         return QVariant(map);
@@ -531,31 +540,36 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         case msgpack::FIXEXT8:  dataLen = 8;  break;
         case msgpack::FIXEXT16: dataLen = 16; break;
         }
-        if (offset + 1 + dataLen > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 + dataLen > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         offset += 1; // skip ext type id
         // Payload is a self-describing msgpack integer.
         return decodeMsgpack(data, offset);
     }
     case msgpack::EXT8: {
-        if (offset + 1 > data.size()) { offset--; return QVariant(); }
+        if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int len = static_cast<uint8_t>(data[offset++]);
-        if (offset + 1 + len > data.size()) return QVariant();
+        // Truncated payload: rewind to the format byte so parseMessages() sees
+        // an unchanged offset and treats this as an incomplete (not corrupt)
+        // message, keeping the buffer until more bytes arrive.
+        if (offset + 1 + len > data.size()) { offset -= 2; m_decodeIncomplete = true; return QVariant(); }
         offset += 1; // skip ext type id
         return decodeMsgpack(data, offset);
     }
     case msgpack::EXT16: {
-        if (offset + 2 > data.size()) { offset--; return QVariant(); }
+        if (offset + 2 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
-        if (offset + 1 + len > data.size()) return QVariant();
+        // Truncated payload: rewind to the format byte (see EXT8 note).
+        if (offset + 1 + len > data.size()) { offset -= 3; m_decodeIncomplete = true; return QVariant(); }
         offset += 1; // skip ext type id
         return decodeMsgpack(data, offset);
     }
     case msgpack::EXT32: {
-        if (offset + 4 > data.size()) { offset--; return QVariant(); }
+        if (offset + 4 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
-        if (offset + 1 + static_cast<int>(len) > data.size()) return QVariant();
+        // Truncated payload: rewind to the format byte (see EXT8 note).
+        if (offset + 1 + static_cast<int>(len) > data.size()) { offset -= 5; m_decodeIncomplete = true; return QVariant(); }
         offset += 1; // skip ext type id
         return decodeMsgpack(data, offset);
     }
