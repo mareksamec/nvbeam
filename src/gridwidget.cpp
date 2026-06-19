@@ -174,10 +174,12 @@ void GridWidget::handleWinPos(const QVariantList &args)
     if (args.size() < 6) return;
     // [grid, win, start_row, start_col, width, height]
     int gridId = args[0].toInt();
+    int win = args[1].toInt();
     int startRow = args[2].toInt();
     int startCol = args[3].toInt();
 
     if (m_grids.contains(gridId)) {
+        m_grids[gridId].win = win;
         m_grids[gridId].x = startCol;
         m_grids[gridId].y = startRow;
         m_grids[gridId].hidden = false;
@@ -191,12 +193,14 @@ void GridWidget::handleWinFloatPos(const QVariantList &args)
     if (args.size() < 7) return;
     // [grid, win, anchor, anchor_grid, anchor_row, anchor_col, mouse_enabled, ...]
     int gridId = args[0].toInt();
+    int win = args[1].toInt();
     int anchorGrid = args[3].toInt();
     double anchorRow = args[4].toDouble();
     double anchorCol = args[5].toDouble();
 
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
+    grid.win = win;
     grid.isFloat = true;
     grid.hidden = false;
 
@@ -704,7 +708,17 @@ void GridWidget::dropEvent(QDropEvent *event)
 
     if (!paths.isEmpty()) {
         event->acceptProposedAction();
-        emit filesDropped(paths);
+
+        // Resolve which window sits under the drop position so the file can be
+        // opened in that specific window (multi-grid targeting). Falls back to
+        // -1 (caller uses the current window) when the grid has no known handle.
+        const QPoint pos = event->position().toPoint();
+        GridHit hit = gridAt(pos);
+        int win = -1;
+        if (m_grids.contains(hit.gridId))
+            win = m_grids[hit.gridId].win;
+
+        emit filesDropped(paths, win, event->modifiers());
     }
 }
 

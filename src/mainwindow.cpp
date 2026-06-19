@@ -240,13 +240,36 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_input_mouse", {button, action, mod, grid, row, col});
     });
 
-    // File drops onto the buffer area: open each dropped file in nvim. Using
-    // nvim_cmd with a list of args lets Neovim handle path escaping (spaces,
-    // %, # etc.) instead of building a fragile ":edit <path>" string.
-    connect(m_grid, &GridWidget::filesDropped, this, [this](const QStringList &paths) {
+    // File drops onto the buffer area: open each dropped file in nvim.
+    //
+    // Targeting: the drop resolves the window under the cursor; we focus it
+    // first so the file opens where it was dropped (multi-grid aware).
+    //
+    // Modifiers select how the file is opened (mirrors common editor habits):
+    //   (none)  :edit      open in the target window
+    //   Shift   :split     open in a horizontal split
+    //   Ctrl    :vsplit    open in a vertical split
+    //   Alt     :tabedit   open in a new tab
+    //
+    // Using nvim_cmd with a list of args lets Neovim handle path escaping
+    // (spaces, %, # etc.) instead of building a fragile command string.
+    connect(m_grid, &GridWidget::filesDropped, this,
+            [this](const QStringList &paths, int win, Qt::KeyboardModifiers mods) {
+        // Focus the window under the drop point, if known.
+        if (win >= 0)
+            m_nvim->request("nvim_set_current_win", { win });
+
+        QString openCmd = "edit";
+        if (mods & Qt::AltModifier)
+            openCmd = "tabedit";
+        else if (mods & Qt::ControlModifier)
+            openCmd = "vsplit";
+        else if (mods & Qt::ShiftModifier)
+            openCmd = "split";
+
         for (const QString &path : paths) {
             QVariantMap cmd;
-            cmd["cmd"] = "edit";
+            cmd["cmd"] = openCmd;
             cmd["args"] = QVariantList{ path };
             m_nvim->request("nvim_cmd", { cmd, QVariantMap{} });
         }

@@ -27,6 +27,7 @@ struct HlAttr {
 /// A single Neovim grid (one per window in ext_multigrid)
 struct Grid {
     int id = 0;
+    int win = -1;    // Neovim window handle (from win_pos), -1 if unknown
     int rows = 0;
     int cols = 0;
     int x = 0;       // position in cell coords on the screen
@@ -84,7 +85,10 @@ signals:
     void flushed();
 
     /// Emitted when local files are dropped onto the buffer area.
-    void filesDropped(const QStringList &paths);
+    /// \param paths     dropped local file paths
+    /// \param win       target Neovim window handle under the cursor (-1 if unknown)
+    /// \param modifiers keyboard modifiers held during the drop
+    void filesDropped(const QStringList &paths, int win, Qt::KeyboardModifiers modifiers);
 
 protected:
     bool event(QEvent *event) override;

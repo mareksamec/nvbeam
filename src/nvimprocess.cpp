@@ -514,28 +514,50 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         return QVariant(map);
     }
     // Ext types — skip the data
-    case msgpack::FIXEXT1: offset += 2; return QVariant();
-    case msgpack::FIXEXT2: offset += 3; return QVariant();
-    case msgpack::FIXEXT4: offset += 5; return QVariant();
-    case msgpack::FIXEXT8: offset += 9; return QVariant();
-    case msgpack::FIXEXT16: offset += 17; return QVariant();
+    // Ext types — Neovim encodes Buffer/Window/Tabpage handles as ext objects
+    // whose payload is a msgpack-encoded integer. We skip the 1-byte ext type
+    // id and decode the payload as a normal integer so handles survive decoding
+    // (they are interchangeable with integers in the Neovim API).
+    case msgpack::FIXEXT1:
+    case msgpack::FIXEXT2:
+    case msgpack::FIXEXT4:
+    case msgpack::FIXEXT8:
+    case msgpack::FIXEXT16: {
+        int dataLen = 0;
+        switch (byte) {
+        case msgpack::FIXEXT1:  dataLen = 1;  break;
+        case msgpack::FIXEXT2:  dataLen = 2;  break;
+        case msgpack::FIXEXT4:  dataLen = 4;  break;
+        case msgpack::FIXEXT8:  dataLen = 8;  break;
+        case msgpack::FIXEXT16: dataLen = 16; break;
+        }
+        if (offset + 1 + dataLen > data.size()) { offset--; return QVariant(); }
+        offset += 1; // skip ext type id
+        // Payload is a self-describing msgpack integer.
+        return decodeMsgpack(data, offset);
+    }
     case msgpack::EXT8: {
         if (offset + 1 > data.size()) { offset--; return QVariant(); }
         int len = static_cast<uint8_t>(data[offset++]);
-        offset += 1 + len; // type byte + data
-        return QVariant();
+        if (offset + 1 + len > data.size()) return QVariant();
+        offset += 1; // skip ext type id
+        return decodeMsgpack(data, offset);
     }
     case msgpack::EXT16: {
         if (offset + 2 > data.size()) { offset--; return QVariant(); }
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
-        offset += 2 + 1 + len;
-        return QVariant();
+        offset += 2;
+        if (offset + 1 + len > data.size()) return QVariant();
+        offset += 1; // skip ext type id
+        return decodeMsgpack(data, offset);
     }
     case msgpack::EXT32: {
         if (offset + 4 > data.size()) { offset--; return QVariant(); }
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
-        offset += 4 + 1 + len;
-        return QVariant();
+        offset += 4;
+        if (offset + 1 + static_cast<int>(len) > data.size()) return QVariant();
+        offset += 1; // skip ext type id
+        return decodeMsgpack(data, offset);
     }
     default:
         qWarning() << "Unknown msgpack byte:" << Qt::hex << byte;
