@@ -5,6 +5,10 @@
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
+#include <QDragEnterEvent>
+#include <QDropEvent>
+#include <QMimeData>
+#include <QUrl>
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QDebug>
@@ -24,6 +28,7 @@ GridWidget::GridWidget(const QFont &font, QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
+    setAcceptDrops(true); // accept file drops onto the buffer area
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -169,10 +174,12 @@ void GridWidget::handleWinPos(const QVariantList &args)
     if (args.size() < 6) return;
     // [grid, win, start_row, start_col, width, height]
     int gridId = args[0].toInt();
+    int win = args[1].toInt();
     int startRow = args[2].toInt();
     int startCol = args[3].toInt();
 
     if (m_grids.contains(gridId)) {
+        m_grids[gridId].win = win;
         m_grids[gridId].x = startCol;
         m_grids[gridId].y = startRow;
         m_grids[gridId].hidden = false;
@@ -186,12 +193,14 @@ void GridWidget::handleWinFloatPos(const QVariantList &args)
     if (args.size() < 7) return;
     // [grid, win, anchor, anchor_grid, anchor_row, anchor_col, mouse_enabled, ...]
     int gridId = args[0].toInt();
+    int win = args[1].toInt();
     int anchorGrid = args[3].toInt();
     double anchorRow = args[4].toDouble();
     double anchorCol = args[5].toDouble();
 
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
+    grid.win = win;
     grid.isFloat = true;
     grid.hidden = false;
 
@@ -668,6 +677,49 @@ void GridWidget::wheelEvent(QWheelEvent *event)
     QString mod = modifierPrefix(event->modifiers(), false);
     QString dir = event->angleDelta().y() > 0 ? "up" : "down";
     emit inputMouse("wheel", dir, mod, hit.gridId, hit.row, hit.col);
+}
+
+void GridWidget::dragEnterEvent(QDragEnterEvent *event)
+{
+    // Only accept drags that carry at least one local file path (e.g. from a
+    // file manager). Non-file drags are left for other widgets / ignored.
+    if (!event->mimeData()->hasUrls())
+        return;
+
+    for (const QUrl &url : event->mimeData()->urls()) {
+        if (url.isLocalFile()) {
+            event->acceptProposedAction();
+            return;
+        }
+    }
+}
+
+void GridWidget::dropEvent(QDropEvent *event)
+{
+    if (!event->mimeData()->hasUrls())
+        return;
+
+    // Collect local file paths; remote URLs are ignored here.
+    QStringList paths;
+    for (const QUrl &url : event->mimeData()->urls()) {
+        if (url.isLocalFile())
+            paths << url.toLocalFile();
+    }
+
+    if (!paths.isEmpty()) {
+        event->acceptProposedAction();
+
+        // Resolve which window sits under the drop position so the file can be
+        // opened in that specific window (multi-grid targeting). Falls back to
+        // -1 (caller uses the current window) when the grid has no known handle.
+        const QPoint pos = event->position().toPoint();
+        GridHit hit = gridAt(pos);
+        int win = -1;
+        if (m_grids.contains(hit.gridId))
+            win = m_grids[hit.gridId].win;
+
+        emit filesDropped(paths, win, event->modifiers());
+    }
 }
 
 void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor)

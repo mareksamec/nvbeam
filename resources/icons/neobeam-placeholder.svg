@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Neobeam application icon — PLACEHOLDER.
+  Replace this file with the real artwork (keep the same path/filename so the
+  Qt resource and the hicolor install rules keep working). An SVG master is
+  preferred; Qt scales it crisply at any size.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect width="256" height="256" rx="48" fill="#1a1b26"/>
+  <!-- stylized "beam" -->
+  <path d="M64 184 V72 h28 l72 84 V72 h28 v112 h-28 l-72-84 v84 z"
+        fill="#50fa7b"/>
+</svg>
