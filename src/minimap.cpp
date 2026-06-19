@@ -86,18 +86,16 @@ void MinimapWidget::rebuildPixmap()
     m_contentHeight = 0;
     if (srcCount > 0 && virtualLines > 0) {
         const int maxLinesInWidget = h / kLineHeight;
-        const int lineIncrement = virtualLines > maxLinesInWidget
-            ? (virtualLines + maxLinesInWidget - 1) / maxLinesInWidget
-            : 1;
-        const int drawnLineCount = qMin(maxLinesInWidget, (virtualLines + lineIncrement - 1) / lineIncrement);
+        // Number of pixel rows we draw — always fill the widget for long files
+        const int drawnLineCount = qMin(virtualLines, maxLinesInWidget);
         m_contentHeight = drawnLineCount * kLineHeight;
 
         QPainter pp(&pix);
         for (int i = 0; i < drawnLineCount; ++i) {
-            const int srcLine = i * lineIncrement;
+            // Map pixel row to source line using floating-point scaling
+            const int srcLine = (int)((qint64)i * virtualLines / drawnLineCount);
             const int y = i * kLineHeight;
             if (srcLine >= srcCount) {
-                // No highlight data for this region — draw a subtle placeholder so it's not black.
                 pp.fillRect(0, y, w, kLineHeight, QColor(0x2a, 0x2b, 0x3a));
                 continue;
             }

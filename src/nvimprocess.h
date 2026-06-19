@@ -52,5 +52,11 @@ private:
     QByteArray m_buffer;
     uint32_t m_msgid = 0;
     bool m_waitingForReady = false;
+    // Set by decodeMsgpack() when it runs out of bytes mid-value (the message
+    // was only partially received). parseMessages() uses this to keep the
+    // partial bytes buffered until the rest arrives, instead of misparsing or
+    // discarding them. Necessary because nested containers (arrays/maps) would
+    // otherwise swallow a truncated child and return a non-null partial value.
+    bool m_decodeIncomplete = false;
     QHash<uint32_t, std::function<void(const QVariant &)>> m_callbacks;
 };
