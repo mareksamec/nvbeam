@@ -11,6 +11,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
+- **Drag & drop** — drop files onto the buffer area to open them in the window under the cursor; modifier keys choose split/tab placement. Dropping onto the terminal pastes the path
 - **TOML configuration** — sensible defaults, all options commented out in the generated config
 - **Session restore** — remembers window size, terminal splits/proportions, panel height, and expanded state
 - **Wayland native** — via qt6-wayland
@@ -90,6 +91,23 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+\` | Toggle terminal panel |
 | Shift+Insert | Paste clipboard (into terminal when focused, into Neovim otherwise) |
 | Ctrl+Shift+V | Paste clipboard (into terminal when focused, into Neovim otherwise) |
+
+### Drag & drop
+
+Drop files from your file manager onto Neobeam to open them.
+
+**Onto the buffer area**, the file opens in the Neovim window under the cursor. Hold a modifier while dropping to choose placement:
+
+| Modifier | Action |
+|----------|--------|
+| (none) | Open in the target window (`:edit`) |
+| Shift | Open in a horizontal split (`:split`) |
+| Ctrl | Open in a vertical split (`:vsplit`) |
+| Alt | Open in a new tab (`:tabedit`) |
+
+Dropping multiple files opens each one with the chosen command. Paths are passed to Neovim with proper escaping, so spaces and special characters are handled correctly.
+
+**Onto the terminal**, the file path is pasted into the active shell (single-quoted) instead of being opened.
 
 ## Configuration
 

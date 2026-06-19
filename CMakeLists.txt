@@ -4,6 +4,9 @@ project(neobeam VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)  # compile .qrc resources (generated app icons)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 option(NEOBEAM_TERMINAL "Build with embedded terminal (requires qtermwidget6)" ON)
 
@@ -55,8 +58,58 @@ if(NEOBEAM_TERMINAL)
     target_link_libraries(neobeam PRIVATE qtermwidget6)
 endif()
 
+# --- Application icon ---
+# Rasterize a PNG size ladder from the SVG master at build time and embed it
+# into the executable as a Qt resource (no runtime Qt6::Svg dependency). The
+# same PNGs are installed into the Linux hicolor icon theme below.
+include(AppIcons)
+set(NEOBEAM_ICON_SIZES_REQUESTED 16 24 32 48 64 128 256)
+neobeam_generate_icons(
+    TARGET  neobeam
+    SVG     "${CMAKE_SOURCE_DIR}/resources/icons/neobeam.svg"
+    SIZES   ${NEOBEAM_ICON_SIZES_REQUESTED}
+    OUT_DIR "${CMAKE_BINARY_DIR}/generated-icons"
+)
+# Let the source know which icon sizes were actually embedded so it can build
+# the QIcon from the matching resource paths.
+if(NEOBEAM_ICON_SIZES)
+    string(REPLACE ";" "," _icon_sizes_csv "${NEOBEAM_ICON_SIZES}")
+    target_compile_definitions(neobeam PRIVATE
+        NEOBEAM_ICON_SIZES=${_icon_sizes_csv})
+endif()
+
 # --- Install & packaging ---
 install(TARGETS neobeam RUNTIME DESTINATION bin)
+
+# Linux desktop integration: launcher entry + themed icons. The .desktop file's
+# "Icon=neobeam" resolves to the PNGs installed under hicolor/<size>x<size>/apps.
+if(UNIX AND NOT APPLE)
+    install(FILES packaging/neobeam.desktop
+            DESTINATION share/applications)
+
+    # Install each generated PNG into its matching hicolor size directory.
+    # Falls back gracefully: if no rasterizer was available NEOBEAM_ICON_SIZES
+    # is empty and nothing icon-related is installed.
+    foreach(size IN LISTS NEOBEAM_ICON_SIZES)
+        install(FILES "${CMAKE_BINARY_DIR}/generated-icons/neobeam_${size}.png"
+                DESTINATION "share/icons/hicolor/${size}x${size}/apps"
+                RENAME neobeam.png)
+    endforeach()
+
+    # Also ship the SVG master into the scalable theme dir for environments
+    # that prefer vector icons (rendered by the desktop, not by our app).
+    install(FILES resources/icons/neobeam.svg
+            DESTINATION share/icons/hicolor/scalable/apps)
+endif()
+
+# Platform icon embedding for later (roadmap: Windows, macOS):
+# if(WIN32)
+#     target_sources(neobeam PRIVATE packaging/neobeam.rc)  # references .ico
+# elseif(APPLE)
+#     set(MACOSX_BUNDLE_ICON_FILE neobeam.icns)
+#     set_source_files_properties(resources/icons/neobeam.icns PROPERTIES
+#         MACOSX_PACKAGE_LOCATION Resources)
+# endif()
 
 set(CPACK_PACKAGE_NAME "neobeam")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
