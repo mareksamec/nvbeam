@@ -98,6 +98,7 @@ void GridWidget::handleGridLine(const QVariantList &args)
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
     if (row < 0 || row >= grid.rows) return;
+    if (col < 0) return;
 
     int hlId = 0;
     for (const auto &cellVar : cells) {
@@ -146,7 +147,14 @@ void GridWidget::handleGridScroll(const QVariantList &args)
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
 
+    top   = qBound(0, top,   grid.rows);
+    bot   = qBound(0, bot,   grid.rows);
+    left  = qBound(0, left,  grid.cols);
+    right = qBound(0, right, grid.cols);
+    if (top >= bot || left >= right) return;
+
     if (rows > 0) {
+        rows = qMin(rows, bot - top);
         for (int r = top; r < bot - rows; r++)
             for (int c = left; c < right; c++)
                 grid.cells[r][c] = grid.cells[r + rows][c];
@@ -154,6 +162,7 @@ void GridWidget::handleGridScroll(const QVariantList &args)
             for (int c = left; c < right; c++)
                 grid.cells[r][c] = GridCell{};
     } else if (rows < 0) {
+        rows = qMax(rows, top - bot);
         for (int r = bot - 1; r >= top - rows; r--)
             for (int c = left; c < right; c++)
                 grid.cells[r][c] = grid.cells[r + rows][c];
