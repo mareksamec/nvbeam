@@ -62,11 +62,11 @@
 - [x] Guard `m_grids` lookups with `contains()` - `m_grids[id]` returns a default-constructed `Grid{rows=0,cols=0}` for unknown IDs instead of signalling absence
 
 ### Performance
-- [ ] Cache styled fonts in `paintEvent` - bold/italic `QFont` variants are constructed fresh per cell; use a small `QHash<int, QFont>` keyed on style flags
-- [ ] Cache z-order sorted grid list - grids are re-sorted on every `paintEvent`; invalidate only on `win_pos`/`win_float_pos` events
-- [ ] Speed up `gridAt()` mouse hit-test - currently O(n) scan per mouse move; use the cached z-order list
-- [ ] Flatten grid cell storage - replace `QVector<QVector<GridCell>>` with a flat `std::vector<GridCell>` indexed by `row * cols + col` for better cache behaviour
-- [ ] Shrink `GridCell::text` - most cells hold a single codepoint; use `char32_t` or `QChar` and reserve `QString` only for multi-codepoint clusters
+- [x] Cache styled fonts in `paintEvent` - bold/italic `QFont` variants are constructed fresh per cell; use a small `QHash<int, QFont>` keyed on style flags
+- [x] Cache z-order sorted grid list - grids are re-sorted on every `paintEvent`; invalidate only on `win_pos`/`win_float_pos` events
+- [x] Speed up `gridAt()` mouse hit-test - currently O(n) scan per mouse move; use the cached z-order list
+- [x] Flatten grid cell storage - replace `QVector<QVector<GridCell>>` with a flat `std::vector<GridCell>` indexed by `row * cols + col` for better cache behaviour
+- [x] Shrink `GridCell::text` - most cells hold a single codepoint; use `char32_t` or `QChar` and reserve `QString` only for multi-codepoint clusters
 
 ### Code Structure
 - [ ] Break up `MainWindow` constructor (~370 lines) into `setupLayout()`, `setupConnections()`, etc.
