@@ -76,6 +76,7 @@
 - [ ] Replace C-style casts in minimap hot paths with `static_cast<int>(...)`
 
 ### Missing Features
+- [ ] When a folder is opened with Neobeam, nvim's cwd should change to that folder - currently only the built-in Qt terminal follows the path; nvim itself stays in its original cwd
 - [ ] Statusline text should be selectable - native statusline widget does not support text selection
 - [ ] IME support - `QInputMethodEvent` is not handled in `GridWidget`; CJK input drops composed characters
 - [ ] Config hot-reload - changes to `neobeam.toml` require a restart; use `QFileSystemWatcher` with debounced reload
