@@ -38,7 +38,8 @@ void GridWidget::rebuildFontCache()
     m_fontCache[1] = m_font; m_fontCache[1].setBold(true);
     m_fontCache[2] = m_font; m_fontCache[2].setItalic(true);
     m_fontCache[3] = m_font; m_fontCache[3].setBold(true); m_fontCache[3].setItalic(true);
-    m_fontDescent = QFontMetrics(m_font).descent();
+    for (int i = 0; i < 4; ++i)
+        m_fontDescent[i] = QFontMetrics(m_fontCache[i]).descent();
 }
 
 void GridWidget::rebuildGridOrder()
@@ -140,8 +141,9 @@ void GridWidget::handleGridLine(const QVariantList &args)
         const QString stored = (text == " ") ? QString{} : text;
         for (int r = 0; r < repeat; r++) {
             if (col < grid.cols) {
-                grid.at(row, col).text = stored;
-                grid.at(row, col).hlId = hlId;
+                GridCell &c = grid.at(row, col);
+                c.text = stored;
+                c.hlId = hlId;
                 col++;
             }
         }
@@ -400,15 +402,18 @@ void GridWidget::paintEvent(QPaintEvent *event)
     Q_UNUSED(event)
     QPainter painter(this);
     painter.fillRect(rect(), m_defaultBg);
-    painter.setFont(m_font);
 
     // Use cached paint order; rebuild only when grid topology changed.
     if (m_gridOrderDirty) rebuildGridOrder();
 
+    // Track painter state to skip redundant setFont/setPen calls.
+    int curFontIdx = -1;
+    QColor curPen;
+
     for (int gridId : m_gridOrder) {
         const Grid &grid = m_grids[gridId];
-        int ox = grid.x * m_cellWidth;
-        int oy = grid.y * m_cellHeight;
+        const int ox = grid.x * m_cellWidth;
+        const int oy = grid.y * m_cellHeight;
 
         for (int row = 0; row < grid.rows; row++) {
             for (int col = 0; col < grid.cols; col++) {
@@ -418,34 +423,43 @@ void GridWidget::paintEvent(QPaintEvent *event)
                 QColor bg = m_defaultBg;
                 bool bold = false, italic = false, underline = false;
 
-                if (cell.hlId != 0 && m_hlAttrs.contains(cell.hlId)) {
-                    const HlAttr &hl = m_hlAttrs[cell.hlId];
-                    if (hl.foreground.isValid()) fg = hl.foreground;
-                    if (hl.background.isValid()) bg = hl.background;
-                    if (hl.reverse) std::swap(fg, bg);
-                    bold = hl.bold;
-                    italic = hl.italic;
-                    underline = hl.underline;
+                if (cell.hlId != 0) {
+                    const auto it = m_hlAttrs.constFind(cell.hlId);
+                    if (it != m_hlAttrs.cend()) {
+                        const HlAttr &hl = *it;
+                        if (hl.foreground.isValid()) fg = hl.foreground;
+                        if (hl.background.isValid()) bg = hl.background;
+                        if (hl.reverse) std::swap(fg, bg);
+                        bold = hl.bold;
+                        italic = hl.italic;
+                        underline = hl.underline;
+                    }
                 }
 
-                int x = ox + col * m_cellWidth;
-                int y = oy + row * m_cellHeight;
+                const int x = ox + col * m_cellWidth;
+                const int y = oy + row * m_cellHeight;
 
                 if (bg != m_defaultBg || grid.isFloat) {
                     painter.fillRect(x, y, m_cellWidth, m_cellHeight, bg);
                 }
 
-                if (!cell.text.isEmpty()) {
-                    int fontIdx = (bold ? 1 : 0) | (italic ? 2 : 0);
-                    painter.setFont(m_fontCache[fontIdx]);
-                    painter.setPen(fg);
-                    painter.drawText(x, y + m_cellHeight - m_fontDescent, cell.text);
-                    if (fontIdx != 0) painter.setFont(m_fontCache[0]);
-                }
-
-                if (underline) {
-                    painter.setPen(fg);
-                    painter.drawLine(x, y + m_cellHeight - 1, x + m_cellWidth, y + m_cellHeight - 1);
+                // Set pen once per cell for both text and underline that share the same fg.
+                if (!cell.text.isEmpty() || underline) {
+                    if (fg != curPen) {
+                        painter.setPen(fg);
+                        curPen = fg;
+                    }
+                    if (!cell.text.isEmpty()) {
+                        const int fontIdx = (bold ? 1 : 0) | (italic ? 2 : 0);
+                        if (fontIdx != curFontIdx) {
+                            painter.setFont(m_fontCache[fontIdx]);
+                            curFontIdx = fontIdx;
+                        }
+                        painter.drawText(x, y + m_cellHeight - m_fontDescent[fontIdx], cell.text);
+                    }
+                    if (underline) {
+                        painter.drawLine(x, y + m_cellHeight - 1, x + m_cellWidth, y + m_cellHeight - 1);
+                    }
                 }
             }
         }
@@ -473,7 +487,7 @@ void GridWidget::paintEvent(QPaintEvent *event)
                 painter.fillRect(x, y, m_cellWidth, m_cellHeight, cursorColor);
                 painter.setPen(m_defaultBg);
                 painter.setFont(m_fontCache[0]);
-                painter.drawText(x, y + m_cellHeight - m_fontDescent,
+                painter.drawText(x, y + m_cellHeight - m_fontDescent[0],
                                  cg.at(m_cursorRow, m_cursorCol).text);
             } else if (shape == "vertical") {
                 int w = qMax(1, m_cellWidth * pct / 100);

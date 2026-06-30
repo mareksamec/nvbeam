@@ -150,7 +150,7 @@ private:
 
     QFont m_font;
     QFont m_fontCache[4]; // [0]=normal [1]=bold [2]=italic [3]=bold+italic
-    int m_fontDescent = 0;
+    int m_fontDescent[4] = {}; // per-variant descent, indexed same as m_fontCache
     int m_cellWidth = 0;
     int m_cellHeight = 0;
 
