@@ -52,6 +52,43 @@
 - [x] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
 - [x] Consider adding mouse behaviour to .toml config
 
+## Phase 8: Code Quality & Robustness
+
+### Correctness
+- [x] Add column bounds check in `handleGridLine` - row is guarded but col is not, malformed Neovim responses can write past the end of a row
+- [x] Handle RPC error field - response handler extracts result (`msgList[3]`) but silently drops the error (`msgList[2]`); failed nvim API calls are invisible
+- [x] Add RPC timeout and cancellation - callbacks stored by message ID are never expired; Neovim crash mid-request leaks closures
+- [x] Drain partial msgpack buffer on disconnect - partial message in `m_buffer` is never flushed when Neovim exits unexpectedly
+- [x] Guard `m_grids` lookups with `contains()` - `m_grids[id]` returns a default-constructed `Grid{rows=0,cols=0}` for unknown IDs instead of signalling absence
+
+### Performance
+- [x] Cache styled fonts in `paintEvent` - bold/italic `QFont` variants are constructed fresh per cell; use a small `QHash<int, QFont>` keyed on style flags
+- [x] Cache z-order sorted grid list - grids are re-sorted on every `paintEvent`; invalidate only on `win_pos`/`win_float_pos` events
+- [x] Speed up `gridAt()` mouse hit-test - currently O(n) scan per mouse move; use the cached z-order list
+- [x] Flatten grid cell storage - replace `QVector<QVector<GridCell>>` with a flat `std::vector<GridCell>` indexed by `row * cols + col` for better cache behaviour
+- [x] Shrink `GridCell::text` - most cells hold a single codepoint; use `char32_t` or `QChar` and reserve `QString` only for multi-codepoint clusters
+
+### Code Structure
+- [ ] Break up `MainWindow` constructor (~370 lines) into `setupLayout()`, `setupConnections()`, etc.
+- [ ] Split `GridWidget` (810 lines) - rendering, keyboard input, mouse selection, drag/drop, and Neovim event dispatch are too many concerns for one class
+- [ ] Replace `QVariant` in Neovim message path with concrete structs - `.toInt()`/`.toList()`/`.toMap()` without type guards moves errors from compile-time to runtime
+- [ ] Add RAII guard around `blockSignals(true/false)` in `uiwidgets.cpp` - current pattern is not exception-safe
+- [ ] Replace C-style casts in minimap hot paths with `static_cast<int>(...)`
+
+### Missing Features
+- [ ] When a folder is opened with Neobeam, nvim's cwd should change to that folder - currently only the built-in Qt terminal follows the path; nvim itself stays in its original cwd
+- [ ] Statusline text should be selectable - native statusline widget does not support text selection
+- [ ] IME support - `QInputMethodEvent` is not handled in `GridWidget`; CJK input drops composed characters
+- [ ] Config hot-reload - changes to `neobeam.toml` require a restart; use `QFileSystemWatcher` with debounced reload
+- [ ] Event-driven terminal CWD tracking - current 500 ms poll in `mainwindow.cpp` should be replaced with a Neovim autocmd
+- [ ] Unit test suite - no tests for the msgpack codec, grid state machine, or key-mapping logic; these are the areas most prone to off-by-one errors
+
+### Housekeeping
+- [ ] Fix placeholder git clone URL in `README.md` (`youruser`)
+- [ ] Fill in maintainer info in `packaging/aur/neobeam-git/PKGBUILD`
+- [ ] Remove or consolidate vendored `third_party/toml11/` - the normal build uses FetchContent; the copy is only used by the AUR PKGBUILD override, which is confusing
+- [ ] Fix typo in `AGENTS.md`: "functinons"
+
 ## Fixes/Adjustments
 
 ### General
