@@ -5,6 +5,7 @@
 #include <QListWidget>
 #include <QTabBar>
 #include <QVBoxLayout>
+#include <QHBoxLayout>
 #include <QVariant>
 #include <QPainter>
 #include <QPaintEvent>
@@ -73,17 +74,17 @@ public:
     /// Update the current mode display
     void setMode(const QString &mode);
 
-protected:
-    void paintEvent(QPaintEvent *event) override;
-
 private:
-    struct Segment {
-        QString text;
-        QColor fg;
-        QColor bg;
-    };
-    QVector<Segment> m_segments;
-    int m_stretchIndex = 0;
+    // Per-segment selectable labels (concrete types live in the .cpp).
+    QLabel *m_modeLabel = nullptr;
+    QLabel *m_branchLabel = nullptr;
+    QLabel *m_fileLabel = nullptr;
+    QLabel *m_diagLabel = nullptr;
+    QLabel *m_encLabel = nullptr;
+    QLabel *m_posLabel = nullptr;
+    // One trailing divider per segment slot, in slot order.
+    QVector<QWidget *> m_dividers;
+
     QString m_dividerStyle;
     QString m_accent;
     QString m_mode = "NORMAL";
@@ -93,5 +94,7 @@ private:
     QString m_pos;
     QString m_encoding;
     QColor modeColor() const;
-    void rebuildSegments();
+
+    /// Rebuild label text/colours/visibility and divider colours in place.
+    void refresh();
 };

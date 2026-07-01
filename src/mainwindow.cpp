@@ -7,10 +7,12 @@
 #include "imagerenderer.h"
 #include "config.h"
 #include "session.h"
+#include <QApplication>
 #include <QCloseEvent>
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
+#include <QKeyEvent>
 #include <QFile>
 #include <QFontMetrics>
 #include <QGuiApplication>
@@ -409,6 +411,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     }
 
     m_nvim->start(nvimArgs);
+
+    // Ctrl+Tab switches focus between the editor grid and the terminal. It is
+    // caught by an application-level event filter because both the grid
+    // (GridWidget::event) and QTermWidget consume Tab before a QShortcut would
+    // see it.
+    qApp->installEventFilter(this);
+
+    // Focus the editor grid on startup rather than the terminal. The terminal
+    // panel grabs focus in its showEvent when started expanded, so defer this
+    // until the event loop has processed those show events.
+    QTimer::singleShot(0, this, [this]() { m_grid->setFocus(); });
 }
 
 MainWindow::~MainWindow()
@@ -436,4 +449,34 @@ void MainWindow::closeEvent(QCloseEvent *event)
         m_session->sync();
     }
     QMainWindow::closeEvent(event);
+}
+
+bool MainWindow::eventFilter(QObject *watched, QEvent *event)
+{
+    if (event->type() == QEvent::KeyPress) {
+        auto *ke = static_cast<QKeyEvent *>(event);
+        // Key_Backtab is what Ctrl+Shift+Tab produces; treat both directions
+        // the same since there are only two panes to cycle between.
+        if ((ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab)
+            && (ke->modifiers() & Qt::ControlModifier)) {
+            toggleGridTerminalFocus();
+            return true;
+        }
+    }
+    return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::toggleGridTerminalFocus()
+{
+    QWidget *focused = QApplication::focusWidget();
+    const bool termFocused = m_terminal && m_terminal->isVisible()
+                             && focused && m_terminal->isAncestorOf(focused);
+    if (termFocused) {
+        m_grid->setFocus();
+    } else if (m_terminal && m_terminal->isVisible()) {
+        m_terminal->focusTerminal();
+    } else {
+        // Terminal hidden: nothing to switch to, keep the grid focused.
+        m_grid->setFocus();
+    }
 }

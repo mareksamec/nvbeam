@@ -26,8 +26,14 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
+    /// App-level filter used to catch Ctrl+Tab before the grid/terminal consume it.
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
+    /// Toggle keyboard focus between the Neovim grid and the terminal panel.
+    void toggleGridTerminalFocus();
+
+
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
     PopupmenuWidget *m_popupmenu = nullptr;

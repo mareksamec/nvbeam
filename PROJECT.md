@@ -51,6 +51,10 @@
 - [x] Improve the statusline (dividers, etc)
 - [x] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
 - [x] Consider adding mouse behaviour to .toml config
+- [x] Make text in the UI statusline selectable.
+- [ ] Ctrl + Shift + E splits the terminal
+- [ ] Ctrl + Shift + W closes active split
+- [ ] Terminal + and vertical split | button does the same. Remove the | button.
 
 ## Fixes/Adjustments
 

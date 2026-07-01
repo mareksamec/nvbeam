@@ -58,6 +58,9 @@ public:
     /// Paste system clipboard into the active terminal widget
     void pasteClipboard();
 
+    /// Give keyboard focus to the active terminal widget
+    void focusTerminal();
+
 signals:
     void visibilityChanged(bool visible);
 
