@@ -2,6 +2,9 @@
 #include <QHBoxLayout>
 #include <QFontMetrics>
 #include <QPainterPath>
+#include <QMouseEvent>
+#include <QGuiApplication>
+#include <QClipboard>
 
 // --- PopupmenuWidget ---
 
@@ -196,6 +199,91 @@ void MessageWidget::showRuler(const QVariantList &content)
 
 // --- StatuslineWidget ---
 
+namespace {
+
+/// A QLabel whose text can be selected with the mouse; on release the current
+/// selection is auto-copied to the clipboard (mirrors the grid's behaviour).
+class SelectableLabel : public QLabel
+{
+public:
+    explicit SelectableLabel(QWidget *parent = nullptr)
+        : QLabel(parent)
+    {
+        QFont f("monospace", 10);
+        setFont(f);
+        setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
+        setTextInteractionFlags(Qt::TextSelectableByMouse);
+        setAutoFillBackground(true);
+        // Show a text I-beam cursor to signal the text is selectable.
+        setCursor(Qt::IBeamCursor);
+        // Reproduce the old " text " padding around each segment.
+        setContentsMargins(6, 0, 6, 0);
+    }
+
+    /// Apply foreground/background colours and boldness without a stylesheet
+    /// re-parse (cheaper on the ~100ms refresh cadence).
+    void setColors(const QColor &fg, const QColor &bg, bool bold)
+    {
+        QPalette pal = palette();
+        pal.setColor(QPalette::WindowText, fg);
+        pal.setColor(QPalette::Window, bg);
+        setPalette(pal);
+        QFont f = font();
+        f.setBold(bold);
+        setFont(f);
+    }
+
+protected:
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        QLabel::mouseReleaseEvent(event);
+        const QString sel = selectedText();
+        if (!sel.isEmpty())
+            QGuiApplication::clipboard()->setText(sel);
+    }
+};
+
+/// Custom-painted powerline divider: a right-pointing triangle in the previous
+/// segment's colour over the next segment's background.
+class PowerlineDivider : public QWidget
+{
+public:
+    explicit PowerlineDivider(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        setFixedWidth(12);
+    }
+
+    void setColors(const QColor &prevBg, const QColor &nextBg)
+    {
+        m_prevBg = prevBg;
+        m_nextBg = nextBg;
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        p.fillRect(rect(), m_nextBg);
+        QPainterPath tri;
+        tri.moveTo(0, 0);
+        tri.lineTo(width(), height() / 2.0);
+        tri.lineTo(0, height());
+        tri.closeSubpath();
+        p.setPen(Qt::NoPen);
+        p.setBrush(m_prevBg);
+        p.drawPath(tri);
+    }
+
+private:
+    QColor m_prevBg{"#1a1b26"};
+    QColor m_nextBg{"#1a1b26"};
+};
+
+} // namespace
+
 StatuslineWidget::StatuslineWidget(const QString &accent, const QString &dividerStyle,
                                    QWidget *parent)
     : QWidget(parent)
@@ -203,7 +291,44 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
     , m_accent(accent)
 {
     setFixedHeight(28);
-    rebuildSegments();
+
+    auto *layout = new QHBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    // Segment slots in display order; the file slot stretches to fill.
+    QLabel **labels[] = {&m_modeLabel, &m_branchLabel, &m_fileLabel,
+                         &m_diagLabel, &m_encLabel, &m_posLabel};
+    const int slotCount = static_cast<int>(sizeof(labels) / sizeof(labels[0]));
+
+    for (int i = 0; i < slotCount; ++i) {
+        auto *label = new SelectableLabel(this);
+        *labels[i] = label;
+        layout->addWidget(label);
+
+        // One trailing divider per slot; the last visible slot's divider is
+        // always hidden by refresh().
+        QWidget *divider = nullptr;
+        if (m_dividerStyle == "powerline") {
+            divider = new PowerlineDivider(this);
+        } else if (m_dividerStyle == "pipe") {
+            auto *pipe = new QLabel(QString(QChar(0x2502)), this);
+            pipe->setFont(QFont("monospace", 10, QFont::Bold));
+            pipe->setAlignment(Qt::AlignCenter);
+            pipe->setContentsMargins(2, 0, 2, 0);
+            pipe->setStyleSheet("color: #565f89; background-color: #1a1b26;");
+            divider = pipe;
+        }
+        if (divider) {
+            layout->addWidget(divider);
+            divider->hide();
+        }
+        m_dividers.append(divider);
+    }
+    // The file segment stretches to fill available width.
+    layout->setStretchFactor(m_fileLabel, 1);
+
+    refresh();
 }
 
 QColor StatuslineWidget::modeColor() const
@@ -221,44 +346,61 @@ QColor StatuslineWidget::modeColor() const
     return QColor(m_accent); // Normal
 }
 
-void StatuslineWidget::rebuildSegments()
+void StatuslineWidget::refresh()
 {
-    m_segments.clear();
-    QColor modeBg = modeColor();
-    QColor dark("#1a1b26");
-    QColor mid("#24283b");
-    QColor dim("#565f89");
+    const QColor modeBg = modeColor();
+    const QColor dark("#1a1b26");
+    const QColor mid("#24283b");
+    const QColor dim("#565f89");
+    const QColor fg("#c0caf5");
 
-    // Mode segment
-    m_segments.append({" " + m_mode + " ", dark, modeBg});
+    // Configure each slot: text, colours, visibility. Order must match the
+    // layout slot order built in the constructor.
+    struct Slot { QLabel *label; QString text; QColor fg; QColor bg; bool bold; bool visible; };
+    const Slot cfg[] = {
+        {m_modeLabel,   " " + m_mode + " ",                                    dark,              modeBg, true,  true},
+        {m_branchLabel, " " + m_branch + " ",                                  fg,                mid,    false, !m_branch.isEmpty()},
+        {m_fileLabel,   " " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ", fg,                dark,   false, true},
+        {m_diagLabel,   " " + m_diag + " ",                                    QColor("#f7768e"), mid,    false, !m_diag.isEmpty()},
+        {m_encLabel,    " " + m_encoding + " ",                                dim,               mid,    false, !m_encoding.isEmpty()},
+        {m_posLabel,    " " + m_pos + " ",                                     dark,              modeBg, false, !m_pos.isEmpty()},
+    };
+    const int slotCount = static_cast<int>(sizeof(cfg) / sizeof(cfg[0]));
 
-    // Branch segment
-    if (!m_branch.isEmpty())
-        m_segments.append({" " + m_branch + " ", QColor("#c0caf5"), mid});
+    for (int i = 0; i < slotCount; ++i) {
+        cfg[i].label->setText(cfg[i].text);
+        static_cast<SelectableLabel *>(cfg[i].label)->setColors(cfg[i].fg, cfg[i].bg, cfg[i].bold);
+        cfg[i].label->setVisible(cfg[i].visible);
+    }
 
-    // File segment (this one stretches — index tracked below)
-    m_stretchIndex = m_segments.size();
-    m_segments.append({" " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ",
-                       QColor("#c0caf5"), dark});
-
-    // Diagnostics
-    if (!m_diag.isEmpty())
-        m_segments.append({" " + m_diag + " ", QColor("#f7768e"), mid});
-
-    // Encoding
-    if (!m_encoding.isEmpty())
-        m_segments.append({" " + m_encoding + " ", dim, mid});
-
-    // Position
-    if (!m_pos.isEmpty())
-        m_segments.append({" " + m_pos + " ", dark, modeBg});
+    // Assign dividers: a slot's trailing divider is shown only between it and
+    // the next visible slot. Walk left→right tracking the last visible slot.
+    int prev = -1;
+    for (int i = 0; i < slotCount; ++i) {
+        if (!cfg[i].visible) {
+            if (m_dividers[i]) m_dividers[i]->hide();
+            continue;
+        }
+        if (prev >= 0 && m_dividers[prev]) {
+            QWidget *pdiv = m_dividers[prev];
+            // Only powerline dividers are colour-dependent; pipe dividers are
+            // plain labels. m_dividers only ever holds PowerlineDivider when
+            // the style is "powerline", so the cast is safe.
+            if (m_dividerStyle == "powerline")
+                static_cast<PowerlineDivider *>(pdiv)->setColors(cfg[prev].bg, cfg[i].bg);
+            pdiv->show();
+        }
+        prev = i;
+    }
+    // The last visible slot has no following segment — hide its divider.
+    if (prev >= 0 && m_dividers[prev])
+        m_dividers[prev]->hide();
 }
 
 void StatuslineWidget::setMode(const QString &mode)
 {
     m_mode = mode.toUpper();
-    rebuildSegments();
-    update();
+    refresh();
 }
 
 void StatuslineWidget::updateStatus(const QVariantMap &data)
@@ -269,78 +411,5 @@ void StatuslineWidget::updateStatus(const QVariantMap &data)
     if (data.contains("pos")) m_pos = data["pos"].toString();
     if (data.contains("encoding")) m_encoding = data["encoding"].toString();
     if (data.contains("diagnostics")) m_diag = data["diagnostics"].toString();
-    rebuildSegments();
-    update();
-}
-
-void StatuslineWidget::paintEvent(QPaintEvent * /*event*/)
-{
-    QPainter p(this);
-    p.setRenderHint(QPainter::Antialiasing, true);
-
-    QFont font("monospace", 10);
-    font.setBold(true);
-    p.setFont(font);
-    QFontMetrics fm(font);
-
-    QColor bgDefault("#1a1b26");
-    p.fillRect(rect(), bgDefault);
-
-    if (m_segments.isEmpty()) return;
-
-    // Calculate segment widths; the file segment (index 2) stretches
-    int divW = (m_dividerStyle == "powerline") ? 12 : 0;
-    if (m_dividerStyle == "pipe") divW = fm.horizontalAdvance("|") + 4;
-
-    QVector<int> widths(m_segments.size());
-    int fixedWidth = 0;
-    for (int i = 0; i < m_segments.size(); ++i) {
-        widths[i] = fm.horizontalAdvance(m_segments[i].text) + 4;
-        if (i != m_stretchIndex) fixedWidth += widths[i];
-    }
-    fixedWidth += divW * (m_segments.size() - 1);
-    widths[m_stretchIndex] = qMax(widths[m_stretchIndex], width() - fixedWidth);
-
-    int x = 0;
-    for (int i = 0; i < m_segments.size(); ++i) {
-        const auto &seg = m_segments[i];
-        int w = widths[i];
-
-        // Draw segment background
-        p.fillRect(x, 0, w, height(), seg.bg);
-
-        // Draw text
-        p.setPen(seg.fg);
-        QFont textFont = font;
-        textFont.setBold(i == 0);
-        p.setFont(textFont);
-        p.drawText(x, 0, w, height(), Qt::AlignVCenter | Qt::AlignLeft, seg.text);
-        x += w;
-
-        // Draw divider between segments
-        if (i < m_segments.size() - 1 && divW > 0) {
-            QColor prevBg = seg.bg;
-            QColor nextBg = m_segments[i + 1].bg;
-
-            if (m_dividerStyle == "powerline") {
-                // Fill divider area with next segment's bg
-                p.fillRect(x, 0, divW, height(), nextBg);
-                // Draw triangle pointing right with prev segment's color
-                QPainterPath tri;
-                tri.moveTo(x, 0);
-                tri.lineTo(x + divW, height() / 2.0);
-                tri.lineTo(x, height());
-                tri.closeSubpath();
-                p.setPen(Qt::NoPen);
-                p.setBrush(prevBg);
-                p.drawPath(tri);
-            } else if (m_dividerStyle == "pipe") {
-                p.fillRect(x, 0, divW, height(), nextBg);
-                p.setPen(QColor("#565f89"));
-                p.setFont(font);
-                p.drawText(x, 0, divW, height(), Qt::AlignCenter, QStringLiteral("\u2502"));
-            }
-            x += divW;
-        }
-    }
+    refresh();
 }

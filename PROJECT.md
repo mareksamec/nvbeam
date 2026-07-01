@@ -51,6 +51,7 @@
 - [x] Improve the statusline (dividers, etc)
 - [x] Mouse - terminal like mouse behaviour in nvim buffers on mouse= setting in vim. Allow selection with cursor with auto copy of selected test to clipboard that won't trigger nvim VISUAL mode on click or mouse drag.
 - [x] Consider adding mouse behaviour to .toml config
+- [ ] Make text in the UI statusline selectable.
 
 ## Fixes/Adjustments
 
