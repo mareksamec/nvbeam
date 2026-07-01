@@ -30,11 +30,14 @@ options=('!lto')
 _toml11_ver=4.2.0
 _toml11_sha256=9287971cd4a1a3992ef37e7b95a3972d1ae56410e7f8e3f300727ab1d6c79c2c
 
-# GitHub's tag archive for "vX.Y.Z" extracts to "${pkgname}-X.Y.Z" (leading "v"
-# stripped). Our own tarball uses SKIP: it is generated on demand from a tag we
-# just pushed, so a pinned hash would need recomputing on every release.
+# Our own source is a LOCAL tarball supplied by CI (git archive of the checkout,
+# with a "${pkgname}-${pkgver}/" prefix). The repo is private, so re-downloading
+# from the GitHub archive URL 404s under makepkg's unauthenticated curl; building
+# from the checkout also packages exactly the tree CI tested. SKIP because the
+# tarball is generated per build. When/if the repo goes public, this entry can
+# revert to: "${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz"
 source=(
-    "${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz"
+    "${pkgname}-${pkgver}.tar.gz"
     "toml11-${_toml11_ver}.tar.gz::https://github.com/ToruNiina/toml11/archive/refs/tags/v${_toml11_ver}.tar.gz"
 )
 sha256sums=(
