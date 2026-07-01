@@ -5,8 +5,6 @@
 #include <QVariant>
 #include <QByteArray>
 #include <QHash>
-#include <QTimer>
-#include <QDeadlineTimer>
 #include <functional>
 
 /// Manages the embedded Neovim process and msgpack-RPC communication
@@ -60,12 +58,5 @@ private:
     // discarding them. Necessary because nested containers (arrays/maps) would
     // otherwise swallow a truncated child and return a non-null partial value.
     bool m_decodeIncomplete = false;
-
-    struct PendingRequest {
-        std::function<void(const QVariant &)> callback;
-        QDeadlineTimer deadline;
-    };
-    QHash<uint32_t, PendingRequest> m_callbacks;
-    QTimer *m_timeoutSweep = nullptr;
-    static constexpr int kRpcTimeoutMs = 30'000;
+    QHash<uint32_t, std::function<void(const QVariant &)>> m_callbacks;
 };

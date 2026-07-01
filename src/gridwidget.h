@@ -7,11 +7,10 @@
 #include <QHash>
 #include <QTimer>
 #include <QVariant>
-#include <vector>
 
 /// A single cell in the character grid
 struct GridCell {
-    QString text; // empty string represents a space (avoids allocating " " for every cell)
+    QString text = " ";
     int hlId = 0;
 };
 
@@ -36,20 +35,19 @@ struct Grid {
     int zindex = 0;
     bool hidden = false;
     bool isFloat = false;
-    std::vector<GridCell> cells; // flat row-major: index = row * cols + col
+    QVector<QVector<GridCell>> cells;
 
     void resize(int r, int c) {
         rows = r;
         cols = c;
-        cells.assign(static_cast<std::size_t>(r * c), GridCell{});
+        cells.resize(r);
+        for (auto &row : cells) row.resize(c);
     }
 
     void clear() {
-        std::fill(cells.begin(), cells.end(), GridCell{});
+        for (auto &row : cells)
+            for (auto &cell : row) { cell.text = " "; cell.hlId = 0; }
     }
-
-    GridCell &at(int row, int col)             { return cells[row * cols + col]; }
-    const GridCell &at(int row, int col) const { return cells[row * cols + col]; }
 };
 
 /// Widget that renders multiple Neovim grids using QPainter
@@ -131,8 +129,6 @@ private:
     void handleMsgRuler(const QVariantList &args);
     void handleOptionSet(const QVariantList &args);
     void recalculateGrid();
-    void rebuildFontCache();
-    void rebuildGridOrder();
     QString extractSelectedText() const;
     void paintSelection(QPainter &p) const;
     bool hasSelection() const {
@@ -149,15 +145,8 @@ private:
     GridHit gridAt(const QPoint &pos);
 
     QFont m_font;
-    QFont m_fontCache[4]; // [0]=normal [1]=bold [2]=italic [3]=bold+italic
-    int m_fontDescent[4] = {}; // per-variant descent, indexed same as m_fontCache
     int m_cellWidth = 0;
     int m_cellHeight = 0;
-
-    // Grids sorted for paint order (non-float first, then float by ascending zindex).
-    // Rebuilt lazily when m_gridOrderDirty is set.
-    QVector<int> m_gridOrder;
-    bool m_gridOrderDirty = true;
 
     // Cursor
     int m_cursorGrid = 1;

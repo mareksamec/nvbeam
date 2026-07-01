@@ -48,21 +48,6 @@ NvimProcess::NvimProcess(QObject *parent)
     connect(m_process, &QProcess::readyReadStandardOutput, this, &NvimProcess::onReadyRead);
     connect(m_process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, &NvimProcess::onProcessFinished);
-
-    m_timeoutSweep = new QTimer(this);
-    m_timeoutSweep->setInterval(5000);
-    connect(m_timeoutSweep, &QTimer::timeout, this, [this]() {
-        for (auto it = m_callbacks.begin(); it != m_callbacks.end(); ) {
-            if (it->deadline.hasExpired()) {
-                qWarning() << "RPC request" << it.key() << "timed out, dropping callback";
-                it = m_callbacks.erase(it);
-            } else {
-                ++it;
-            }
-        }
-        if (m_callbacks.isEmpty())
-            m_timeoutSweep->stop();
-    });
 }
 
 NvimProcess::~NvimProcess()
@@ -95,11 +80,6 @@ void NvimProcess::stop()
             m_process->kill();
         }
     }
-    // waitForFinished() is a blocking wait - onProcessFinished() may not have
-    // fired yet via the event loop, so clean up explicitly here too.
-    m_timeoutSweep->stop();
-    m_callbacks.clear();
-    m_buffer.clear();
 }
 
 void NvimProcess::request(const QString &method, const QVariantList &args)
@@ -113,10 +93,7 @@ void NvimProcess::request(const QString &method, const QVariantList &args,
                            std::function<void(const QVariant &)> callback)
 {
     uint32_t id = m_msgid;
-    m_callbacks[id] = PendingRequest{std::move(callback),
-                                     QDeadlineTimer(static_cast<qint64>(kRpcTimeoutMs))};
-    if (!m_timeoutSweep->isActive())
-        m_timeoutSweep->start();
+    m_callbacks[id] = callback;
     QVariantList msg = {0, m_msgid++, method, args};
     QByteArray encoded = encodeMsgpack(QVariant(msg));
     m_process->write(encoded);
@@ -140,9 +117,6 @@ void NvimProcess::onProcessFinished(int exitCode, QProcess::ExitStatus status)
 {
     Q_UNUSED(status)
     qDebug() << "Neovim exited with code:" << exitCode;
-    m_timeoutSweep->stop();
-    m_callbacks.clear();
-    m_buffer.clear();
     emit finished();
 }
 
@@ -167,10 +141,6 @@ void NvimProcess::parseMessages(const QByteArray &data)
         int type = msgList[0].toInt();
         if (type == 1) {
             // Response: [1, msgid, error, result]
-            if (msgList.size() < 4) {
-                qWarning() << "Malformed RPC response (expected 4 fields, got" << msgList.size() << ")";
-                continue;
-            }
             uint32_t respId = msgList[1].toUInt();
             if (m_waitingForReady) {
                 m_waitingForReady = false;
@@ -178,11 +148,8 @@ void NvimProcess::parseMessages(const QByteArray &data)
                 emit ready();
             }
             if (m_callbacks.contains(respId)) {
-                auto req = m_callbacks.take(respId);
-                QVariant error = msgList[2];
-                if (!error.isNull())
-                    qWarning() << "Neovim RPC error for request" << respId << ":" << error;
-                req.callback(msgList[3]);
+                auto cb = m_callbacks.take(respId);
+                cb(msgList[3]);
             }
         } else if (type == 2) {
             // Notification: [2, method, params]
