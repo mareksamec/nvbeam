@@ -149,6 +149,14 @@ void TerminalPanel::pasteClipboard()
 #endif
 }
 
+void TerminalPanel::focusTerminal()
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (m_currentTerm)
+        m_currentTerm->setFocus();
+#endif
+}
+
 #ifdef NEOBEAM_HAS_TERMINAL
 QTermWidget *TerminalPanel::createTermWidget()
 {
