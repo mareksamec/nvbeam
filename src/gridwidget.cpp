@@ -23,38 +23,12 @@ GridWidget::GridWidget(const QFont &font, QWidget *parent)
     QFontMetrics fm(m_font);
     m_cellWidth = fm.horizontalAdvance('M');
     m_cellHeight = fm.height();
-    rebuildFontCache();
 
     setFocusPolicy(Qt::StrongFocus);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
     setAcceptDrops(true); // accept file drops onto the buffer area
-}
-
-void GridWidget::rebuildFontCache()
-{
-    m_fontCache[0] = m_font;
-    m_fontCache[1] = m_font; m_fontCache[1].setBold(true);
-    m_fontCache[2] = m_font; m_fontCache[2].setItalic(true);
-    m_fontCache[3] = m_font; m_fontCache[3].setBold(true); m_fontCache[3].setItalic(true);
-    for (int i = 0; i < 4; ++i)
-        m_fontDescent[i] = QFontMetrics(m_fontCache[i]).descent();
-}
-
-void GridWidget::rebuildGridOrder()
-{
-    m_gridOrder.clear();
-    for (auto it = m_grids.cbegin(); it != m_grids.cend(); ++it) {
-        if (!it->hidden) m_gridOrder.append(it.key());
-    }
-    std::sort(m_gridOrder.begin(), m_gridOrder.end(), [this](int a, int b) {
-        const Grid &ga = m_grids[a];
-        const Grid &gb = m_grids[b];
-        if (ga.isFloat != gb.isFloat) return !ga.isFloat;
-        return ga.zindex < gb.zindex;
-    });
-    m_gridOrderDirty = false;
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -111,7 +85,6 @@ void GridWidget::handleGridResize(const QVariantList &args)
 
     m_grids[gridId].id = gridId;
     m_grids[gridId].resize(rows, cols);
-    m_gridOrderDirty = true;
 }
 
 void GridWidget::handleGridLine(const QVariantList &args)
@@ -125,7 +98,6 @@ void GridWidget::handleGridLine(const QVariantList &args)
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
     if (row < 0 || row >= grid.rows) return;
-    if (col < 0) return;
 
     int hlId = 0;
     for (const auto &cellVar : cells) {
@@ -136,14 +108,10 @@ void GridWidget::handleGridLine(const QVariantList &args)
         if (cell.size() >= 2) hlId = cell[1].toInt();
         int repeat = (cell.size() >= 3) ? cell[2].toInt() : 1;
 
-        // Normalise space to empty string so GridCell default and explicit
-        // space are identical, avoiding a redundant != " " check in paintEvent.
-        const QString stored = (text == " ") ? QString{} : text;
         for (int r = 0; r < repeat; r++) {
             if (col < grid.cols) {
-                GridCell &c = grid.at(row, col);
-                c.text = stored;
-                c.hlId = hlId;
+                grid.cells[row][col].text = text;
+                grid.cells[row][col].hlId = hlId;
                 col++;
             }
         }
@@ -178,28 +146,20 @@ void GridWidget::handleGridScroll(const QVariantList &args)
     if (!m_grids.contains(gridId)) return;
     Grid &grid = m_grids[gridId];
 
-    top   = qBound(0, top,   grid.rows);
-    bot   = qBound(0, bot,   grid.rows);
-    left  = qBound(0, left,  grid.cols);
-    right = qBound(0, right, grid.cols);
-    if (top >= bot || left >= right) return;
-
     if (rows > 0) {
-        rows = qMin(rows, bot - top);
         for (int r = top; r < bot - rows; r++)
             for (int c = left; c < right; c++)
-                grid.at(r, c) = grid.at(r + rows, c);
+                grid.cells[r][c] = grid.cells[r + rows][c];
         for (int r = bot - rows; r < bot; r++)
             for (int c = left; c < right; c++)
-                grid.at(r, c) = GridCell{};
+                grid.cells[r][c] = GridCell{};
     } else if (rows < 0) {
-        rows = qMax(rows, top - bot);
         for (int r = bot - 1; r >= top - rows; r--)
             for (int c = left; c < right; c++)
-                grid.at(r, c) = grid.at(r + rows, c);
+                grid.cells[r][c] = grid.cells[r + rows][c];
         for (int r = top; r < top - rows; r++)
             for (int c = left; c < right; c++)
-                grid.at(r, c) = GridCell{};
+                grid.cells[r][c] = GridCell{};
     }
 }
 
@@ -207,7 +167,6 @@ void GridWidget::handleGridDestroy(const QVariantList &args)
 {
     if (args.isEmpty()) return;
     m_grids.remove(args[0].toInt());
-    m_gridOrderDirty = true;
 }
 
 void GridWidget::handleWinPos(const QVariantList &args)
@@ -226,7 +185,6 @@ void GridWidget::handleWinPos(const QVariantList &args)
         m_grids[gridId].hidden = false;
         m_grids[gridId].isFloat = false;
         m_grids[gridId].zindex = 0;
-        m_gridOrderDirty = true;
     }
 }
 
@@ -245,7 +203,6 @@ void GridWidget::handleWinFloatPos(const QVariantList &args)
     grid.win = win;
     grid.isFloat = true;
     grid.hidden = false;
-    m_gridOrderDirty = true;
 
     // Position relative to anchor grid
     int baseX = 0, baseY = 0;
@@ -264,17 +221,13 @@ void GridWidget::handleWinHide(const QVariantList &args)
 {
     if (args.isEmpty()) return;
     int gridId = args[0].toInt();
-    if (m_grids.contains(gridId)) {
-        m_grids[gridId].hidden = true;
-        m_gridOrderDirty = true;
-    }
+    if (m_grids.contains(gridId)) m_grids[gridId].hidden = true;
 }
 
 void GridWidget::handleWinClose(const QVariantList &args)
 {
     if (args.isEmpty()) return;
     m_grids.remove(args[0].toInt());
-    m_gridOrderDirty = true;
 }
 
 void GridWidget::handleMsgSetPos(const QVariantList &args)
@@ -287,7 +240,6 @@ void GridWidget::handleMsgSetPos(const QVariantList &args)
         m_grids[gridId].y = row;
         m_grids[gridId].x = 0;
         m_grids[gridId].hidden = false;
-        m_gridOrderDirty = true;
     }
 }
 
@@ -402,64 +354,63 @@ void GridWidget::paintEvent(QPaintEvent *event)
     Q_UNUSED(event)
     QPainter painter(this);
     painter.fillRect(rect(), m_defaultBg);
+    painter.setFont(m_font);
 
-    // Use cached paint order; rebuild only when grid topology changed.
-    if (m_gridOrderDirty) rebuildGridOrder();
+    // Collect visible grids sorted by z-order (non-float first, then float by zindex)
+    QVector<int> gridOrder;
+    for (auto it = m_grids.begin(); it != m_grids.end(); ++it) {
+        if (!it->hidden) gridOrder.append(it.key());
+    }
+    std::sort(gridOrder.begin(), gridOrder.end(), [this](int a, int b) {
+        const Grid &ga = m_grids[a];
+        const Grid &gb = m_grids[b];
+        if (ga.isFloat != gb.isFloat) return !ga.isFloat; // non-float first
+        return ga.zindex < gb.zindex;
+    });
 
-    // Track painter state to skip redundant setFont/setPen calls.
-    int curFontIdx = -1;
-    QColor curPen;
-
-    for (int gridId : m_gridOrder) {
+    for (int gridId : gridOrder) {
         const Grid &grid = m_grids[gridId];
-        const int ox = grid.x * m_cellWidth;
-        const int oy = grid.y * m_cellHeight;
+        int ox = grid.x * m_cellWidth;
+        int oy = grid.y * m_cellHeight;
 
         for (int row = 0; row < grid.rows; row++) {
             for (int col = 0; col < grid.cols; col++) {
-                const GridCell &cell = grid.at(row, col);
+                const GridCell &cell = grid.cells[row][col];
 
                 QColor fg = m_defaultFg;
                 QColor bg = m_defaultBg;
                 bool bold = false, italic = false, underline = false;
 
-                if (cell.hlId != 0) {
-                    const auto it = m_hlAttrs.constFind(cell.hlId);
-                    if (it != m_hlAttrs.cend()) {
-                        const HlAttr &hl = *it;
-                        if (hl.foreground.isValid()) fg = hl.foreground;
-                        if (hl.background.isValid()) bg = hl.background;
-                        if (hl.reverse) std::swap(fg, bg);
-                        bold = hl.bold;
-                        italic = hl.italic;
-                        underline = hl.underline;
-                    }
+                if (cell.hlId != 0 && m_hlAttrs.contains(cell.hlId)) {
+                    const HlAttr &hl = m_hlAttrs[cell.hlId];
+                    if (hl.foreground.isValid()) fg = hl.foreground;
+                    if (hl.background.isValid()) bg = hl.background;
+                    if (hl.reverse) std::swap(fg, bg);
+                    bold = hl.bold;
+                    italic = hl.italic;
+                    underline = hl.underline;
                 }
 
-                const int x = ox + col * m_cellWidth;
-                const int y = oy + row * m_cellHeight;
+                int x = ox + col * m_cellWidth;
+                int y = oy + row * m_cellHeight;
 
                 if (bg != m_defaultBg || grid.isFloat) {
                     painter.fillRect(x, y, m_cellWidth, m_cellHeight, bg);
                 }
 
-                // Set pen once per cell for both text and underline that share the same fg.
-                if (!cell.text.isEmpty() || underline) {
-                    if (fg != curPen) {
-                        painter.setPen(fg);
-                        curPen = fg;
-                    }
-                    if (!cell.text.isEmpty()) {
-                        const int fontIdx = (bold ? 1 : 0) | (italic ? 2 : 0);
-                        if (fontIdx != curFontIdx) {
-                            painter.setFont(m_fontCache[fontIdx]);
-                            curFontIdx = fontIdx;
-                        }
-                        painter.drawText(x, y + m_cellHeight - m_fontDescent[fontIdx], cell.text);
-                    }
-                    if (underline) {
-                        painter.drawLine(x, y + m_cellHeight - 1, x + m_cellWidth, y + m_cellHeight - 1);
-                    }
+                if (!cell.text.isEmpty() && cell.text != " ") {
+                    QFont cellFont = m_font;
+                    if (bold) cellFont.setBold(true);
+                    if (italic) cellFont.setItalic(true);
+                    painter.setFont(cellFont);
+                    painter.setPen(fg);
+                    painter.drawText(x, y + m_cellHeight - painter.fontMetrics().descent(), cell.text);
+                    if (bold || italic) painter.setFont(m_font);
+                }
+
+                if (underline) {
+                    painter.setPen(fg);
+                    painter.drawLine(x, y + m_cellHeight - 1, x + m_cellWidth, y + m_cellHeight - 1);
                 }
             }
         }
@@ -486,9 +437,9 @@ void GridWidget::paintEvent(QPaintEvent *event)
             if (shape == "block") {
                 painter.fillRect(x, y, m_cellWidth, m_cellHeight, cursorColor);
                 painter.setPen(m_defaultBg);
-                painter.setFont(m_fontCache[0]);
-                painter.drawText(x, y + m_cellHeight - m_fontDescent[0],
-                                 cg.at(m_cursorRow, m_cursorCol).text);
+                painter.setFont(m_font);
+                painter.drawText(x, y + m_cellHeight - painter.fontMetrics().descent(),
+                                 cg.cells[m_cursorRow][m_cursorCol].text);
             } else if (shape == "vertical") {
                 int w = qMax(1, m_cellWidth * pct / 100);
                 painter.fillRect(x, y, w, m_cellHeight, cursorColor);
@@ -607,16 +558,33 @@ GridWidget::GridHit GridWidget::gridAt(const QPoint &pos)
     int pixelCol = pos.x() / m_cellWidth;
     int pixelRow = pos.y() / m_cellHeight;
 
-    // Ensure order is current, then walk back-to-front (reverse paint order =
-    // front-to-back hit order: highest-z floats tested before lower-z grids).
-    if (m_gridOrderDirty) rebuildGridOrder();
+    // Check floating grids first (reverse z-order)
+    QVector<int> floats;
+    for (auto it = m_grids.begin(); it != m_grids.end(); ++it) {
+        if (!it->hidden && it->isFloat) floats.append(it.key());
+    }
+    std::sort(floats.begin(), floats.end(), [this](int a, int b) {
+        return m_grids[a].zindex > m_grids[b].zindex;
+    });
 
-    for (int i = m_gridOrder.size() - 1; i >= 0; --i) {
-        const Grid &g = m_grids[m_gridOrder[i]];
+    for (int gid : floats) {
+        const Grid &g = m_grids[gid];
         int localCol = pixelCol - g.x;
         int localRow = pixelRow - g.y;
-        if (localCol >= 0 && localCol < g.cols && localRow >= 0 && localRow < g.rows)
-            return {m_gridOrder[i], localRow, localCol};
+        if (localCol >= 0 && localCol < g.cols && localRow >= 0 && localRow < g.rows) {
+            return {gid, localRow, localCol};
+        }
+    }
+
+    // Check non-float grids
+    for (auto it = m_grids.begin(); it != m_grids.end(); ++it) {
+        if (it->hidden || it->isFloat) continue;
+        const Grid &g = *it;
+        int localCol = pixelCol - g.x;
+        int localRow = pixelRow - g.y;
+        if (localCol >= 0 && localCol < g.cols && localRow >= 0 && localRow < g.rows) {
+            return {it.key(), localRow, localCol};
+        }
     }
 
     // Fallback to grid 1
@@ -792,10 +760,8 @@ QString GridWidget::extractSelectedText() const
         endCol = qBound(0, endCol, grid.cols - 1);
 
         QString line;
-        for (int c = startCol; c <= endCol; ++c) {
-            const QString &t = grid.at(r, c).text;
-            line += t.isEmpty() ? QChar(' ') : t;
-        }
+        for (int c = startCol; c <= endCol; ++c)
+            line += grid.cells[r][c].text;
 
         // Trim trailing spaces from each line
         while (line.endsWith(' ')) line.chop(1);
