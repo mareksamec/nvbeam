@@ -26,8 +26,10 @@
 /// Load a Lua script from the lua/ directory next to the executable
 static QString loadLua(const QString &name)
 {
-    // Try relative to executable first, then source tree fallback
+    // Try the installed share dir first (/usr/bin/neobeam -> /usr/share/neobeam/lua),
+    // then the source-tree layout used when running from the build directory.
     QStringList searchPaths = {
+        QCoreApplication::applicationDirPath() + "/../share/neobeam/lua/" + name,
         QCoreApplication::applicationDirPath() + "/../lua/" + name,
         QCoreApplication::applicationDirPath() + "/lua/" + name,
     };

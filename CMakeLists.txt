@@ -81,6 +81,13 @@ endif()
 # --- Install & packaging ---
 install(TARGETS neobeam RUNTIME DESTINATION bin)
 
+# Runtime Lua scripts (minimap, bufferline, statusline feed data via
+# nvim_exec_lua). These are required at runtime, not just build-time — without
+# them the minimap/bufferline/statusline silently no-op. loadLua() in
+# mainwindow.cpp resolves them relative to the executable, so for an installed
+# /usr/bin/neobeam this maps to /usr/share/neobeam/lua.
+install(DIRECTORY lua/ DESTINATION share/neobeam/lua FILES_MATCHING PATTERN "*.lua")
+
 # Linux desktop integration: launcher entry + themed icons. The .desktop file's
 # "Icon=neobeam" resolves to the PNGs installed under hicolor/<size>x<size>/apps.
 if(UNIX AND NOT APPLE)
