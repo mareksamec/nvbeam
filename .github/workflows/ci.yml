@@ -66,3 +66,26 @@ jobs:
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+  build-arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+
+    steps:
+      - name: Install dependencies
+        run: |
+          pacman -Syu --noconfirm --needed \
+            git \
+            cmake \
+            make \
+            gcc \
+            qt6-base \
+            qtermwidget
+
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=ON
+
+      - name: Build
+        run: cmake --build build -j$(nproc)

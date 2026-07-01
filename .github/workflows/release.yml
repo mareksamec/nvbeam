@@ -57,8 +57,40 @@ jobs:
           name: rpm-package
           path: build/*.rpm
 
+  build-arch:
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    steps:
+      - name: Install base tools
+        run: pacman -Syu --noconfirm --needed base-devel git sudo
+
+      - uses: actions/checkout@v4
+
+      - name: Create unprivileged build user
+        run: |
+          # makepkg refuses to run as root; give a normal user passwordless
+          # pacman via sudo so it can install makedepends.
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Set package version from tag
+        run: |
+          # GITHUB_REF_NAME is the tag, e.g. "v0.1.0" -> pkgver "0.1.0".
+          pkgver="${GITHUB_REF_NAME#v}"
+          sed -i "s/^pkgver=.*/pkgver=${pkgver}/" packaging/arch/PKGBUILD
+
+      - name: Build package
+        working-directory: packaging/arch
+        run: sudo -u builder makepkg -s --noconfirm
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch-package
+          path: packaging/arch/*.pkg.tar.zst
+
   release:
-    needs: [build-deb, build-rpm]
+    needs: [build-deb, build-rpm, build-arch]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
@@ -72,3 +104,4 @@ jobs:
           files: |
             *.deb
             *.rpm
+            *.pkg.tar.zst
