@@ -14,7 +14,9 @@
 #include <QDir>
 #include <QKeyEvent>
 #include <QFile>
+#include <QFileInfo>
 #include <QFontMetrics>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -49,6 +51,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     setWindowTitle("neobeam");
     resize(800, 600);
 
+    // A single positional argument that is an existing directory means the
+    // user opened a folder (e.g. `neobeam .`). Window geometry and terminal
+    // split layout still restore normally; only the nvim/terminal cwd is
+    // overridden to point at the folder (handled once nvim is ready, below).
+    QString openFolder;
+    if (nvimArgs.size() == 1) {
+        QFileInfo info(nvimArgs.first());
+        if (info.isDir())
+            openFolder = info.absoluteFilePath();
+    }
+
     m_session = new Session();
 
     auto *central = new QWidget(this);
@@ -63,9 +76,18 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_vsplitter->setChildrenCollapsible(false);
 
     // Editor area container: tabline, grid+minimap row, messages, statusline.
-    auto *editorArea = new QWidget(m_vsplitter);
+    // A QFrame (rather than plain QWidget) so a focus-highlight border can be
+    // drawn around the whole column via stylesheet, matching the terminal
+    // splits' wrapper approach.
+    m_editorArea = new QFrame(m_vsplitter);
+    m_editorArea->setFrameShape(QFrame::NoFrame);
+    // Scoped by object name rather than the bare "QFrame" type selector: QLabel
+    // (used by the statusline segments) is itself a QFrame subclass and would
+    // otherwise pick up the same border rule.
+    m_editorArea->setObjectName("nbEditorArea");
+    auto *editorArea = m_editorArea;
     auto *editorLayout = new QVBoxLayout(editorArea);
-    editorLayout->setContentsMargins(0, 0, 0, 0);
+    editorLayout->setContentsMargins(1, 1, 1, 1); // room for the focus-highlight border
     editorLayout->setSpacing(0);
 
     m_tabline = new TablineWidget(cfg.accentColor, editorArea);
@@ -91,6 +113,15 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     if (cfg.extStatusline)
         editorLayout->addWidget(m_statusline);
 
+    // Highlight the whole editor column (tabline/grid/minimap/statusline) with
+    // a 1px border while the grid holds keyboard focus.
+    m_editorArea->setStyleSheet(QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    connect(m_grid, &GridWidget::focusChanged, this, [this](bool focused) {
+        m_editorArea->setStyleSheet(focused
+            ? QStringLiteral("QFrame#nbEditorArea { border: 1px solid %1; }").arg(m_cfg.focusBorderColor)
+            : QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    });
+
     // Embedded terminal panel (VSCode-like, below statusline)
     TerminalConfig termCfg;
     termCfg.fontFamily = cfg.terminalFont.isEmpty() ? cfg.fontFamily : cfg.terminalFont;
@@ -105,6 +136,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
+    termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
     // Assemble the vertical splitter: editor area on top, terminal below.
@@ -117,6 +149,25 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Ctrl+` toggles terminal panel
     auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
     connect(termShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::toggle);
+
+    // Ctrl+Shift+E splits the terminal; Ctrl+Shift+W closes the active split
+    auto *termSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), this);
+    connect(termSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::addTerminal);
+    auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
+    connect(termCloseSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::removeCurrentTerminal);
+
+    // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
+    auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
+    connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
+
+    // Arrow-down toolbar button: broadcast nvim's current cwd to all terminal splits.
+    connect(m_terminal, &TerminalPanel::cwdBroadcastRequested, this, [this]() {
+        m_nvim->request("nvim_exec_lua",
+            {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
+            [this](const QVariant &result) {
+                m_terminal->broadcastCwd(result.toString());
+            });
+    });
 
     // Paste shortcuts: route to terminal or nvim depending on focus
     auto pasteHandler = [this]() {
@@ -217,7 +268,14 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(m_grid, &GridWidget::gridSizeReady, this, [this](int rows, int cols) {
         m_nvim->request("nvim_ui_try_resize_grid", {1, cols, rows});
     });
-    connect(m_nvim, &NvimProcess::ready, this, [this]() {
+    connect(m_nvim, &NvimProcess::ready, this, [this, openFolder]() {
+        // Folder open (e.g. `neobeam .`): point both nvim's cwd and every
+        // terminal split (including any restored from the session) at the
+        // folder, overriding whatever cwd nvim/the terminals started with.
+        if (!openFolder.isEmpty()) {
+            m_nvim->request("nvim_set_current_dir", {openFolder});
+            m_terminal->broadcastCwd(openFolder);
+        }
         QTimer::singleShot(0, this, [this]() {
             int cols = m_grid->width() / m_grid->cellWidth();
             int rows = m_grid->height() / m_grid->cellHeight();
@@ -414,8 +472,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     m_nvim->start(nvimArgs);
 
-    // Ctrl+Tab switches focus between the editor grid and the terminal. It is
-    // caught by an application-level event filter because both the grid
+    // Ctrl+Tab cycles focus through the editor grid and each terminal split.
+    // It is caught by an application-level event filter because both the grid
     // (GridWidget::event) and QTermWidget consume Tab before a QShortcut would
     // see it.
     qApp->installEventFilter(this);
@@ -461,24 +519,36 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         // the same since there are only two panes to cycle between.
         if ((ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab)
             && (ke->modifiers() & Qt::ControlModifier)) {
-            toggleGridTerminalFocus();
+            // Key_Backtab is what Ctrl+Shift+Tab produces.
+            cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
     }
     return QMainWindow::eventFilter(watched, event);
 }
 
-void MainWindow::toggleGridTerminalFocus()
+void MainWindow::cycleGridTerminalFocus(bool forward)
 {
-    QWidget *focused = QApplication::focusWidget();
-    const bool termFocused = m_terminal && m_terminal->isVisible()
-                             && focused && m_terminal->isAncestorOf(focused);
-    if (termFocused) {
+    const bool hasTerminals = m_terminal && m_terminal->isVisible() && m_terminal->splitCount() > 0;
+    if (!hasTerminals) {
         m_grid->setFocus();
-    } else if (m_terminal && m_terminal->isVisible()) {
-        m_terminal->focusTerminal();
-    } else {
-        // Terminal hidden: nothing to switch to, keep the grid focused.
-        m_grid->setFocus();
+        return;
     }
+
+    // Fixed cycle order: grid (position 0), then each terminal split in
+    // split order (positions 1..count).
+    const int count = m_terminal->splitCount();
+    const int total = count + 1;
+    QWidget *focused = QApplication::focusWidget();
+    int pos = 0;
+    if (focused && m_terminal->isAncestorOf(focused)) {
+        const int idx = m_terminal->indexOfFocused(focused);
+        pos = (idx >= 0) ? idx + 1 : 1;
+    }
+
+    pos = (pos + (forward ? 1 : -1) + total) % total;
+    if (pos == 0)
+        m_grid->setFocus();
+    else
+        m_terminal->focusTerminalAt(pos - 1);
 }

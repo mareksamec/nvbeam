@@ -53,6 +53,7 @@ Config Config::load(const QString &customPath)
                 "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
                 "# accent_color = \"#50fa7b\"\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
+                "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
                 "\n"
                 "# [mouse]\n"
                 "# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty\n"
@@ -151,6 +152,8 @@ Config Config::load(const QString &customPath)
                 cfg.extStatusline = toml::find<bool>(ui, "statusline");
             if (ui.contains("statusline_divider"))
                 cfg.statuslineDivider = QString::fromStdString(toml::find<std::string>(ui, "statusline_divider"));
+            if (ui.contains("focus_border_color"))
+                cfg.focusBorderColor = QString::fromStdString(toml::find<std::string>(ui, "focus_border_color"));
         }
 
         if (data.contains("mouse")) {

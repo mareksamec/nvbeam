@@ -14,6 +14,7 @@ class MinimapWidget;
 class ImageRenderer;
 class Session;
 class QSplitter;
+class QFrame;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -30,8 +31,10 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    /// Toggle keyboard focus between the Neovim grid and the terminal panel.
-    void toggleGridTerminalFocus();
+    /// Cycle keyboard focus through the Neovim grid and each terminal split,
+    /// in split order, wrapping around. forward=false reverses direction
+    /// (Ctrl+Shift+Tab).
+    void cycleGridTerminalFocus(bool forward);
 
 
     NvimProcess *m_nvim = nullptr;
@@ -42,6 +45,7 @@ private:
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
+    QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
     Session *m_session = nullptr;

@@ -90,6 +90,10 @@ signals:
     /// \param modifiers keyboard modifiers held during the drop
     void filesDropped(const QStringList &paths, int win, Qt::KeyboardModifiers modifiers);
 
+    /// Emitted when the grid gains or loses keyboard focus, so the enclosing
+    /// editor area (tabline/minimap/statusline included) can show a focus highlight.
+    void focusChanged(bool hasFocus);
+
 protected:
     bool event(QEvent *event) override;
     void paintEvent(QPaintEvent *event) override;
@@ -101,6 +105,8 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
 
 private:
     void processEvent(const QString &name, const QVariantList &args);

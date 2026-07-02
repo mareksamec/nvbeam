@@ -4,6 +4,7 @@
 #include <QResizeEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QFocusEvent>
 #include <QWheelEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -727,6 +728,18 @@ void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QCo
     m_terminalSelectionEnabled = terminalSelection;
     m_mouseAutoCopy = autoCopy;
     m_selectionColor = selColor;
+}
+
+void GridWidget::focusInEvent(QFocusEvent *event)
+{
+    QWidget::focusInEvent(event);
+    emit focusChanged(true);
+}
+
+void GridWidget::focusOutEvent(QFocusEvent *event)
+{
+    QWidget::focusOutEvent(event);
+    emit focusChanged(false);
 }
 
 void GridWidget::handleOptionSet(const QVariantList &args)
