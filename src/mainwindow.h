@@ -44,6 +44,7 @@ private:
     MessageWidget *m_messages = nullptr;
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
+    TerminalPanel *m_sideTerminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;

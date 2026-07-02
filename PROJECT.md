@@ -59,6 +59,7 @@
 - [x] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
 - [ ] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
     - [ ] Add config option for default command to run with side terminal e.g. claude, nanocoder
+    - [ ] Side terminal is not affected by the "Send cwd to all terminals button"
 
 ## Fixes/Adjustments
 

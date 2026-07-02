@@ -33,17 +33,23 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     layout->addWidget(m_toolbar);
 
-    // Splitter holds terminal instances side by side
-    m_splitter = new QSplitter(Qt::Horizontal, this);
+    // Splitter holds terminal instances side by side (bottom panel) or
+    // stacked vertically (side panel, where horizontal space is scarce).
+    m_splitter = new QSplitter(m_cfg.sidePanel ? Qt::Vertical : Qt::Horizontal, this);
     m_splitter->setStyleSheet("QSplitter { background: #000; }"
-                              "QSplitter::handle { background: #333; width: 2px; }");
+                              "QSplitter::handle { background: #333; width: 2px; height: 2px; }");
     layout->addWidget(m_splitter, 1);
 
-    setStyleSheet("background: #000; border-top: 1px solid #333;");
-    // Resizable: enforce a sensible minimum rather than a fixed height so the
-    // user can drag the editor/terminal splitter. The initial height is applied
-    // by MainWindow via the vertical splitter's sizes.
-    setMinimumHeight(kMinHeight);
+    setStyleSheet(m_cfg.sidePanel
+        ? "background: #000; border-left: 1px solid #333;"
+        : "background: #000; border-top: 1px solid #333;");
+    // Resizable: enforce a sensible minimum rather than a fixed size so the
+    // user can drag the surrounding splitter. The initial size is applied by
+    // MainWindow via the splitter's sizes.
+    if (m_cfg.sidePanel)
+        setMinimumWidth(kMinWidth);
+    else
+        setMinimumHeight(kMinHeight);
     hide();
 
     // Create initial terminal
@@ -89,6 +95,11 @@ void TerminalPanel::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
 #ifdef NEOBEAM_HAS_TERMINAL
+    // All shells may have exited while the panel was hidden (their finished
+    // handlers remove the splits); reopening should present a fresh terminal
+    // rather than an empty panel.
+    if (m_terminals.isEmpty())
+        addTerminal();
     for (auto *term : m_terminals) {
         if (term->property("_nb_pending").toBool()) {
             term->setProperty("_nb_pending", false);
@@ -99,6 +110,7 @@ void TerminalPanel::showEvent(QShowEvent *event)
         }
     }
 #endif
+    emit visibilityChanged(true);
 }
 
 void TerminalPanel::setWorkingDirectory(const QString &dir)
@@ -142,10 +154,12 @@ void TerminalPanel::addTerminal()
 
     // QSplitter gives a freshly added pane only a sliver of leftover space by
     // default; redistribute so every split (old and new) gets an equal share
-    // of the available width. Qt normalizes these as relative weights, so
+    // of the available space. Qt normalizes these as relative weights, so
     // equal values here mean an equal split regardless of handle overhead.
     const int count = m_splitter->count();
-    const int each = qMax(1, m_splitter->width() / qMax(1, count));
+    const int avail = m_splitter->orientation() == Qt::Horizontal
+                          ? m_splitter->width() : m_splitter->height();
+    const int each = qMax(1, avail / qMax(1, count));
     m_splitter->setSizes(QList<int>(count, each));
 #endif
 }
@@ -279,8 +293,10 @@ QTermWidget *TerminalPanel::createTermWidget()
             term->deleteLater();
         if (term == m_currentTerm)
             m_currentTerm = m_terminals.isEmpty() ? nullptr : m_terminals.last();
-        if (m_terminals.isEmpty())
+        if (m_terminals.isEmpty()) {
             hide();
+            emit visibilityChanged(false); // keep the toggle button in sync
+        }
     });
 
     return term;

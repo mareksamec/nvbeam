@@ -30,6 +30,9 @@ struct TerminalConfig {
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
     QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
+    // Side-panel mode (terminal docked next to the minimap): splits stack
+    // vertically and the panel enforces a minimum width instead of height.
+    bool sidePanel = false;
 };
 
 /// VSCode-like embedded terminal panel with split support
@@ -111,5 +114,6 @@ private:
     TerminalConfig m_cfg;
     QString m_cwd;
 
-    static constexpr int kMinHeight = 80; // minimum panel height in pixels when resizing
+    static constexpr int kMinHeight = 80;  // minimum panel height in pixels when resizing
+    static constexpr int kMinWidth = 150;  // minimum panel width in side-panel mode
 };

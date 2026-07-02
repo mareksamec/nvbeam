@@ -22,6 +22,10 @@
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
 
+[side_terminal]
+# command = ""  # command run when the side terminal opens (e.g. "claude", "nanocoder")
+# width = 400  # startup width in pixels
+
 [ui]
 # ext_popupmenu = true
 # ext_tabline = true

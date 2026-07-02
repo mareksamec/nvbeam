@@ -45,6 +45,10 @@ Config Config::load(const QString &customPath)
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "# scrollback = 1000  # scrollback buffer size in lines\n"
                 "\n"
+                "# [side_terminal]\n"
+                "# command = \"\"  # command run when the side terminal opens (e.g. \"claude\", \"nanocoder\")\n"
+                "# width = 400  # startup width in pixels\n"
+                "\n"
                 "# [ui]\n"
                 "# ext_popupmenu = true\n"
                 "# ext_tabline = true\n"
@@ -134,6 +138,14 @@ Config Config::load(const QString &customPath)
                 // modes are intentionally not exposed yet.
                 cfg.terminalScrollback = qMax(1, toml::find<int>(term, "scrollback"));
             }
+        }
+
+        if (data.contains("side_terminal")) {
+            auto &side = data.at("side_terminal");
+            if (side.contains("command"))
+                cfg.sideTerminalCommand = QString::fromStdString(toml::find<std::string>(side, "command"));
+            if (side.contains("width"))
+                cfg.sideTerminalWidth = qMax(150, toml::find<int>(side, "width"));
         }
 
         if (data.contains("ui")) {
