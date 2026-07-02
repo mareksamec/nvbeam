@@ -64,6 +64,9 @@ public:
     /// Configure terminal-style mouse selection behavior
     void setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor);
 
+    /// Color of the 1px border drawn around the grid when it has keyboard focus
+    void setFocusBorderColor(const QColor &color);
+
 public slots:
     void handleRedraw(const QVariantList &events);
 
@@ -101,6 +104,8 @@ protected:
     void wheelEvent(QWheelEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
+    void focusInEvent(QFocusEvent *event) override;
+    void focusOutEvent(QFocusEvent *event) override;
 
 private:
     void processEvent(const QString &name, const QVariantList &args);
@@ -183,4 +188,5 @@ private:
     QHash<int, HlAttr> m_hlAttrs;
     QColor m_defaultFg = Qt::white;
     QColor m_defaultBg = QColor(30, 30, 30);
+    QColor m_focusBorderColor = QColor("#61afef");
 };

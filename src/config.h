@@ -35,6 +35,7 @@ struct Config {
     bool extStatusline = true;        // native statusline widget
     QString accentColor = "#50fa7b";  // greenish accent for native elements
     QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
+    QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane
 
     // Mouse settings
     bool mouseTerminalSelection = true;  // terminal-style selection when vim mouse= empty

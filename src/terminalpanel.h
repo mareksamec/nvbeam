@@ -6,8 +6,11 @@
 #include <QToolBar>
 #include <QAction>
 #include <QList>
+#include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QColor>
+#include <QFrame>
 
 #ifdef NEOBEAM_HAS_TERMINAL
 #include <qtermwidget.h>
@@ -26,6 +29,7 @@ struct TerminalConfig {
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
+    QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
 };
 
 /// VSCode-like embedded terminal panel with split support
@@ -61,6 +65,14 @@ public:
     /// Give keyboard focus to the active terminal widget
     void focusTerminal();
 
+    /// Focus the terminal split at the given index (0-based, in split order).
+    /// Returns false if the index is out of range.
+    bool focusTerminalAt(int index);
+
+    /// Index (0-based, in split order) of the terminal split that contains
+    /// the given widget, or -1 if it is not one of the open terminal splits.
+    int indexOfFocused(QWidget *focused) const;
+
     /// Change the working directory of every open terminal split, regardless
     /// of the followCwd setting (explicit user action via the toolbar button).
     void broadcastCwd(const QString &dir);
@@ -81,8 +93,17 @@ public slots:
 private:
 #ifdef NEOBEAM_HAS_TERMINAL
     QTermWidget *createTermWidget();
+    /// Wrap a terminal widget in a QFrame so its border is paintable via
+    /// stylesheet (QTermWidget itself does its own custom painting and
+    /// ignores QSS border properties).
+    QFrame *wrapTerminal(QTermWidget *term);
+    /// Apply the focus-highlight border to the split containing `focused`
+    /// and clear it on every other split.
+    void updateFocusHighlight(QTermWidget *focused);
+
     QTermWidget *m_currentTerm = nullptr;
     QList<QTermWidget *> m_terminals;
+    QHash<QTermWidget *, QFrame *> m_wrapperFor;
 #endif
 
     QSplitter *m_splitter = nullptr;

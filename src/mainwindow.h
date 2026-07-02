@@ -30,8 +30,10 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
-    /// Toggle keyboard focus between the Neovim grid and the terminal panel.
-    void toggleGridTerminalFocus();
+    /// Cycle keyboard focus through the Neovim grid and each terminal split,
+    /// in split order, wrapping around. forward=false reverses direction
+    /// (Ctrl+Shift+Tab).
+    void cycleGridTerminalFocus(bool forward);
 
 
     NvimProcess *m_nvim = nullptr;

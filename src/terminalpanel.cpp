@@ -135,7 +135,7 @@ void TerminalPanel::addTerminal()
 {
 #ifdef NEOBEAM_HAS_TERMINAL
     auto *term = createTermWidget();
-    m_splitter->addWidget(term);
+    m_splitter->addWidget(wrapTerminal(term));
     m_currentTerm = term;
     m_terminals.append(term);
     term->setFocus();
@@ -149,7 +149,11 @@ void TerminalPanel::removeCurrentTerminal()
         return;
 
     m_terminals.removeOne(m_currentTerm);
-    m_currentTerm->deleteLater();
+    QFrame *wrapper = m_wrapperFor.take(m_currentTerm);
+    if (wrapper)
+        wrapper->deleteLater(); // also deletes the child terminal widget
+    else
+        m_currentTerm->deleteLater();
     m_currentTerm = m_terminals.isEmpty() ? nullptr : m_terminals.last();
     if (m_currentTerm)
         m_currentTerm->setFocus();
@@ -170,6 +174,32 @@ void TerminalPanel::focusTerminal()
     if (m_currentTerm)
         m_currentTerm->setFocus();
 #endif
+}
+
+bool TerminalPanel::focusTerminalAt(int index)
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (index < 0 || index >= m_terminals.size())
+        return false;
+    m_terminals[index]->setFocus();
+    return true;
+#else
+    Q_UNUSED(index);
+    return false;
+#endif
+}
+
+int TerminalPanel::indexOfFocused(QWidget *focused) const
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (!focused)
+        return -1;
+    for (int i = 0; i < m_terminals.size(); ++i) {
+        if (m_terminals[i] == focused || m_terminals[i]->isAncestorOf(focused))
+            return i;
+    }
+#endif
+    return -1;
 }
 
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -224,10 +254,21 @@ QTermWidget *TerminalPanel::createTermWidget()
 
     connect(term, &QTermWidget::termGetFocus, this, [this, term]() {
         m_currentTerm = term;
+        updateFocusHighlight(term);
+    });
+    connect(term, &QTermWidget::termLostFocus, this, [this]() {
+        // If focus moved to another split rather than away from the panel,
+        // its termGetFocus (focus-out fires before focus-in) will run right
+        // after this and re-highlight the right wrapper.
+        updateFocusHighlight(nullptr);
     });
     connect(term, &QTermWidget::finished, this, [this, term]() {
         m_terminals.removeOne(term);
-        term->deleteLater();
+        QFrame *wrapper = m_wrapperFor.take(term);
+        if (wrapper)
+            wrapper->deleteLater(); // also deletes the child terminal widget
+        else
+            term->deleteLater();
         if (term == m_currentTerm)
             m_currentTerm = m_terminals.isEmpty() ? nullptr : m_terminals.last();
         if (m_terminals.isEmpty())
@@ -235,5 +276,28 @@ QTermWidget *TerminalPanel::createTermWidget()
     });
 
     return term;
+}
+
+QFrame *TerminalPanel::wrapTerminal(QTermWidget *term)
+{
+    auto *wrapper = new QFrame(this);
+    wrapper->setFrameShape(QFrame::NoFrame);
+    auto *layout = new QVBoxLayout(wrapper);
+    layout->setContentsMargins(1, 1, 1, 1); // room for the focus-highlight border
+    layout->setSpacing(0);
+    layout->addWidget(term);
+    m_wrapperFor.insert(term, wrapper);
+    updateFocusHighlight(m_currentTerm); // keep existing highlight consistent as splits are added/removed
+    return wrapper;
+}
+
+void TerminalPanel::updateFocusHighlight(QTermWidget *focused)
+{
+    for (auto it = m_wrapperFor.constBegin(); it != m_wrapperFor.constEnd(); ++it) {
+        const bool isFocused = it.key() == focused;
+        it.value()->setStyleSheet(isFocused
+            ? QStringLiteral("QFrame { border: 1px solid %1; }").arg(m_cfg.focusBorderColor.name())
+            : QStringLiteral("QFrame { border: 1px solid transparent; }"));
+    }
 }
 #endif

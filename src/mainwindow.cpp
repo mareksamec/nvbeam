@@ -86,6 +86,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_grid = new GridWidget(cfg.font(), editorArea);
     m_grid->setMouseConfig(cfg.mouseTerminalSelection, cfg.mouseAutoCopy,
                            QColor(cfg.mouseSelectionColor));
+    m_grid->setFocusBorderColor(QColor(cfg.focusBorderColor));
 
     // Grid + minimap side by side
     m_minimap = new MinimapWidget(editorArea);
@@ -117,6 +118,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
+    termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
     // Assemble the vertical splitter: editor area on top, terminal below.
@@ -452,8 +454,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     m_nvim->start(nvimArgs);
 
-    // Ctrl+Tab switches focus between the editor grid and the terminal. It is
-    // caught by an application-level event filter because both the grid
+    // Ctrl+Tab cycles focus through the editor grid and each terminal split.
+    // It is caught by an application-level event filter because both the grid
     // (GridWidget::event) and QTermWidget consume Tab before a QShortcut would
     // see it.
     qApp->installEventFilter(this);
@@ -499,24 +501,36 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         // the same since there are only two panes to cycle between.
         if ((ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab)
             && (ke->modifiers() & Qt::ControlModifier)) {
-            toggleGridTerminalFocus();
+            // Key_Backtab is what Ctrl+Shift+Tab produces.
+            cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
     }
     return QMainWindow::eventFilter(watched, event);
 }
 
-void MainWindow::toggleGridTerminalFocus()
+void MainWindow::cycleGridTerminalFocus(bool forward)
 {
-    QWidget *focused = QApplication::focusWidget();
-    const bool termFocused = m_terminal && m_terminal->isVisible()
-                             && focused && m_terminal->isAncestorOf(focused);
-    if (termFocused) {
+    const bool hasTerminals = m_terminal && m_terminal->isVisible() && m_terminal->splitCount() > 0;
+    if (!hasTerminals) {
         m_grid->setFocus();
-    } else if (m_terminal && m_terminal->isVisible()) {
-        m_terminal->focusTerminal();
-    } else {
-        // Terminal hidden: nothing to switch to, keep the grid focused.
-        m_grid->setFocus();
+        return;
     }
+
+    // Fixed cycle order: grid (position 0), then each terminal split in
+    // split order (positions 1..count).
+    const int count = m_terminal->splitCount();
+    const int total = count + 1;
+    QWidget *focused = QApplication::focusWidget();
+    int pos = 0;
+    if (focused && m_terminal->isAncestorOf(focused)) {
+        const int idx = m_terminal->indexOfFocused(focused);
+        pos = (idx >= 0) ? idx + 1 : 1;
+    }
+
+    pos = (pos + (forward ? 1 : -1) + total) % total;
+    if (pos == 0)
+        m_grid->setFocus();
+    else
+        m_terminal->focusTerminalAt(pos - 1);
 }

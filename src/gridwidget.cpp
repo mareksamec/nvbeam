@@ -4,6 +4,7 @@
 #include <QResizeEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QFocusEvent>
 #include <QWheelEvent>
 #include <QDragEnterEvent>
 #include <QDropEvent>
@@ -449,6 +450,14 @@ void GridWidget::paintEvent(QPaintEvent *event)
             }
         }
     }
+
+    if (hasFocus()) {
+        QPen pen(m_focusBorderColor);
+        pen.setWidth(1);
+        painter.setPen(pen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawRect(rect().adjusted(0, 0, -1, -1));
+    }
 }
 
 void GridWidget::resizeEvent(QResizeEvent *event)
@@ -727,6 +736,25 @@ void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QCo
     m_terminalSelectionEnabled = terminalSelection;
     m_mouseAutoCopy = autoCopy;
     m_selectionColor = selColor;
+}
+
+void GridWidget::setFocusBorderColor(const QColor &color)
+{
+    m_focusBorderColor = color;
+    if (hasFocus())
+        update();
+}
+
+void GridWidget::focusInEvent(QFocusEvent *event)
+{
+    QWidget::focusInEvent(event);
+    update(); // WA_OpaquePaintEvent suppresses Qt's automatic repaint on focus change
+}
+
+void GridWidget::focusOutEvent(QFocusEvent *event)
+{
+    QWidget::focusOutEvent(event);
+    update();
 }
 
 void GridWidget::handleOptionSet(const QVariantList &args)
