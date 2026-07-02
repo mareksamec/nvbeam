@@ -64,9 +64,6 @@ public:
     /// Configure terminal-style mouse selection behavior
     void setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor);
 
-    /// Color of the 1px border drawn around the grid when it has keyboard focus
-    void setFocusBorderColor(const QColor &color);
-
 public slots:
     void handleRedraw(const QVariantList &events);
 
@@ -92,6 +89,10 @@ signals:
     /// \param win       target Neovim window handle under the cursor (-1 if unknown)
     /// \param modifiers keyboard modifiers held during the drop
     void filesDropped(const QStringList &paths, int win, Qt::KeyboardModifiers modifiers);
+
+    /// Emitted when the grid gains or loses keyboard focus, so the enclosing
+    /// editor area (tabline/minimap/statusline included) can show a focus highlight.
+    void focusChanged(bool hasFocus);
 
 protected:
     bool event(QEvent *event) override;
@@ -188,5 +189,4 @@ private:
     QHash<int, HlAttr> m_hlAttrs;
     QColor m_defaultFg = Qt::white;
     QColor m_defaultBg = QColor(30, 30, 30);
-    QColor m_focusBorderColor = QColor("#61afef");
 };

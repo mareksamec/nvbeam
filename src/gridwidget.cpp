@@ -450,14 +450,6 @@ void GridWidget::paintEvent(QPaintEvent *event)
             }
         }
     }
-
-    if (hasFocus()) {
-        QPen pen(m_focusBorderColor);
-        pen.setWidth(1);
-        painter.setPen(pen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawRect(rect().adjusted(0, 0, -1, -1));
-    }
 }
 
 void GridWidget::resizeEvent(QResizeEvent *event)
@@ -738,23 +730,16 @@ void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QCo
     m_selectionColor = selColor;
 }
 
-void GridWidget::setFocusBorderColor(const QColor &color)
-{
-    m_focusBorderColor = color;
-    if (hasFocus())
-        update();
-}
-
 void GridWidget::focusInEvent(QFocusEvent *event)
 {
     QWidget::focusInEvent(event);
-    update(); // WA_OpaquePaintEvent suppresses Qt's automatic repaint on focus change
+    emit focusChanged(true);
 }
 
 void GridWidget::focusOutEvent(QFocusEvent *event)
 {
     QWidget::focusOutEvent(event);
-    update();
+    emit focusChanged(false);
 }
 
 void GridWidget::handleOptionSet(const QVariantList &args)

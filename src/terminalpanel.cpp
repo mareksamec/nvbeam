@@ -282,6 +282,10 @@ QFrame *TerminalPanel::wrapTerminal(QTermWidget *term)
 {
     auto *wrapper = new QFrame(this);
     wrapper->setFrameShape(QFrame::NoFrame);
+    // Scoped by object name rather than the bare "QFrame" type selector, since
+    // any QFrame-derived widget nested inside (e.g. QLabel) would otherwise
+    // also pick up the border rule.
+    wrapper->setObjectName("nbTermWrapper");
     auto *layout = new QVBoxLayout(wrapper);
     layout->setContentsMargins(1, 1, 1, 1); // room for the focus-highlight border
     layout->setSpacing(0);
@@ -296,8 +300,8 @@ void TerminalPanel::updateFocusHighlight(QTermWidget *focused)
     for (auto it = m_wrapperFor.constBegin(); it != m_wrapperFor.constEnd(); ++it) {
         const bool isFocused = it.key() == focused;
         it.value()->setStyleSheet(isFocused
-            ? QStringLiteral("QFrame { border: 1px solid %1; }").arg(m_cfg.focusBorderColor.name())
-            : QStringLiteral("QFrame { border: 1px solid transparent; }"));
+            ? QStringLiteral("QFrame#nbTermWrapper { border: 1px solid %1; }").arg(m_cfg.focusBorderColor.name())
+            : QStringLiteral("QFrame#nbTermWrapper { border: 1px solid transparent; }"));
     }
 }
 #endif

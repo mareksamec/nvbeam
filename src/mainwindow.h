@@ -14,6 +14,7 @@ class MinimapWidget;
 class ImageRenderer;
 class Session;
 class QSplitter;
+class QFrame;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -44,6 +45,7 @@ private:
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
+    QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
     Session *m_session = nullptr;

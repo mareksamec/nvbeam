@@ -16,6 +16,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QFontMetrics>
+#include <QFrame>
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QPushButton>
@@ -75,9 +76,18 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_vsplitter->setChildrenCollapsible(false);
 
     // Editor area container: tabline, grid+minimap row, messages, statusline.
-    auto *editorArea = new QWidget(m_vsplitter);
+    // A QFrame (rather than plain QWidget) so a focus-highlight border can be
+    // drawn around the whole column via stylesheet, matching the terminal
+    // splits' wrapper approach.
+    m_editorArea = new QFrame(m_vsplitter);
+    m_editorArea->setFrameShape(QFrame::NoFrame);
+    // Scoped by object name rather than the bare "QFrame" type selector: QLabel
+    // (used by the statusline segments) is itself a QFrame subclass and would
+    // otherwise pick up the same border rule.
+    m_editorArea->setObjectName("nbEditorArea");
+    auto *editorArea = m_editorArea;
     auto *editorLayout = new QVBoxLayout(editorArea);
-    editorLayout->setContentsMargins(0, 0, 0, 0);
+    editorLayout->setContentsMargins(1, 1, 1, 1); // room for the focus-highlight border
     editorLayout->setSpacing(0);
 
     m_tabline = new TablineWidget(cfg.accentColor, editorArea);
@@ -86,7 +96,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_grid = new GridWidget(cfg.font(), editorArea);
     m_grid->setMouseConfig(cfg.mouseTerminalSelection, cfg.mouseAutoCopy,
                            QColor(cfg.mouseSelectionColor));
-    m_grid->setFocusBorderColor(QColor(cfg.focusBorderColor));
 
     // Grid + minimap side by side
     m_minimap = new MinimapWidget(editorArea);
@@ -103,6 +112,15 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
     if (cfg.extStatusline)
         editorLayout->addWidget(m_statusline);
+
+    // Highlight the whole editor column (tabline/grid/minimap/statusline) with
+    // a 1px border while the grid holds keyboard focus.
+    m_editorArea->setStyleSheet(QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    connect(m_grid, &GridWidget::focusChanged, this, [this](bool focused) {
+        m_editorArea->setStyleSheet(focused
+            ? QStringLiteral("QFrame#nbEditorArea { border: 1px solid %1; }").arg(m_cfg.focusBorderColor)
+            : QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    });
 
     // Embedded terminal panel (VSCode-like, below statusline)
     TerminalConfig termCfg;
