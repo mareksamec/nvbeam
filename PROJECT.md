@@ -55,6 +55,7 @@
 - [x] Ctrl + Shift + E splits the terminal
 - [x] Ctrl + Shift + W closes active split
 - [x] Instead add (arrow down button) that sends current nvim cwd to all open terminals.
+- [ ] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
 - [ ] When a folder is open with neobeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
 - [ ] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
     - [ ] Add config option for default command to run with side terminal e.g. claude, nanocoder

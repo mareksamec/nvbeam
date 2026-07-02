@@ -14,6 +14,7 @@
 #include <QDir>
 #include <QKeyEvent>
 #include <QFile>
+#include <QFileInfo>
 #include <QFontMetrics>
 #include <QGuiApplication>
 #include <QHBoxLayout>
@@ -48,6 +49,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 {
     setWindowTitle("neobeam");
     resize(800, 600);
+
+    // A single positional argument that is an existing directory means the
+    // user opened a folder (e.g. `neobeam .`). Window geometry and terminal
+    // split layout still restore normally; only the nvim/terminal cwd is
+    // overridden to point at the folder (handled once nvim is ready, below).
+    QString openFolder;
+    if (nvimArgs.size() == 1) {
+        QFileInfo info(nvimArgs.first());
+        if (info.isDir())
+            openFolder = info.absoluteFilePath();
+    }
 
     m_session = new Session();
 
@@ -123,6 +135,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(termSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::addTerminal);
     auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
     connect(termCloseSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::removeCurrentTerminal);
+
+    // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
+    auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
+    connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
 
     // Arrow-down toolbar button: broadcast nvim's current cwd to all terminal splits.
     connect(m_terminal, &TerminalPanel::cwdBroadcastRequested, this, [this]() {
@@ -232,7 +248,14 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(m_grid, &GridWidget::gridSizeReady, this, [this](int rows, int cols) {
         m_nvim->request("nvim_ui_try_resize_grid", {1, cols, rows});
     });
-    connect(m_nvim, &NvimProcess::ready, this, [this]() {
+    connect(m_nvim, &NvimProcess::ready, this, [this, openFolder]() {
+        // Folder open (e.g. `neobeam .`): point both nvim's cwd and every
+        // terminal split (including any restored from the session) at the
+        // folder, overriding whatever cwd nvim/the terminals started with.
+        if (!openFolder.isEmpty()) {
+            m_nvim->request("nvim_set_current_dir", {openFolder});
+            m_terminal->broadcastCwd(openFolder);
+        }
         QTimer::singleShot(0, this, [this]() {
             int cols = m_grid->width() / m_grid->cellWidth();
             int rows = m_grid->height() / m_grid->cellHeight();

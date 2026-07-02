@@ -118,8 +118,16 @@ void TerminalPanel::broadcastCwd(const QString &dir)
         return;
     m_cwd = dir;
 #ifdef NEOBEAM_HAS_TERMINAL
-    for (auto *term : m_terminals)
-        term->changeDir(dir);
+    for (auto *term : m_terminals) {
+        // Terminals whose shell hasn't started yet (panel still hidden) have
+        // no running process for changeDir()'s "cd" keystrokes to reach, so
+        // fix up their startup directory instead; it takes effect once
+        // showEvent() calls startShellProgram() on them.
+        if (term->property("_nb_pending").toBool())
+            term->setWorkingDirectory(dir);
+        else
+            term->changeDir(dir);
+    }
 #endif
 }
 

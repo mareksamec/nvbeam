@@ -33,6 +33,6 @@ right_click_paste = true  # PuTTY-style right-click paste
 # accent_color = "#50fa7b"
 
 [session]
-# restore = true           # remember and restore last session on startup
-# restore_window = true    # best-effort window size/state (WM/Wayland may override)
-# restore_terminal = true  # terminal split count, proportions, height, expanded state
+restore = true           # remember and restore last session on startup
+restore_window = true    # best-effort window size/state (WM/Wayland may override)
+restore_terminal = true  # terminal split count, proportions, height, expanded state
