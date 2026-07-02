@@ -139,6 +139,14 @@ void TerminalPanel::addTerminal()
     m_currentTerm = term;
     m_terminals.append(term);
     term->setFocus();
+
+    // QSplitter gives a freshly added pane only a sliver of leftover space by
+    // default; redistribute so every split (old and new) gets an equal share
+    // of the available width. Qt normalizes these as relative weights, so
+    // equal values here mean an equal split regardless of handle overhead.
+    const int count = m_splitter->count();
+    const int each = qMax(1, m_splitter->width() / qMax(1, count));
+    m_splitter->setSizes(QList<int>(count, each));
 #endif
 }
 
