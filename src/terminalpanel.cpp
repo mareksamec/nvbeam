@@ -25,8 +25,9 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     auto *addAct = m_toolbar->addAction("+", this, &TerminalPanel::addTerminal);
     addAct->setToolTip("New terminal");
-    auto *splitAct = m_toolbar->addAction("⎸", this, &TerminalPanel::splitHorizontal);
-    splitAct->setToolTip("Split terminal");
+    auto *cwdAct = m_toolbar->addAction("↓");
+    cwdAct->setToolTip("Send nvim cwd to all terminals");
+    connect(cwdAct, &QAction::triggered, this, &TerminalPanel::cwdBroadcastRequested);
     auto *closeAct = m_toolbar->addAction("✕", this, &TerminalPanel::removeCurrentTerminal);
     closeAct->setToolTip("Close terminal");
 
@@ -111,6 +112,17 @@ void TerminalPanel::setWorkingDirectory(const QString &dir)
 #endif
 }
 
+void TerminalPanel::broadcastCwd(const QString &dir)
+{
+    if (dir.isEmpty())
+        return;
+    m_cwd = dir;
+#ifdef NEOBEAM_HAS_TERMINAL
+    for (auto *term : m_terminals)
+        term->changeDir(dir);
+#endif
+}
+
 void TerminalPanel::addTerminal()
 {
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -120,11 +132,6 @@ void TerminalPanel::addTerminal()
     m_terminals.append(term);
     term->setFocus();
 #endif
-}
-
-void TerminalPanel::splitHorizontal()
-{
-    addTerminal();
 }
 
 void TerminalPanel::removeCurrentTerminal()

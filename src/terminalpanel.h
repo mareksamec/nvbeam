@@ -61,15 +61,21 @@ public:
     /// Give keyboard focus to the active terminal widget
     void focusTerminal();
 
+    /// Change the working directory of every open terminal split, regardless
+    /// of the followCwd setting (explicit user action via the toolbar button).
+    void broadcastCwd(const QString &dir);
+
 signals:
     void visibilityChanged(bool visible);
+    /// Emitted when the user clicks the "send cwd" toolbar button; MainWindow
+    /// resolves the current nvim cwd and calls broadcastCwd() with it.
+    void cwdBroadcastRequested();
 
 protected:
     void showEvent(QShowEvent *event) override;
 
-private slots:
+public slots:
     void addTerminal();
-    void splitHorizontal();
     void removeCurrentTerminal();
 
 private:

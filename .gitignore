@@ -1,5 +1,8 @@
 build/
 .cache/
+.nanocoder
+agents.config.json
+.claude
 compile_commands.json
 third_party/
 test.txt

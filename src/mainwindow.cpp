@@ -118,6 +118,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
     connect(termShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::toggle);
 
+    // Ctrl+Shift+E splits the terminal; Ctrl+Shift+W closes the active split
+    auto *termSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), this);
+    connect(termSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::addTerminal);
+    auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
+    connect(termCloseSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::removeCurrentTerminal);
+
+    // Arrow-down toolbar button: broadcast nvim's current cwd to all terminal splits.
+    connect(m_terminal, &TerminalPanel::cwdBroadcastRequested, this, [this]() {
+        m_nvim->request("nvim_exec_lua",
+            {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
+            [this](const QVariant &result) {
+                m_terminal->broadcastCwd(result.toString());
+            });
+    });
+
     // Paste shortcuts: route to terminal or nvim depending on focus
     auto pasteHandler = [this]() {
         if (m_terminal->isVisible() && m_terminal->isAncestorOf(focusWidget())) {
