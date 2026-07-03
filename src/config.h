@@ -18,7 +18,9 @@ struct Config {
     int terminalHeight = 300;             // startup height in pixels
     QString terminalFont;                 // empty = use global font
     int terminalFontSize = 0;             // 0 = use global fontSize
-    QString terminalColorScheme = "Linux"; // QTermWidget color scheme
+    QString terminalColorScheme = "Neoblue"; // QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+    QString terminalForeground;           // override scheme text color (e.g. "#f8f8f2"); empty = scheme default
+    QString terminalBackground;           // override scheme background color; empty = scheme default
     QString terminalShell;                // empty = system default shell
     QStringList terminalShellArgs;        // args passed to shell
     QString terminalExecCommand;          // command executed after shell starts (e.g. "tmux")

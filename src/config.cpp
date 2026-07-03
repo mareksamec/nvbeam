@@ -36,7 +36,9 @@ Config Config::load(const QString &customPath)
                 "# height = 300  # startup height in pixels\n"
                 "# font = \"\"  # terminal font (empty = use global font)\n"
                 "# font_size = 0  # terminal font size (0 = use global)\n"
-                "# color_scheme = \"Linux\"  # QTermWidget color scheme\n"
+                "# color_scheme = \"Neoblue\"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)\n"
+                "# foreground = \"\"  # override scheme text color, e.g. \"#f8f8f2\" (empty = scheme default)\n"
+                "# background = \"\"  # override scheme background color (empty = scheme default)\n"
                 "# shell = \"\"  # shell program (empty = system default)\n"
                 "# shell_args = []  # arguments passed to shell\n"
                 "# exec_command = \"\"  # command to run after shell starts (e.g. \"tmux\")\n"
@@ -115,6 +117,10 @@ Config Config::load(const QString &customPath)
                 cfg.terminalFontSize = toml::find<int>(term, "font_size");
             if (term.contains("color_scheme"))
                 cfg.terminalColorScheme = QString::fromStdString(toml::find<std::string>(term, "color_scheme"));
+            if (term.contains("foreground"))
+                cfg.terminalForeground = QString::fromStdString(toml::find<std::string>(term, "foreground"));
+            if (term.contains("background"))
+                cfg.terminalBackground = QString::fromStdString(toml::find<std::string>(term, "background"));
             if (term.contains("shell"))
                 cfg.terminalShell = QString::fromStdString(toml::find<std::string>(term, "shell"));
             if (term.contains("shell_args")) {

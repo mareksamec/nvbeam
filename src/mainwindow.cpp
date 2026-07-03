@@ -130,6 +130,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.followCwd = cfg.terminalFollowCwd;
     termCfg.height = cfg.terminalHeight;
     termCfg.colorScheme = cfg.terminalColorScheme;
+    termCfg.foreground = cfg.terminalForeground;
+    termCfg.background = cfg.terminalBackground;
     termCfg.shell = cfg.terminalShell;
     termCfg.shellArgs = cfg.terminalShellArgs;
     termCfg.execCommand = cfg.terminalExecCommand;

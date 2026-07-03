@@ -132,7 +132,9 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Linux"  # QTermWidget color scheme
+# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+# foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
+# background = ""  # override scheme background color (empty = scheme default)
 # shell = ""  # shell program (empty = system default)
 # shell_args = []  # arguments passed to shell
 # exec_command = ""  # command to run after shell starts (e.g. "tmux")
@@ -183,7 +185,9 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `height` — Terminal panel startup height in pixels (default: `300`)
 - `font` — Terminal font family; empty uses the global font (default: `""`)
 - `font_size` — Terminal font size in points; `0` uses the global font size (default: `0`)
-- `color_scheme` — QTermWidget color scheme name (default: `"Linux"`)
+- `color_scheme` — Color scheme name (default: `"Neoblue"`, neobeam's own dark blue scheme; `"OneDark"` — based on onedark.nvim with a slightly darker background than the editor — and `"Dracula"` also ship with neobeam). Any scheme installed with qtermwidget works too (`Linux`, `Nord`, `Solarized`, ...), as does a full path to a `.colorscheme` file
+- `foreground` — Override the scheme's text color, e.g. `"#f8f8f2"`; empty keeps the scheme's color (default: `""`)
+- `background` — Override the scheme's background color; empty keeps the scheme's color (default: `""`)
 - `shell` — Shell program to launch; empty uses the system default (default: `""`)
 - `shell_args` — Arguments passed to the shell (default: `[]`)
 - `exec_command` — Command run after the shell starts, e.g. `"tmux"` (default: `""`)

@@ -5,6 +5,65 @@
 #include <QMouseEvent>
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
+#include <QFile>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QDebug>
+
+#ifdef NEOBEAM_HAS_TERMINAL
+namespace {
+
+/// Directories holding .colorscheme files shipped with neobeam, covering the
+/// installed layout (/usr/bin/neobeam -> /usr/share/neobeam/color-schemes)
+/// and the source-tree layout used when running from the build directory.
+QStringList neobeamSchemeDirs()
+{
+    return {
+        QCoreApplication::applicationDirPath() + "/../share/neobeam/color-schemes",
+        QCoreApplication::applicationDirPath() + "/../resources/color-schemes",
+        QCoreApplication::applicationDirPath() + "/color-schemes",
+    };
+}
+
+/// Make neobeam-shipped schemes (Neoblue, the default, plus OneDark and
+/// Dracula) resolvable by name in setColorScheme(). Called once; QTermWidget
+/// keeps the dirs in a process-wide list.
+void registerNeobeamSchemeDirs()
+{
+    static bool registered = false;
+    if (registered)
+        return;
+    registered = true;
+    for (const QString &dir : neobeamSchemeDirs()) {
+        if (QDir(dir).exists())
+            QTermWidget::addCustomColorSchemeDir(dir);
+    }
+}
+
+/// Locate the .colorscheme file for a scheme name across neobeam's own dirs
+/// and the system qtermwidget dirs. Returns an empty string if not found.
+QString findSchemeFile(const QString &scheme)
+{
+    // A path (rather than a bare name) is used as-is; setColorScheme()
+    // supports full paths too, so keep the same contract here.
+    if (scheme.contains(QLatin1Char('/')))
+        return QFile::exists(scheme) ? scheme : QString();
+
+    QStringList dirs = neobeamSchemeDirs();
+    dirs << QStringLiteral("/usr/share/qtermwidget6/color-schemes")
+         << QStringLiteral("/usr/local/share/qtermwidget6/color-schemes")
+         << QStringLiteral("/usr/share/qtermwidget5/color-schemes");
+    for (const QString &dir : dirs) {
+        const QString path = dir + QLatin1Char('/') + scheme + QStringLiteral(".colorscheme");
+        if (QFile::exists(path))
+            return path;
+    }
+    return {};
+}
+
+} // namespace
+#endif
 
 TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     : QWidget(parent)
@@ -250,14 +309,73 @@ QFont TerminalPanel::terminalFont() const
     return f;
 }
 
+QString TerminalPanel::effectiveColorScheme()
+{
+    if (!m_schemeResolved.isEmpty())
+        return m_schemeResolved;
+    m_schemeResolved = m_cfg.colorScheme;
+
+    const QColor fg(m_cfg.foreground);
+    const QColor bg(m_cfg.background);
+    if (!m_cfg.foreground.isEmpty() && !fg.isValid())
+        qWarning() << "Invalid terminal foreground color:" << m_cfg.foreground;
+    if (!m_cfg.background.isEmpty() && !bg.isValid())
+        qWarning() << "Invalid terminal background color:" << m_cfg.background;
+    if (!fg.isValid() && !bg.isValid())
+        return m_schemeResolved;
+
+    // Derive a scheme file with the overrides applied on top of the base
+    // scheme's palette. QTermWidget has no per-color API; colors can only be
+    // set through a .colorscheme file, so generate one in the cache dir.
+    const QString basePath = findSchemeFile(m_cfg.colorScheme);
+    if (basePath.isEmpty())
+        qWarning() << "Color scheme" << m_cfg.colorScheme
+                   << "not found; foreground/background overrides applied to the default palette";
+
+    const QString outDir = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    if (!QDir().mkpath(outDir))
+        return m_schemeResolved;
+    const QString outPath = outDir + QStringLiteral("/custom.colorscheme");
+    QFile::remove(outPath);
+    if (!basePath.isEmpty() && !QFile::copy(basePath, outPath)) {
+        qWarning() << "Failed to write" << outPath << "- foreground/background overrides ignored";
+        return m_schemeResolved;
+    }
+
+    // .colorscheme files are QSettings-compatible INI; rewriting just the
+    // Foreground/Background groups keeps the base palette intact.
+    QSettings out(outPath, QSettings::IniFormat);
+    auto writeColor = [&out](const QString &group, const QColor &c) {
+        out.setValue(group + QStringLiteral("/Color"),
+                     QStringList{QString::number(c.red()),
+                                 QString::number(c.green()),
+                                 QString::number(c.blue())});
+    };
+    if (fg.isValid()) {
+        writeColor(QStringLiteral("Foreground"), fg);
+        writeColor(QStringLiteral("ForegroundIntense"), fg.lighter(120));
+    }
+    if (bg.isValid()) {
+        writeColor(QStringLiteral("Background"), bg);
+        writeColor(QStringLiteral("BackgroundIntense"), bg);
+    }
+    out.sync();
+
+    m_schemeResolved = outPath;
+    return m_schemeResolved;
+}
+
 QTermWidget *TerminalPanel::createTermWidget()
 {
+    registerNeobeamSchemeDirs();
+
     auto *term = new QTermWidget(0, this);
 
     term->setTerminalFont(terminalFont());
 
-    // Color scheme (default "Linux" = white on black)
-    term->setColorScheme(m_cfg.colorScheme);
+    // Color scheme (default "Neoblue", shipped with neobeam), with optional
+    // foreground/background overrides baked into a derived scheme file.
+    term->setColorScheme(effectiveColorScheme());
     term->setScrollBarPosition(QTermWidgetInterface::ScrollBarRight);
     term->setHistorySize(m_cfg.scrollback); // scrollback lines (in-memory buffer)
     term->setWorkingDirectory(m_cwd);
