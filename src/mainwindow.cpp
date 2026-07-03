@@ -313,8 +313,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // --- Session restore ---
     // Terminal layout: restore split count + proportions before deciding
     // visibility, so the panel comes back exactly as it was left.
-    const bool restoreTerm = cfg.sessionRestore && cfg.sessionRestoreTerminal
-                             && m_session->hasTerminalState();
+    const bool restoreTerm = cfg.sessionRestoreTerminal && m_session->hasTerminalState();
     if (restoreTerm)
         m_terminal->restoreSplits(m_session->terminalSplitCount(),
                                   m_session->terminalSplitterState());
@@ -337,7 +336,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Editor/terminal split proportions. If no saved state, seed the terminal
     // with its configured startup height.
-    if (cfg.sessionRestore && !m_session->verticalSplitterState().isEmpty()) {
+    if (cfg.sessionRestoreWindow && !m_session->verticalSplitterState().isEmpty()) {
         m_vsplitter->restoreState(m_session->verticalSplitterState());
     } else {
         const int h = qMax(1, height());
@@ -346,8 +345,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Window geometry (best-effort; the window manager / Wayland compositor may
     // override size and will ignore position on Wayland). Applied before show().
-    if (cfg.sessionRestore && cfg.sessionRestoreWindow
-        && !m_session->windowGeometry().isEmpty()) {
+    if (cfg.sessionRestoreWindow && !m_session->windowGeometry().isEmpty()) {
         restoreGeometry(m_session->windowGeometry());
     }
 

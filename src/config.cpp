@@ -69,9 +69,8 @@ Config Config::load(const QString &customPath)
                 "# selection_color = \"#44475a\" # selection highlight color\n"
                 "\n"
                 "# [session]\n"
-                "# restore = true           # remember and restore last session on startup\n"
-                "# restore_window = true    # best-effort window size/state (WM/Wayland may override)\n"
-                "# restore_terminal = true  # terminal split count, proportions, height, expanded state\n"
+                "# restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)\n"
+                "# restore_terminal = true  # terminal split count, proportions, expanded state\n"
             );
             file.close();
             qDebug() << "Created default config at:" << path;
@@ -192,8 +191,6 @@ Config Config::load(const QString &customPath)
 
         if (data.contains("session")) {
             auto &session = data.at("session");
-            if (session.contains("restore"))
-                cfg.sessionRestore = toml::find<bool>(session, "restore");
             if (session.contains("restore_window"))
                 cfg.sessionRestoreWindow = toml::find<bool>(session, "restore_window");
             if (session.contains("restore_terminal"))

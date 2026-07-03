@@ -62,6 +62,9 @@
     - [x] Side terminal is not affected by the "Send cwd to all terminals button"
 - [x] Add independent font configuration for the side terminal.
 - [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
+- [ ] Handle non-existent or wrong options in the .toml config.
+- [ ] Add simple config validation e.g. neobeam -k
+- [ ] Add option to keep neobeam running when nvim buffer is exited
 
 ## Fixes/Adjustments
 

@@ -45,6 +45,5 @@
 # selection_color = "#44475a" # selection highlight color
 
 [session]
-# restore = true           # remember and restore last session on startup
-# restore_window = true    # best-effort window size/state (WM/Wayland may override)
-# restore_terminal = true  # terminal split count, proportions, height, expanded state
+# restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)
+# restore_terminal = true  # terminal split count, proportions, expanded state

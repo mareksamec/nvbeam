@@ -164,9 +164,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # selection_color = "#44475a" # selection highlight color
 
 # [session]
-# restore = true           # remember and restore last session on startup
-# restore_window = true    # best-effort window size/state (WM/Wayland may override)
-# restore_terminal = true  # terminal split count, proportions, height, expanded state
+# restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)
+# restore_terminal = true  # terminal split count, proportions, expanded state
 ```
 
 A ready-to-copy `neobeam.toml.example` is also included in the project root.
@@ -217,9 +216,8 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `selection_color` — Selection highlight color (default: `"#44475a"`)
 
 **`[session]`**
-- `restore` — Remember and restore the last session on startup; master switch for the options below (default: `true`)
-- `restore_window` — Restore window size/state. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
-- `restore_terminal` — Restore the terminal split count, split proportions, panel height, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`)
+- `restore_window` — Restore the window size and the editor/terminal panel proportions. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
+- `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`)
 
 Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it).
 
