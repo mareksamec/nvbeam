@@ -101,6 +101,12 @@ public slots:
     void removeCurrentTerminal();
 
 private:
+    /// Background color for the panel chrome (toolbar, splitter, panel
+    /// widget): the configured background override, else the scheme's
+    /// [Background] color, else black. Keeps areas not covered by the
+    /// terminal display from showing through as black bands.
+    QColor panelBackgroundColor() const;
+
 #ifdef NEOBEAM_HAS_TERMINAL
     QTermWidget *createTermWidget();
     /// Build the terminal QFont from the current config (family, size,

@@ -62,6 +62,28 @@ QString findSchemeFile(const QString &scheme)
     return {};
 }
 
+/// Background color declared by a scheme's [Background] group ("r,g,b" per
+/// the .colorscheme format). Invalid QColor when the scheme or entry is
+/// missing.
+QColor schemeBackgroundColor(const QString &scheme)
+{
+    const QString path = findSchemeFile(scheme);
+    if (path.isEmpty())
+        return {};
+    QSettings ini(path, QSettings::IniFormat);
+    const QStringList parts = ini.value(QStringLiteral("Background/Color")).toStringList();
+    if (parts.size() != 3)
+        return {};
+    int rgb[3];
+    for (int i = 0; i < 3; ++i) {
+        bool ok = false;
+        rgb[i] = parts[i].toInt(&ok);
+        if (!ok || rgb[i] < 0 || rgb[i] > 255)
+            return {};
+    }
+    return QColor(rgb[0], rgb[1], rgb[2]);
+}
+
 } // namespace
 #endif
 
@@ -74,13 +96,20 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     layout->setContentsMargins(0, 0, 0, 0);
     layout->setSpacing(0);
 
+    // The panel chrome (toolbar, splitter, this widget) matches the terminal
+    // color scheme's background so that any area the terminal display does
+    // not cover (margins, resize gaps) blends in instead of showing through
+    // as black bands under non-black schemes.
+    const QString bg = panelBackgroundColor().name();
+
     // Toolbar with terminal actions
     m_toolbar = new QToolBar(this);
     m_toolbar->setIconSize(QSize(16, 16));
     m_toolbar->setMovable(false);
-    m_toolbar->setStyleSheet("QToolBar { background: #000; border: none; spacing: 4px; }"
-                             "QToolButton { color: #aaa; background: transparent; border: none; padding: 2px 6px; }"
-                             "QToolButton:hover { background: #333; border-radius: 3px; }");
+    m_toolbar->setStyleSheet(QStringLiteral(
+        "QToolBar { background: %1; border: none; spacing: 4px; }"
+        "QToolButton { color: #aaa; background: transparent; border: none; padding: 2px 6px; }"
+        "QToolButton:hover { background: #333; border-radius: 3px; }").arg(bg));
 
     auto *addAct = m_toolbar->addAction("+", this, &TerminalPanel::addTerminal);
     addAct->setToolTip("New terminal");
@@ -95,13 +124,13 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     // Splitter holds terminal instances side by side (bottom panel) or
     // stacked vertically (side panel, where horizontal space is scarce).
     m_splitter = new QSplitter(m_cfg.sidePanel ? Qt::Vertical : Qt::Horizontal, this);
-    m_splitter->setStyleSheet("QSplitter { background: #000; }"
-                              "QSplitter::handle { background: #333; width: 2px; height: 2px; }");
+    m_splitter->setStyleSheet(QStringLiteral(
+        "QSplitter { background: %1; }"
+        "QSplitter::handle { background: #333; width: 2px; height: 2px; }").arg(bg));
     layout->addWidget(m_splitter, 1);
 
-    setStyleSheet(m_cfg.sidePanel
-        ? "background: #000; border-left: 1px solid #333;"
-        : "background: #000; border-top: 1px solid #333;");
+    setStyleSheet(QStringLiteral("background: %1; border-%2: 1px solid #333;")
+                      .arg(bg, m_cfg.sidePanel ? QStringLiteral("left") : QStringLiteral("top")));
     // Resizable: enforce a sensible minimum rather than a fixed size so the
     // user can drag the surrounding splitter. The initial size is applied by
     // MainWindow via the splitter's sizes.
@@ -113,6 +142,21 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     // Create initial terminal
     addTerminal();
+}
+
+QColor TerminalPanel::panelBackgroundColor() const
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    // Same precedence as effectiveColorScheme(): an explicit background
+    // override wins over the scheme's own background.
+    const QColor configured(m_cfg.background);
+    if (configured.isValid())
+        return configured;
+    const QColor schemeBg = schemeBackgroundColor(m_cfg.colorScheme);
+    if (schemeBg.isValid())
+        return schemeBg;
+#endif
+    return QColor(Qt::black);
 }
 
 void TerminalPanel::toggle()
