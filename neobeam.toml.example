@@ -25,6 +25,8 @@
 [side_terminal]
 # command = ""  # command run when the side terminal opens (e.g. "claude", "nanocoder")
 # width = 400  # startup width in pixels
+# font = ""  # side terminal font (empty = use terminal font)
+# font_size = 0  # side terminal font size (0 = use terminal font size)
 
 [ui]
 # ext_popupmenu = true

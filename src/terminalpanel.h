@@ -80,6 +80,11 @@ public:
     /// of the followCwd setting (explicit user action via the toolbar button).
     void broadcastCwd(const QString &dir);
 
+    /// Grow (+1) or shrink (-1) the font size of every terminal split in this
+    /// panel. The new size is clamped to a sane range and also applies to
+    /// splits opened later.
+    void changeFontSize(int delta);
+
 signals:
     void visibilityChanged(bool visible);
     /// Emitted when the user clicks the "send cwd" toolbar button; MainWindow
@@ -96,6 +101,9 @@ public slots:
 private:
 #ifdef NEOBEAM_HAS_TERMINAL
     QTermWidget *createTermWidget();
+    /// Build the terminal QFont from the current config (family, size,
+    /// hinting, antialiasing).
+    QFont terminalFont() const;
     /// Wrap a terminal widget in a QFrame so its border is paintable via
     /// stylesheet (QTermWidget itself does its own custom painting and
     /// ignores QSS border properties).
@@ -116,4 +124,6 @@ private:
 
     static constexpr int kMinHeight = 80;  // minimum panel height in pixels when resizing
     static constexpr int kMinWidth = 150;  // minimum panel width in side-panel mode
+    static constexpr int kMinFontSize = 4;   // font-size clamp for Ctrl+-/Ctrl+=/Ctrl+wheel
+    static constexpr int kMaxFontSize = 72;
 };

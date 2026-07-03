@@ -24,6 +24,7 @@
 #include <QSplitter>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 /// Load a Lua script from the lua/ directory next to the executable
 static QString loadLua(const QString &name)
@@ -148,6 +149,11 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     sideCfg.followCwd = false;
     sideCfg.execCommand = cfg.sideTerminalCommand;
     sideCfg.sidePanel = true;
+    // Independent font: fall back to the bottom terminal's font when unset.
+    if (!cfg.sideTerminalFont.isEmpty())
+        sideCfg.fontFamily = cfg.sideTerminalFont;
+    if (cfg.sideTerminalFontSize > 0)
+        sideCfg.fontSize = cfg.sideTerminalFontSize;
 
     // Horizontal splitter: editor area (left) and side terminal (right).
     auto *hsplitter = new QSplitter(Qt::Horizontal, m_vsplitter);
@@ -599,8 +605,41 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
+        // Ctrl+- / Ctrl+= change the font size of the focused terminal panel.
+        // Handled here rather than via QShortcut because QTermWidget consumes
+        // plain Ctrl+key presses before shortcuts fire.
+        if (ke->modifiers() == Qt::ControlModifier
+            && (ke->key() == Qt::Key_Minus || ke->key() == Qt::Key_Equal)) {
+            if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget())) {
+                panel->changeFontSize(ke->key() == Qt::Key_Equal ? 1 : -1);
+                return true;
+            }
+        }
+    }
+    // Ctrl+wheel over a terminal zooms its panel's font.
+    if (event->type() == QEvent::Wheel) {
+        auto *we = static_cast<QWheelEvent *>(event);
+        if (we->modifiers() & Qt::ControlModifier) {
+            if (TerminalPanel *panel = terminalPanelFor(qobject_cast<QWidget *>(watched))) {
+                const int dy = we->angleDelta().y();
+                if (dy != 0)
+                    panel->changeFontSize(dy > 0 ? 1 : -1);
+                return true;
+            }
+        }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const
+{
+    if (!widget)
+        return nullptr;
+    if (m_terminal && (m_terminal == widget || m_terminal->isAncestorOf(widget)))
+        return m_terminal;
+    if (m_sideTerminal && (m_sideTerminal == widget || m_sideTerminal->isAncestorOf(widget)))
+        return m_sideTerminal;
+    return nullptr;
 }
 
 void MainWindow::cycleGridTerminalFocus(bool forward)

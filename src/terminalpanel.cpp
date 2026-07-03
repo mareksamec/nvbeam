@@ -224,20 +224,37 @@ int TerminalPanel::indexOfFocused(QWidget *focused) const
     return -1;
 }
 
-#ifdef NEOBEAM_HAS_TERMINAL
-QTermWidget *TerminalPanel::createTermWidget()
+void TerminalPanel::changeFontSize(int delta)
 {
-    auto *term = new QTermWidget(0, this);
+#ifdef NEOBEAM_HAS_TERMINAL
+    const int size = qBound(kMinFontSize, m_cfg.fontSize + delta, kMaxFontSize);
+    if (size == m_cfg.fontSize)
+        return;
+    m_cfg.fontSize = size;
+    const QFont f = terminalFont();
+    for (auto *term : m_terminals)
+        term->setTerminalFont(f);
+#else
+    Q_UNUSED(delta);
+#endif
+}
 
-    // Font: use terminal-specific or fall back to global, with hinting/antialiasing
-    QString family = m_cfg.fontFamily;
-    int size = m_cfg.fontSize;
-    QFont f(family, size);
+#ifdef NEOBEAM_HAS_TERMINAL
+QFont TerminalPanel::terminalFont() const
+{
+    QFont f(m_cfg.fontFamily, m_cfg.fontSize);
     f.setStyleHint(QFont::Monospace);
     f.setHintingPreference(m_cfg.hinting);
     if (!m_cfg.antialiasing)
         f.setStyleStrategy(QFont::NoAntialias);
-    term->setTerminalFont(f);
+    return f;
+}
+
+QTermWidget *TerminalPanel::createTermWidget()
+{
+    auto *term = new QTermWidget(0, this);
+
+    term->setTerminalFont(terminalFont());
 
     // Color scheme (default "Linux" = white on black)
     term->setColorScheme(m_cfg.colorScheme);

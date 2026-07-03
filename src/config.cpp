@@ -48,6 +48,8 @@ Config Config::load(const QString &customPath)
                 "# [side_terminal]\n"
                 "# command = \"\"  # command run when the side terminal opens (e.g. \"claude\", \"nanocoder\")\n"
                 "# width = 400  # startup width in pixels\n"
+                "# font = \"\"  # side terminal font (empty = use terminal font)\n"
+                "# font_size = 0  # side terminal font size (0 = use terminal font size)\n"
                 "\n"
                 "# [ui]\n"
                 "# ext_popupmenu = true\n"
@@ -146,6 +148,10 @@ Config Config::load(const QString &customPath)
                 cfg.sideTerminalCommand = QString::fromStdString(toml::find<std::string>(side, "command"));
             if (side.contains("width"))
                 cfg.sideTerminalWidth = qMax(150, toml::find<int>(side, "width"));
+            if (side.contains("font"))
+                cfg.sideTerminalFont = QString::fromStdString(toml::find<std::string>(side, "font"));
+            if (side.contains("font_size"))
+                cfg.sideTerminalFontSize = toml::find<int>(side, "font_size");
         }
 
         if (data.contains("ui")) {

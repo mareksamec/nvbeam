@@ -92,6 +92,9 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Tab | Switch between terminal and nvim buffer |
 | Shift+Insert | Paste clipboard (into terminal when focused, into Neovim otherwise) |
 | Ctrl+Shift+V | Paste clipboard (into terminal when focused, into Neovim otherwise) |
+| Ctrl+= | Increase terminal font size (when a terminal is focused) |
+| Ctrl+- | Decrease terminal font size (when a terminal is focused) |
+| Ctrl+Mouse wheel | Increase/decrease terminal font size (over a terminal) |
 
 ### Drag & drop
 
@@ -138,6 +141,12 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
 
+# [side_terminal]
+# command = ""  # command run when the side terminal opens (e.g. "claude", "nanocoder")
+# width = 400  # startup width in pixels
+# font = ""  # side terminal font (empty = use terminal font)
+# font_size = 0  # side terminal font size (0 = use terminal font size)
+
 # [ui]
 # ext_popupmenu = true
 # ext_tabline = true
@@ -182,6 +191,12 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `antialiasing` — Enable font antialiasing in the terminal (default: `true`)
 - `hinting` — Terminal font hinting: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
 - `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
+
+**`[side_terminal]`**
+- `command` — Command run when the side terminal opens, e.g. `"claude"` or `"nanocoder"` (default: `""`)
+- `width` — Side terminal startup width in pixels (default: `400`)
+- `font` — Side terminal font family; empty uses the `[terminal]` font (default: `""`)
+- `font_size` — Side terminal font size in points; `0` uses the `[terminal]` font size (default: `0`)
 
 **`[ui]`**
 - `ext_popupmenu` — Native completion popup (default: `true`)
