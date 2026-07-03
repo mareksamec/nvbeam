@@ -88,6 +88,13 @@ install(TARGETS neobeam RUNTIME DESTINATION bin)
 # /usr/bin/neobeam this maps to /usr/share/neobeam/lua.
 install(DIRECTORY lua/ DESTINATION share/neobeam/lua FILES_MATCHING PATTERN "*.lua")
 
+# Terminal color schemes shipped with neobeam (Neoblue, the default, plus
+# OneDark and Dracula).
+# TerminalPanel registers this directory with QTermWidget at startup; without
+# it the terminal falls back to QTermWidget's built-in default scheme.
+install(DIRECTORY resources/color-schemes/ DESTINATION share/neobeam/color-schemes
+        FILES_MATCHING PATTERN "*.colorscheme")
+
 # Linux desktop integration: launcher entry + themed icons. The .desktop file's
 # "Icon=neobeam" resolves to the PNGs installed under hicolor/<size>x<size>/apps.
 if(UNIX AND NOT APPLE)

@@ -21,7 +21,9 @@ struct TerminalConfig {
     int fontSize = 10;
     bool followCwd = true;
     int height = 300;
-    QString colorScheme = "Linux";
+    QString colorScheme = "Neoblue";
+    QString foreground;       // override scheme text color (e.g. "#f8f8f2"); empty = scheme default
+    QString background;       // override scheme background color; empty = scheme default
     QString shell;            // empty = system default
     QStringList shellArgs;
     QString execCommand;      // run after shell starts
@@ -99,11 +101,23 @@ public slots:
     void removeCurrentTerminal();
 
 private:
+    /// Background color for the panel chrome (toolbar, splitter, panel
+    /// widget): the configured background override, else the scheme's
+    /// [Background] color, else black. Keeps areas not covered by the
+    /// terminal display from showing through as black bands.
+    QColor panelBackgroundColor() const;
+
 #ifdef NEOBEAM_HAS_TERMINAL
     QTermWidget *createTermWidget();
     /// Build the terminal QFont from the current config (family, size,
     /// hinting, antialiasing).
     QFont terminalFont() const;
+    /// Color scheme name/path to pass to QTermWidget::setColorScheme(). When
+    /// foreground/background overrides are configured, this generates a
+    /// derived .colorscheme file in the cache dir and returns its full path;
+    /// otherwise it returns the configured scheme name unchanged. The result
+    /// is computed once and cached in m_schemeResolved.
+    QString effectiveColorScheme();
     /// Wrap a terminal widget in a QFrame so its border is paintable via
     /// stylesheet (QTermWidget itself does its own custom painting and
     /// ignores QSS border properties).
@@ -121,6 +135,7 @@ private:
     QToolBar *m_toolbar = nullptr;
     TerminalConfig m_cfg;
     QString m_cwd;
+    QString m_schemeResolved; // cached result of effectiveColorScheme()
 
     static constexpr int kMinHeight = 80;  // minimum panel height in pixels when resizing
     static constexpr int kMinWidth = 150;  // minimum panel width in side-panel mode

@@ -9,6 +9,7 @@ constexpr auto kVerticalSplitter    = "layout/vertical_splitter";
 constexpr auto kTermSplitCount      = "terminal/split_count";
 constexpr auto kTermSplitterState   = "terminal/splitter_state";
 constexpr auto kTermExpanded        = "terminal/expanded";
+constexpr auto kSideTermVisible     = "side_terminal/visible";
 } // namespace
 
 QString Session::filePath()
@@ -83,6 +84,16 @@ bool Session::terminalExpanded() const
 void Session::setTerminalExpanded(bool expanded)
 {
     m_settings->setValue(kTermExpanded, expanded);
+}
+
+bool Session::sideTerminalVisible() const
+{
+    return m_settings->value(kSideTermVisible, false).toBool();
+}
+
+void Session::setSideTerminalVisible(bool visible)
+{
+    m_settings->setValue(kSideTermVisible, visible);
 }
 
 void Session::sync()
