@@ -44,7 +44,8 @@
 - Prefer readable code instead of super l33t tricks and hacks that are hard to read and maintain for less experienced programmers.
 - CMake build system
 - When api or git repo is mentioned, always search the web for current repo state and up to date documentation.
-
+- Don't do any "smoke tests" by trying to execute the app in a virtual display etc. - always ask user to run the binary and report back.
+ 
 # Performance targets
 - Low latency
 - Fast and smooth animations

@@ -24,6 +24,7 @@
 #include <QSplitter>
 #include <QTimer>
 #include <QVBoxLayout>
+#include <QWheelEvent>
 
 /// Load a Lua script from the lua/ directory next to the executable
 static QString loadLua(const QString &name)
@@ -139,8 +140,44 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
-    // Assemble the vertical splitter: editor area on top, terminal below.
-    m_vsplitter->addWidget(editorArea);
+    // Side terminal: docked to the right of the editor area (next to the
+    // minimap), intended for CLI tools like claude or nanocoder. It does not
+    // follow nvim's cwd while running (changeDir types a "cd" command into
+    // the terminal, which would corrupt an interactive tool's input); instead
+    // it receives nvim's cwd once, right before it is shown.
+    TerminalConfig sideCfg = termCfg;
+    sideCfg.followCwd = false;
+    sideCfg.execCommand = cfg.sideTerminalCommand;
+    sideCfg.sidePanel = true;
+    // Independent font: fall back to the bottom terminal's font when unset.
+    if (!cfg.sideTerminalFont.isEmpty())
+        sideCfg.fontFamily = cfg.sideTerminalFont;
+    if (cfg.sideTerminalFontSize > 0)
+        sideCfg.fontSize = cfg.sideTerminalFontSize;
+
+    // Horizontal splitter: editor area (left) and side terminal (right).
+    auto *hsplitter = new QSplitter(Qt::Horizontal, m_vsplitter);
+    hsplitter->setStyleSheet("QSplitter::handle { background: #333; width: 2px; }");
+    hsplitter->setChildrenCollapsible(false);
+    m_sideTerminal = new TerminalPanel(sideCfg, hsplitter);
+    hsplitter->addWidget(editorArea);
+    hsplitter->addWidget(m_sideTerminal);
+    hsplitter->setStretchFactor(0, 1); // editor area takes extra space
+    hsplitter->setStretchFactor(1, 0);
+    // Seed the side terminal with its configured startup width on its first
+    // show; setting sizes while the panel is hidden has no effect (hidden
+    // widgets get no splitter space).
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this,
+            [this, hsplitter, seeded = false](bool visible) mutable {
+        if (!visible || seeded)
+            return;
+        seeded = true;
+        const int w = qMax(1, hsplitter->width());
+        hsplitter->setSizes({ qMax(1, w - m_cfg.sideTerminalWidth), m_cfg.sideTerminalWidth });
+    });
+
+    // Assemble the vertical splitter: editor row on top, terminal below.
+    m_vsplitter->addWidget(hsplitter);
     m_vsplitter->addWidget(m_terminal);
     m_vsplitter->setStretchFactor(0, 1); // editor area takes extra space
     m_vsplitter->setStretchFactor(1, 0);
@@ -150,29 +187,46 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
     connect(termShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::toggle);
 
-    // Ctrl+Shift+E splits the terminal; Ctrl+Shift+W closes the active split
+    // Ctrl+Shift+E splits the terminal; Ctrl+Shift+W closes the active split.
+    // Both act on the panel that currently holds focus (side terminal when
+    // focused there, bottom panel otherwise).
+    auto focusedPanel = [this]() -> TerminalPanel * {
+        QWidget *focused = QApplication::focusWidget();
+        if (focused && m_sideTerminal->isVisible() && m_sideTerminal->isAncestorOf(focused))
+            return m_sideTerminal;
+        return m_terminal;
+    };
     auto *termSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), this);
-    connect(termSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::addTerminal);
+    connect(termSplitShortcut, &QShortcut::activated, this,
+            [focusedPanel]() { focusedPanel()->addTerminal(); });
     auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
-    connect(termCloseSplitShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::removeCurrentTerminal);
+    connect(termCloseSplitShortcut, &QShortcut::activated, this,
+            [focusedPanel]() { focusedPanel()->removeCurrentTerminal(); });
 
     // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
     auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
     connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
 
-    // Arrow-down toolbar button: broadcast nvim's current cwd to all terminal splits.
-    connect(m_terminal, &TerminalPanel::cwdBroadcastRequested, this, [this]() {
-        m_nvim->request("nvim_exec_lua",
-            {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
-            [this](const QVariant &result) {
-                m_terminal->broadcastCwd(result.toString());
-            });
-    });
+    // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
+    // the panel whose button was clicked.
+    auto connectCwdBroadcast = [this](TerminalPanel *panel) {
+        connect(panel, &TerminalPanel::cwdBroadcastRequested, this, [this, panel]() {
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
+                [panel](const QVariant &result) {
+                    panel->broadcastCwd(result.toString());
+                });
+        });
+    };
+    connectCwdBroadcast(m_terminal);
+    connectCwdBroadcast(m_sideTerminal);
 
     // Paste shortcuts: route to terminal or nvim depending on focus
     auto pasteHandler = [this]() {
         if (m_terminal->isVisible() && m_terminal->isAncestorOf(focusWidget())) {
             m_terminal->pasteClipboard();
+        } else if (m_sideTerminal->isVisible() && m_sideTerminal->isAncestorOf(focusWidget())) {
+            m_sideTerminal->pasteClipboard();
         } else {
             QString text = QGuiApplication::clipboard()->text();
             if (!text.isEmpty())
@@ -213,12 +267,40 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termBtn->setStyleSheet(btnStyle);
     btnLayout->addWidget(termBtn);
 
+    auto *sideTermBtn = new QPushButton("◨", central);
+    sideTermBtn->setToolTip("Toggle side terminal");
+    sideTermBtn->setCheckable(true);
+    sideTermBtn->setChecked(false);
+    sideTermBtn->setFixedSize(28, 20);
+    sideTermBtn->setStyleSheet(btnStyle);
+    btnLayout->addWidget(sideTermBtn);
+
     btnBar->setFixedHeight(24);
     layout->addWidget(btnBar);
 
     connect(minimapBtn, &QPushButton::toggled, m_minimap, &QWidget::setVisible);
     connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
     connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
+
+    // Side terminal opens in nvim's current cwd: resolve it first, seed the
+    // panel with it, and only then show (showing starts the pending shell, so
+    // the directory must be set before that).
+    connect(sideTermBtn, &QPushButton::toggled, this, [this](bool on) {
+        if (!on) {
+            m_sideTerminal->hide();
+            return;
+        }
+        m_nvim->request("nvim_exec_lua",
+            {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
+            [this](const QVariant &result) {
+                const QString cwd = result.toString();
+                if (!cwd.isEmpty())
+                    m_sideTerminal->broadcastCwd(cwd);
+                m_sideTerminal->show();
+                m_sideTerminal->focusTerminal();
+            });
+    });
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, sideTermBtn, &QPushButton::setChecked);
 
     setCentralWidget(central);
 
@@ -523,32 +605,72 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
             cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
+        // Ctrl+- / Ctrl+= change the font size of the focused terminal panel.
+        // Handled here rather than via QShortcut because QTermWidget consumes
+        // plain Ctrl+key presses before shortcuts fire.
+        if (ke->modifiers() == Qt::ControlModifier
+            && (ke->key() == Qt::Key_Minus || ke->key() == Qt::Key_Equal)) {
+            if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget())) {
+                panel->changeFontSize(ke->key() == Qt::Key_Equal ? 1 : -1);
+                return true;
+            }
+        }
+    }
+    // Ctrl+wheel over a terminal zooms its panel's font.
+    if (event->type() == QEvent::Wheel) {
+        auto *we = static_cast<QWheelEvent *>(event);
+        if (we->modifiers() & Qt::ControlModifier) {
+            if (TerminalPanel *panel = terminalPanelFor(qobject_cast<QWidget *>(watched))) {
+                const int dy = we->angleDelta().y();
+                if (dy != 0)
+                    panel->changeFontSize(dy > 0 ? 1 : -1);
+                return true;
+            }
+        }
     }
     return QMainWindow::eventFilter(watched, event);
 }
 
+TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const
+{
+    if (!widget)
+        return nullptr;
+    if (m_terminal && (m_terminal == widget || m_terminal->isAncestorOf(widget)))
+        return m_terminal;
+    if (m_sideTerminal && (m_sideTerminal == widget || m_sideTerminal->isAncestorOf(widget)))
+        return m_sideTerminal;
+    return nullptr;
+}
+
 void MainWindow::cycleGridTerminalFocus(bool forward)
 {
-    const bool hasTerminals = m_terminal && m_terminal->isVisible() && m_terminal->splitCount() > 0;
-    if (!hasTerminals) {
+    // Fixed cycle order: grid (position 0), then each bottom-terminal split,
+    // then each side-terminal split. Hidden panels contribute no positions.
+    const int bottomCount = (m_terminal && m_terminal->isVisible())
+                                ? m_terminal->splitCount() : 0;
+    const int sideCount = (m_sideTerminal && m_sideTerminal->isVisible())
+                              ? m_sideTerminal->splitCount() : 0;
+    const int total = 1 + bottomCount + sideCount;
+    if (total == 1) {
         m_grid->setFocus();
         return;
     }
 
-    // Fixed cycle order: grid (position 0), then each terminal split in
-    // split order (positions 1..count).
-    const int count = m_terminal->splitCount();
-    const int total = count + 1;
     QWidget *focused = QApplication::focusWidget();
     int pos = 0;
-    if (focused && m_terminal->isAncestorOf(focused)) {
+    if (focused && bottomCount > 0 && m_terminal->isAncestorOf(focused)) {
         const int idx = m_terminal->indexOfFocused(focused);
         pos = (idx >= 0) ? idx + 1 : 1;
+    } else if (focused && sideCount > 0 && m_sideTerminal->isAncestorOf(focused)) {
+        const int idx = m_sideTerminal->indexOfFocused(focused);
+        pos = 1 + bottomCount + ((idx >= 0) ? idx : 0);
     }
 
     pos = (pos + (forward ? 1 : -1) + total) % total;
     if (pos == 0)
         m_grid->setFocus();
-    else
+    else if (pos <= bottomCount)
         m_terminal->focusTerminalAt(pos - 1);
+    else
+        m_sideTerminal->focusTerminalAt(pos - 1 - bottomCount);
 }

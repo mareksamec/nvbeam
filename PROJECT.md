@@ -57,8 +57,11 @@
 - [x] Instead add (arrow down button) that sends current nvim cwd to all open terminals.
 - [x] When a folder is open with neobeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
 - [x] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
-- [ ] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
-    - [ ] Add config option for default command to run with side terminal e.g. claude, nanocoder
+- [-] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
+    - [x] Add config option for default command to run with side terminal e.g. claude, nanocoder
+    - [x] Side terminal is not affected by the "Send cwd to all terminals button"
+- [x] Add independent font configuration for the side terminal.
+- [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
 
 ## Fixes/Adjustments
 

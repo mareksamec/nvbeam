@@ -27,7 +27,8 @@ public:
 
 protected:
     void closeEvent(QCloseEvent *event) override;
-    /// App-level filter used to catch Ctrl+Tab before the grid/terminal consume it.
+    /// App-level filter used to catch Ctrl+Tab and the terminal font-size
+    /// keys/wheel before the grid/terminal consume them.
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
@@ -35,6 +36,10 @@ private:
     /// in split order, wrapping around. forward=false reverses direction
     /// (Ctrl+Shift+Tab).
     void cycleGridTerminalFocus(bool forward);
+
+    /// The terminal panel (bottom or side) containing the given widget, or
+    /// nullptr if the widget is not inside either panel.
+    TerminalPanel *terminalPanelFor(QWidget *widget) const;
 
 
     NvimProcess *m_nvim = nullptr;
@@ -44,6 +49,7 @@ private:
     MessageWidget *m_messages = nullptr;
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
+    TerminalPanel *m_sideTerminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;

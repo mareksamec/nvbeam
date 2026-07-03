@@ -27,6 +27,12 @@ struct Config {
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
 
+    // Side terminal (docked next to the minimap, for CLI tools like claude)
+    QString sideTerminalCommand;          // command run when the side terminal opens (e.g. "claude")
+    int sideTerminalWidth = 400;          // startup width in pixels
+    QString sideTerminalFont;             // empty = use terminal font
+    int sideTerminalFontSize = 0;         // 0 = use terminal font size
+
     // UI extensions (native chrome)
     bool extPopupmenu = true;
     bool extTabline = true;
