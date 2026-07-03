@@ -38,6 +38,10 @@ public:
     bool terminalExpanded() const;          // whether panel was visible
     void setTerminalExpanded(bool expanded);
 
+    // --- Side terminal ---
+    bool sideTerminalVisible() const;       // whether the side terminal was visible
+    void setSideTerminalVisible(bool visible);
+
     /// Flush pending writes to disk.
     void sync();
 

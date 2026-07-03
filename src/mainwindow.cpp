@@ -292,6 +292,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             m_sideTerminal->hide();
             return;
         }
+        // Already visible: the button is being synced to the panel (session
+        // restore shows the panel directly, before m_nvim exists).
+        if (m_sideTerminal->isVisible())
+            return;
         m_nvim->request("nvim_exec_lua",
             {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
             [this](const QVariant &result) {
@@ -323,6 +327,13 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // in sync and triggers TerminalPanel::showEvent, which starts the shell.
     if (startExpanded)
         termBtn->setChecked(true);
+
+    // Side terminal visibility. Shown directly rather than via the button:
+    // the button handler queries nvim's cwd, but m_nvim does not exist yet.
+    // At startup the shell's default cwd matches nvim's anyway. showEvent
+    // syncs the button and seeds the panel width.
+    if (restoreTerm && m_session->sideTerminalVisible())
+        m_sideTerminal->show();
 
     // Editor/terminal split proportions. If no saved state, seed the terminal
     // with its configured startup height.
@@ -590,6 +601,8 @@ void MainWindow::closeEvent(QCloseEvent *event)
             m_session->setTerminalSplitterState(m_terminal->splitterState());
             m_session->setTerminalExpanded(m_terminal->isExpanded());
         }
+        if (m_sideTerminal)
+            m_session->setSideTerminalVisible(m_sideTerminal->isVisible());
         m_session->sync();
     }
     QMainWindow::closeEvent(event);
