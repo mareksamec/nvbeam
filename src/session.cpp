@@ -10,6 +10,18 @@ constexpr auto kTermSplitCount      = "terminal/split_count";
 constexpr auto kTermSplitterState   = "terminal/splitter_state";
 constexpr auto kTermExpanded        = "terminal/expanded";
 constexpr auto kSideTermVisible     = "side_terminal/visible";
+constexpr auto kRecentFiles         = "recent/files";
+constexpr auto kRecentFolders       = "recent/folders";
+
+// Move (or insert) path to the front of the list and trim to maxEntries.
+QStringList mruInsert(QStringList list, const QString &path, int maxEntries)
+{
+    list.removeAll(path);
+    list.prepend(path);
+    while (list.size() > qMax(0, maxEntries))
+        list.removeLast();
+    return list;
+}
 } // namespace
 
 QString Session::filePath()
@@ -94,6 +106,30 @@ bool Session::sideTerminalVisible() const
 void Session::setSideTerminalVisible(bool visible)
 {
     m_settings->setValue(kSideTermVisible, visible);
+}
+
+QStringList Session::recentFiles() const
+{
+    return m_settings->value(kRecentFiles).toStringList();
+}
+
+void Session::addRecentFile(const QString &path, int maxEntries)
+{
+    if (path.isEmpty())
+        return;
+    m_settings->setValue(kRecentFiles, mruInsert(recentFiles(), path, maxEntries));
+}
+
+QStringList Session::recentFolders() const
+{
+    return m_settings->value(kRecentFolders).toStringList();
+}
+
+void Session::addRecentFolder(const QString &path, int maxEntries)
+{
+    if (path.isEmpty())
+        return;
+    m_settings->setValue(kRecentFolders, mruInsert(recentFolders(), path, maxEntries));
 }
 
 void Session::sync()

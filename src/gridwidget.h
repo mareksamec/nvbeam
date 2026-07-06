@@ -67,6 +67,12 @@ public:
 public slots:
     void handleRedraw(const QVariantList &events);
 
+    /// Drop all grid state from the previous nvim instance. Called before a
+    /// replacement nvim attaches (keep_running restart): the new instance
+    /// reuses grid IDs, so stale multigrid entries would linger as ghost
+    /// windows otherwise.
+    void resetGrids();
+
 signals:
     void gridSizeReady(int rows, int cols);
     void inputKey(const QString &keys);

@@ -25,7 +25,6 @@
 # scrollback = 1000  # scrollback buffer size in lines
 
 [side_terminal]
-# command = ""  # command run when the side terminal opens (e.g. "claude", "nanocoder")
 # width = 400  # startup width in pixels
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
@@ -47,3 +46,19 @@
 [session]
 # restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)
 # restore_terminal = true  # terminal split count, proportions, expanded state
+
+[switcher]
+# keep_running = true  # show the project switcher instead of quitting when nvim exits
+# max_recent = 20      # recent files/folders kept in the switcher list (each)
+
+# Pinned projects, shown on top of the project switcher list.
+# Repeat the [[projects]] block once per project.
+# [[projects]]
+# path = "~/work/myproject"
+# name = "myproject"      # optional display name (default: folder name)
+# side_command = "claude" # optional command for the side terminal in this project
+#
+# [[projects]]
+# path = "~/work/otherproject" 
+# name = "otherproject"       
+# side_command = "nanocoder"  

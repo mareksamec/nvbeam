@@ -2,8 +2,37 @@
 #include <QGuiApplication>
 #include <QCommandLineParser>
 #include <QIcon>
+#include <QFile>
+#include <cstdio>
 #include "mainwindow.h"
 #include "config.h"
+
+// Validate the config file and print findings. Exit codes:
+// 0 = clean, 1 = warnings only, 2 = errors (unparsable or missing file).
+static int checkConfig(const QString &customPath)
+{
+    const QString path = customPath.isEmpty() ? Config::configPath() : customPath;
+    if (!QFile::exists(path)) {
+        fprintf(stderr, "neobeam: config file not found: %s\n", qPrintable(path));
+        return 2;
+    }
+
+    QList<ConfigIssue> issues;
+    Config::load(path, &issues);
+
+    if (issues.isEmpty()) {
+        printf("%s: OK\n", qPrintable(path));
+        return 0;
+    }
+
+    bool hasError = false;
+    for (const auto &issue : issues) {
+        const bool err = issue.severity == ConfigIssue::Error;
+        hasError = hasError || err;
+        fprintf(stderr, "%s: %s\n", err ? "error" : "warning", qPrintable(issue.message));
+    }
+    return hasError ? 2 : 1;
+}
 
 int main(int argc, char *argv[])
 {
@@ -39,13 +68,18 @@ int main(int argc, char *argv[])
     QCommandLineOption fontSizeOption("font-size", "Font size in points", "size");
     QCommandLineOption nativeUiOption("native-ui", "Enable all native UI elements");
     QCommandLineOption configOption({"c", "config"}, "Path to config file", "path");
+    QCommandLineOption checkOption({"k", "check-config"}, "Validate the config file and exit");
     parser.addOption(fontOption);
     parser.addOption(fontSizeOption);
     parser.addOption(nativeUiOption);
     parser.addOption(configOption);
+    parser.addOption(checkOption);
 
     // Parse known options, rest goes to nvim
     parser.parse(app.arguments());
+
+    if (parser.isSet(checkOption))
+        return checkConfig(parser.value(configOption));
 
     Config cfg = Config::load(parser.value(configOption));
 
@@ -65,7 +99,7 @@ int main(int argc, char *argv[])
     QStringList nvimArgs = parser.unknownOptionNames();
     // Also pass positional args and raw unknown args
     QStringList allArgs = app.arguments().mid(1);
-    QStringList knownFlags = {"-f", "--font", "--font-size", "--native-ui", "-c", "--config", "-h", "--help", "-v", "--version"};
+    QStringList knownFlags = {"-f", "--font", "--font-size", "--native-ui", "-c", "--config", "-k", "--check-config", "-h", "--help", "-v", "--version"};
     QStringList filteredArgs;
     for (int i = 0; i < allArgs.size(); i++) {
         QString arg = allArgs[i];

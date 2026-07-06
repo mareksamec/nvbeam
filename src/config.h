@@ -2,7 +2,23 @@
 
 #include <QString>
 #include <QStringList>
+#include <QList>
 #include <QFont>
+
+/// A problem found while loading the config file
+struct ConfigIssue {
+    enum Severity { Warning, Error };
+    Severity severity;
+    QString message;
+};
+
+/// A pinned project from [[projects]] in neobeam.toml. Shown at the top of
+/// the project switcher list.
+struct ProjectEntry {
+    QString path;         // absolute, tilde-expanded folder path
+    QString name;         // display name; empty = folder basename
+    QString sideCommand;  // side terminal command for this project; empty = plain shell
+};
 
 /// Application configuration loaded from TOML
 struct Config {
@@ -29,8 +45,9 @@ struct Config {
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
 
-    // Side terminal (docked next to the minimap, for CLI tools like claude)
-    QString sideTerminalCommand;          // command run when the side terminal opens (e.g. "claude")
+    // Side terminal (docked next to the minimap, for CLI tools like claude).
+    // The command it runs comes from the matching [[projects]] entry's
+    // side_command; there is no global default.
     int sideTerminalWidth = 400;          // startup width in pixels
     QString sideTerminalFont;             // empty = use terminal font
     int sideTerminalFontSize = 0;         // 0 = use terminal font size
@@ -54,8 +71,16 @@ struct Config {
     bool sessionRestoreWindow = true;    // window geometry + editor/terminal split proportions
     bool sessionRestoreTerminal = true;  // terminal split count, proportions, expanded state
 
-    // Load config from given path, or standard path if empty
-    static Config load(const QString &path = {});
+    // Project switcher
+    QList<ProjectEntry> projects;        // pinned projects, shown on top of the list
+    bool switcherKeepRunning = true;     // show the switcher instead of quitting when nvim exits
+    int switcherMaxRecent = 20;          // recent files/folders kept in the list (each)
+
+    // Load config from given path, or standard path if empty.
+    // Problems (unknown options, wrong types, invalid values) are collected
+    // into issues when given, otherwise logged via qWarning. A bad value
+    // never aborts the load; the affected option keeps its default.
+    static Config load(const QString &path = {}, QList<ConfigIssue> *issues = nullptr);
 
     // Returns the configured QFont
     QFont font() const;

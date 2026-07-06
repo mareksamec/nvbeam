@@ -46,6 +46,20 @@ void GridWidget::handleRedraw(const QVariantList &events)
     update();
 }
 
+void GridWidget::resetGrids()
+{
+    m_grids.clear();
+    m_cursorGrid = 1;
+    m_cursorRow = 0;
+    m_cursorCol = 0;
+    m_selecting = false;
+    m_selStartRow = m_selEndRow = 0;
+    m_selStartCol = m_selEndCol = 0;
+    // Highlight table and default colors are redefined by the new instance on
+    // attach (hl_attr_define / default_colors_set), so they can stay until then.
+    update();
+}
+
 void GridWidget::processEvent(const QString &name, const QVariantList &args)
 {
     if (name == "grid_resize") handleGridResize(args);

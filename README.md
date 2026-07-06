@@ -79,6 +79,7 @@ sudo pacman -S qtermwidget
 | `--font-size <size>` | Font size in points |
 | `--native-ui` | Enable all native UI elements (ext_popupmenu, ext_tabline, ext_messages) |
 | `-c`, `--config <path>` | Path to a custom config file |
+| `-k`, `--check-config` | Validate the config file and exit (exit code: 0 = clean, 1 = warnings, 2 = errors) |
 | `-h`, `--help` | Show help |
 | `-v`, `--version` | Show version |
 
@@ -95,6 +96,11 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+= | Increase terminal font size (when a terminal is focused) |
 | Ctrl+- | Decrease terminal font size (when a terminal is focused) |
 | Ctrl+Mouse wheel | Increase/decrease terminal font size (over a terminal) |
+| Ctrl+Shift+P | Toggle the project switcher |
+
+### Project switcher
+
+Starting neobeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), neobeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
 
 ### Drag & drop
 
@@ -144,7 +150,6 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # scrollback = 1000  # scrollback buffer size in lines
 
 # [side_terminal]
-# command = ""  # command run when the side terminal opens (e.g. "claude", "nanocoder")
 # width = 400  # startup width in pixels
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
@@ -166,9 +171,25 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # [session]
 # restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)
 # restore_terminal = true  # terminal split count, proportions, expanded state
+
+# [switcher]
+# keep_running = true  # show the project switcher instead of quitting when nvim exits
+# max_recent = 20      # recent files/folders kept in the switcher list (each)
+
+# Pinned projects, shown on top of the project switcher list.
+# Repeat the [[projects]] block once per project.
+# [[projects]]
+# path = "~/work/myproject"
+# name = "myproject"      # optional display name (default: folder name)
+# side_command = "claude" # optional command for the side terminal in this project
+#
+# [[projects]]
+# path = "~/work/otherproject"  # only path is required; side terminal runs a plain shell
 ```
 
 A ready-to-copy `neobeam.toml.example` is also included in the project root.
+
+Run `neobeam -k` (optionally with `-c <path>`) to validate the config without starting the GUI. Unknown sections or options, wrong value types and invalid values (colors, enums) are reported as warnings; a value that fails validation falls back to its default instead of aborting the load.
 
 ### Configuration options
 
@@ -196,7 +217,6 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
 
 **`[side_terminal]`**
-- `command` — Command run when the side terminal opens, e.g. `"claude"` or `"nanocoder"` (default: `""`)
 - `width` — Side terminal startup width in pixels (default: `400`)
 - `font` — Side terminal font family; empty uses the `[terminal]` font (default: `""`)
 - `font_size` — Side terminal font size in points; `0` uses the `[terminal]` font size (default: `0`)
@@ -219,7 +239,18 @@ A ready-to-copy `neobeam.toml.example` is also included in the project root.
 - `restore_window` — Restore the window size and the editor/terminal panel proportions. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
 - `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`)
 
-Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it).
+**`[switcher]`**
+- `keep_running` — When nvim exits, keep neobeam running and show the project switcher instead of closing the window (default: `true`)
+- `max_recent` — How many recent files and folders (each) are remembered for the switcher; `0` disables recents tracking (default: `20`)
+
+**`[[projects]]`** (repeatable)
+- `path` — Project folder, `~` expands to your home directory (required)
+- `name` — Display name in the switcher; empty uses the folder name (default: `""`)
+- `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
+
+The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory.
+
+Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 
 ## License
 
