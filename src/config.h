@@ -2,7 +2,15 @@
 
 #include <QString>
 #include <QStringList>
+#include <QList>
 #include <QFont>
+
+/// A problem found while loading the config file
+struct ConfigIssue {
+    enum Severity { Warning, Error };
+    Severity severity;
+    QString message;
+};
 
 /// Application configuration loaded from TOML
 struct Config {
@@ -54,8 +62,11 @@ struct Config {
     bool sessionRestoreWindow = true;    // window geometry + editor/terminal split proportions
     bool sessionRestoreTerminal = true;  // terminal split count, proportions, expanded state
 
-    // Load config from given path, or standard path if empty
-    static Config load(const QString &path = {});
+    // Load config from given path, or standard path if empty.
+    // Problems (unknown options, wrong types, invalid values) are collected
+    // into issues when given, otherwise logged via qWarning. A bad value
+    // never aborts the load; the affected option keeps its default.
+    static Config load(const QString &path = {}, QList<ConfigIssue> *issues = nullptr);
 
     // Returns the configured QFont
     QFont font() const;

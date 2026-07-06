@@ -34,6 +34,5 @@ right_click_paste = true  # PuTTY-style right-click paste
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
 
 [session]
-restore = true           # remember and restore last session on startup
 restore_window = true    # best-effort window size/state (WM/Wayland may override)
 restore_terminal = true  # terminal split count, proportions, height, expanded state

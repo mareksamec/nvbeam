@@ -79,6 +79,7 @@ sudo pacman -S qtermwidget
 | `--font-size <size>` | Font size in points |
 | `--native-ui` | Enable all native UI elements (ext_popupmenu, ext_tabline, ext_messages) |
 | `-c`, `--config <path>` | Path to a custom config file |
+| `-k`, `--check-config` | Validate the config file and exit (exit code: 0 = clean, 1 = warnings, 2 = errors) |
 | `-h`, `--help` | Show help |
 | `-v`, `--version` | Show version |
 
@@ -169,6 +170,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 ```
 
 A ready-to-copy `neobeam.toml.example` is also included in the project root.
+
+Run `neobeam -k` (optionally with `-c <path>`) to validate the config without starting the GUI. Unknown sections or options, wrong value types and invalid values (colors, enums) are reported as warnings; a value that fails validation falls back to its default instead of aborting the load.
 
 ### Configuration options
 
