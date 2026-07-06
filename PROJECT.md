@@ -79,6 +79,7 @@
     - [ ] The cursor is set to beam and you have a selection in the term.
     - [ ] Selected text is copied to Clipboard
     - [ ] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + .
+    - [ ] Drag selection in this mode won't trigger nvim visual selection mode.
 
 
 ## Fixes/Adjustments
