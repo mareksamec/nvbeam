@@ -62,6 +62,24 @@
     - [x] Side terminal is not affected by the "Send cwd to all terminals button"
 - [x] Add independent font configuration for the side terminal.
 - [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
+- [ ] Config
+    - [ ] Add simple config validation e.g. `neobeam -k`
+    - [ ] Handle non-existent or wrong options in the .toml config.
+- [ ] Add option to keep neobeam running when nvim buffer is exited
+- [ ] Project switcher
+    - [ ] Add project switcher - when neobeam is started without argument a project switcher with fzf search through recently opened folders and files (Like nvim Telescope)
+    - [ ] Switcher can use qt gui elements with typing area and a drop down list, maybe something like k runner in the middle of open neobeam window
+    - [ ] When a file is selected, cwd of nvim and all terminals (including side term) changes to the directory where the selected file is.
+    - [ ] You can also projects in neobeam.toml that will be on top of the switcher list.
+    - [ ] You can configure side term command for each specific folder or leave it without any command.
+    - [ ] We will remove the default side term command from the config
+
+## Phase 8: Text selection mode
+- [ ] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
+    - [ ] The cursor is set to beam and you have a selection in the term.
+    - [ ] Selected text is copied to Clipboard
+    - [ ] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + .
+
 
 ## Fixes/Adjustments
 

@@ -51,9 +51,8 @@ struct Config {
     QString mouseSelectionColor = "#44475a"; // selection highlight color
 
     // Session restore
-    bool sessionRestore = true;          // master switch for restoring last session
-    bool sessionRestoreWindow = true;    // best-effort window size/state (WM may override)
-    bool sessionRestoreTerminal = true;  // terminal split count, proportions, height, expanded state
+    bool sessionRestoreWindow = true;    // window geometry + editor/terminal split proportions
+    bool sessionRestoreTerminal = true;  // terminal split count, proportions, expanded state
 
     // Load config from given path, or standard path if empty
     static Config load(const QString &path = {});
