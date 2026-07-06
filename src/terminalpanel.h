@@ -87,9 +87,14 @@ public:
     /// splits opened later.
     void changeFontSize(int delta);
 
-    /// Set the command sent to newly started shells (side terminal: the
-    /// per-project side_command). Shells already running are not touched.
-    void setExecCommand(const QString &command) { m_cfg.execCommand = command; }
+    /// Point the panel at a project: dir becomes the working directory and
+    /// command the exec command (side terminal: the per-project side_command).
+    /// Shells that haven't started yet just get their startup dir/command
+    /// fixed up. Running shells are kept and cd'd when neither the old nor
+    /// the new command is set; otherwise they are replaced with one fresh
+    /// shell in dir (typing "cd" into a running interactive tool would
+    /// corrupt its input).
+    void adoptProject(const QString &dir, const QString &command);
 
 signals:
     void visibilityChanged(bool visible);
@@ -139,6 +144,7 @@ private:
     QToolBar *m_toolbar = nullptr;
     TerminalConfig m_cfg;
     QString m_cwd;
+    QString m_runningCommand; // exec command the currently running shells were started with
     QString m_schemeResolved; // cached result of effectiveColorScheme()
 
     static constexpr int kMinHeight = 80;  // minimum panel height in pixels when resizing

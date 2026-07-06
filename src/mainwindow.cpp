@@ -800,7 +800,6 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
 
     // Every terminal, side terminal included, moves to the project directory.
     m_terminal->broadcastCwd(dir);
-    m_sideTerminal->broadcastCwd(dir);
     applyProjectSideCommand(dir);
 
     if (m_cfg.switcherMaxRecent > 0) {
@@ -821,9 +820,10 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
             break;
         }
     }
-    // Affects shells started from now on (a freshly shown side terminal);
-    // shells already running keep whatever is in them.
-    m_sideTerminal->setExecCommand(command);
+    // Moves the side terminal to dir and applies the command: pending shells
+    // are fixed up in place, a running plain shell just cds, and anything
+    // else is respawned fresh (see TerminalPanel::adoptProject).
+    m_sideTerminal->adoptProject(dir, command);
 }
 
 TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const

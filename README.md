@@ -248,7 +248,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `name` — Display name in the switcher; empty uses the folder name (default: `""`)
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
 
-The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. Shells already running are left untouched; the command applies to side terminal shells started afterwards.
+The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory.
 
 Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 

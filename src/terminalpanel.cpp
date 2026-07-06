@@ -210,6 +210,7 @@ void TerminalPanel::showEvent(QShowEvent *event)
             if (!m_cfg.execCommand.isEmpty()) {
                 term->sendText(m_cfg.execCommand + "\n");
             }
+            m_runningCommand = m_cfg.execCommand;
         }
     }
 #endif
@@ -243,6 +244,51 @@ void TerminalPanel::broadcastCwd(const QString &dir)
         else
             term->changeDir(dir);
     }
+#endif
+}
+
+void TerminalPanel::adoptProject(const QString &dir, const QString &command)
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    const QString previous = m_runningCommand;
+    m_cfg.execCommand = command;
+
+    bool anyStarted = false;
+    for (auto *term : m_terminals) {
+        if (!term->property("_nb_pending").toBool()) {
+            anyStarted = true;
+            break;
+        }
+    }
+
+    // Nothing running yet (panel never shown, or shells still pending):
+    // broadcastCwd fixes the pending shells' startup directory, and the new
+    // exec command is picked up when showEvent starts them.
+    // Running plain shells (no command on either side) are kept and cd'd.
+    if (!anyStarted || (previous.isEmpty() && command.isEmpty())) {
+        broadcastCwd(dir);
+        return;
+    }
+
+    // A command is involved: replace every split with one fresh shell in the
+    // project directory. addTerminal() starts it immediately when the panel
+    // is visible, or leaves it pending for the next showEvent.
+    m_cwd = dir;
+    for (auto *term : m_terminals) {
+        // The finished-handler must not run for shells we kill ourselves (it
+        // would hide the panel once the list momentarily empties).
+        disconnect(term, nullptr, this, nullptr);
+        if (QFrame *wrapper = m_wrapperFor.take(term))
+            wrapper->deleteLater(); // also deletes the child terminal widget
+        else
+            term->deleteLater();
+    }
+    m_terminals.clear();
+    m_currentTerm = nullptr;
+    addTerminal();
+#else
+    Q_UNUSED(dir);
+    Q_UNUSED(command);
 #endif
 }
 
@@ -449,6 +495,7 @@ QTermWidget *TerminalPanel::createTermWidget()
         if (!m_cfg.execCommand.isEmpty()) {
             term->sendText(m_cfg.execCommand + "\n");
         }
+        m_runningCommand = m_cfg.execCommand;
     } else {
         term->setProperty("_nb_pending", true);
     }
