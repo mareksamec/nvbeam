@@ -59,4 +59,6 @@
 # side_command = "claude" # optional command for the side terminal in this project
 #
 # [[projects]]
-# path = "~/work/otherproject"  # only path is required; side terminal runs a plain shell
+# path = "~/work/otherproject" 
+# name = "otherproject"       
+# side_command = "nanocoder"  
