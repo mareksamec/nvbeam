@@ -145,17 +145,28 @@ const KnownSection kKnownSections[] = {
                   "color_scheme", "foreground", "background", "shell", "shell_args",
                   "exec_command", "right_click_paste", "antialiasing", "hinting",
                   "scrollback"}},
-    {"side_terminal", {"command", "width", "font", "font_size"}},
+    {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "accent_color", "statusline_divider", "focus_border_color"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
+    {"switcher", {"keep_running", "max_recent"}},
 };
 
 void warnUnknownKeys(const toml::value &data, QList<ConfigIssue> *issues)
 {
     for (const auto &kv : data.as_table()) {
         const QString name = QString::fromStdString(kv.first);
+        // [[projects]] is an array of tables, validated in readProjects().
+        if (name == QLatin1String("projects"))
+            continue;
+        // Moved option: point at the replacement instead of a generic warning.
+        if (name == QLatin1String("side_terminal") && kv.second.is_table()
+            && kv.second.contains("command")) {
+            report(issues, ConfigIssue::Warning,
+                   QStringLiteral("[side_terminal] command was removed; set side_command "
+                                  "on a [[projects]] entry instead"));
+        }
         const KnownSection *known = nullptr;
         for (const auto &s : kKnownSections) {
             if (name == QLatin1String(s.name)) {
@@ -178,6 +189,9 @@ void warnUnknownKeys(const toml::value &data, QList<ConfigIssue> *issues)
             continue;
         }
         for (const auto &entry : kv.second.as_table()) {
+            // Already reported above with a pointer to the replacement.
+            if (name == QLatin1String("side_terminal") && entry.first == "command")
+                continue;
             bool found = false;
             for (const char *k : known->keys) {
                 if (entry.first == k) {
@@ -200,6 +214,61 @@ const toml::value *sectionTable(const toml::value &data, const char *name)
         return nullptr;
     const auto &v = data.at(name);
     return v.is_table() ? &v : nullptr;
+}
+
+QString expandTilde(const QString &path)
+{
+    if (path == QLatin1String("~"))
+        return QDir::homePath();
+    if (path.startsWith(QLatin1String("~/")))
+        return QDir::homePath() + path.mid(1);
+    return path;
+}
+
+void readProjects(const toml::value &data, QList<ProjectEntry> &out,
+                  QList<ConfigIssue> *issues)
+{
+    if (!data.contains("projects"))
+        return;
+    const auto &v = data.at("projects");
+    if (!v.is_array()) {
+        report(issues, ConfigIssue::Warning,
+               QStringLiteral("projects: expected an array of tables ([[projects]] entries)"));
+        return;
+    }
+    int index = 0;
+    for (const auto &entry : v.as_array()) {
+        ++index;
+        const char *sec = "projects";
+        if (!entry.is_table()) {
+            report(issues, ConfigIssue::Warning,
+                   QStringLiteral("[[projects]] entry %1: expected a table").arg(index));
+            continue;
+        }
+        for (const auto &kv : entry.as_table()) {
+            if (kv.first != "path" && kv.first != "name" && kv.first != "side_command")
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[[projects]] entry %1: unknown option \"%2\"")
+                           .arg(index).arg(QString::fromStdString(kv.first)));
+        }
+        ProjectEntry project;
+        if (!readString(entry, sec, "path", project.path, issues) || project.path.isEmpty()) {
+            report(issues, ConfigIssue::Warning,
+                   QStringLiteral("[[projects]] entry %1: missing required \"path\" (entry ignored)")
+                       .arg(index));
+            continue;
+        }
+        project.path = QDir::cleanPath(expandTilde(project.path));
+        if (!QDir(project.path).exists())
+            report(issues, ConfigIssue::Warning,
+                   QStringLiteral("[[projects]] entry %1: path does not exist: %2")
+                       .arg(index).arg(project.path));
+        readString(entry, sec, "name", project.name, issues);
+        readString(entry, sec, "side_command", project.sideCommand, issues);
+        if (project.name.isEmpty())
+            project.name = QFileInfo(project.path).fileName();
+        out.append(project);
+    }
 }
 
 } // namespace
@@ -247,7 +316,6 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# scrollback = 1000  # scrollback buffer size in lines\n"
                 "\n"
                 "# [side_terminal]\n"
-                "# command = \"\"  # command run when the side terminal opens (e.g. \"claude\", \"nanocoder\")\n"
                 "# width = 400  # startup width in pixels\n"
                 "# font = \"\"  # side terminal font (empty = use terminal font)\n"
                 "# font_size = 0  # side terminal font size (0 = use terminal font size)\n"
@@ -270,6 +338,20 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# [session]\n"
                 "# restore_window = true    # window size + editor/terminal proportions (WM/Wayland may override)\n"
                 "# restore_terminal = true  # terminal split count, proportions, expanded state\n"
+                "\n"
+                "# [switcher]\n"
+                "# keep_running = true  # show the project switcher instead of quitting when nvim exits\n"
+                "# max_recent = 20      # recent files/folders kept in the switcher list (each)\n"
+                "\n"
+                "# Pinned projects, shown on top of the project switcher list.\n"
+                "# Repeat the [[projects]] block once per project.\n"
+                "# [[projects]]\n"
+                "# path = \"~/work/myproject\"\n"
+                "# name = \"myproject\"      # optional display name (default: folder name)\n"
+                "# side_command = \"claude\" # optional command for the side terminal in this project\n"
+                "#\n"
+                "# [[projects]]\n"
+                "# path = \"~/work/otherproject\"  # only path is required; side terminal runs a plain shell\n"
             );
             file.close();
             qDebug() << "Created default config at:" << path;
@@ -312,7 +394,6 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
         }
 
         if (const auto *side = sectionTable(data, "side_terminal")) {
-            readString(*side, "side_terminal", "command", cfg.sideTerminalCommand, issues);
             if (readInt(*side, "side_terminal", "width", cfg.sideTerminalWidth, issues))
                 cfg.sideTerminalWidth = qMax(150, cfg.sideTerminalWidth);
             readString(*side, "side_terminal", "font", cfg.sideTerminalFont, issues);
@@ -348,6 +429,14 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readBool(*session, "session", "restore_window", cfg.sessionRestoreWindow, issues);
             readBool(*session, "session", "restore_terminal", cfg.sessionRestoreTerminal, issues);
         }
+
+        if (const auto *switcher = sectionTable(data, "switcher")) {
+            readBool(*switcher, "switcher", "keep_running", cfg.switcherKeepRunning, issues);
+            if (readInt(*switcher, "switcher", "max_recent", cfg.switcherMaxRecent, issues))
+                cfg.switcherMaxRecent = qBound(0, cfg.switcherMaxRecent, 200);
+        }
+
+        readProjects(data, cfg.projects, issues);
     } catch (const std::exception &e) {
         report(issues, ConfigIssue::Error,
                QStringLiteral("failed to parse %1:\n%2").arg(path, QString::fromUtf8(e.what())));

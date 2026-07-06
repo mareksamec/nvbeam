@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include "config.h"
+#include "switcher.h"
 
 class GridWidget;
 class NvimProcess;
@@ -41,6 +42,21 @@ private:
     /// nullptr if the widget is not inside either panel.
     TerminalPanel *terminalPanelFor(QWidget *widget) const;
 
+    /// Show the project switcher with a freshly built item list.
+    void openSwitcher();
+
+    /// Pinned projects followed by recent folders and files (deduplicated,
+    /// stale paths pruned).
+    QList<SwitcherItem> switcherItems() const;
+
+    /// Point nvim, the bottom terminal splits and the side terminal at the
+    /// selected project/folder/file and record it as recently used.
+    void applySwitcherSelection(const SwitcherItem &item);
+
+    /// Set the side terminal's exec command to the [[projects]] entry
+    /// matching dir, or clear it when dir is not a pinned project.
+    void applyProjectSideCommand(const QString &dir);
+
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -54,7 +70,14 @@ private:
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
+    SwitcherWidget *m_switcher = nullptr;
     Session *m_session = nullptr;
     Config m_cfg;
     int m_minimapLastTick = 0; // last changedtick seen from Neovim, used to skip highlight rebuilds on scroll
+
+    bool m_quitting = false;          // window closing; don't restart nvim on exit
+    bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
+    QString m_pendingFolder;          // folder from argv, applied on first nvim ready
+    QString m_lastMruFile;            // change gates for the recent-files poll
+    QString m_lastMruCwd;
 };

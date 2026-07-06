@@ -20,6 +20,7 @@
 #include <QGuiApplication>
 #include <QHBoxLayout>
 #include <QPushButton>
+#include <QSet>
 #include <QShortcut>
 #include <QSplitter>
 #include <QTimer>
@@ -60,10 +61,25 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     if (nvimArgs.size() == 1) {
         QFileInfo info(nvimArgs.first());
         if (info.isDir())
-            openFolder = info.absoluteFilePath();
+            openFolder = QDir::cleanPath(info.absoluteFilePath());
     }
+    m_pendingFolder = openFolder;
+    // No arguments at all: present the project switcher once nvim is up.
+    m_showSwitcherOnReady = nvimArgs.isEmpty();
 
     m_session = new Session();
+
+    // Seed the recently-used lists from what was passed on the command line.
+    if (m_cfg.switcherMaxRecent > 0) {
+        if (!openFolder.isEmpty()) {
+            m_session->addRecentFolder(openFolder, m_cfg.switcherMaxRecent);
+        } else if (nvimArgs.size() == 1) {
+            QFileInfo info(nvimArgs.first());
+            if (info.isFile())
+                m_session->addRecentFile(QDir::cleanPath(info.absoluteFilePath()),
+                                         m_cfg.switcherMaxRecent);
+        }
+    }
 
     auto *central = new QWidget(this);
     auto *layout = new QVBoxLayout(central);
@@ -149,7 +165,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // it receives nvim's cwd once, right before it is shown.
     TerminalConfig sideCfg = termCfg;
     sideCfg.followCwd = false;
-    sideCfg.execCommand = cfg.sideTerminalCommand;
+    // The side terminal command comes from the [[projects]] entry matching
+    // the opened folder (none = plain shell). Resolved here, before the panel
+    // exists, because session restore may start its shell in this constructor.
+    sideCfg.execCommand.clear();
+    for (const ProjectEntry &project : cfg.projects) {
+        if (!openFolder.isEmpty() && project.path == openFolder) {
+            sideCfg.execCommand = project.sideCommand;
+            break;
+        }
+    }
     sideCfg.sidePanel = true;
     // Independent font: fall back to the bottom terminal's font when unset.
     if (!cfg.sideTerminalFont.isEmpty())
@@ -357,17 +382,31 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     m_nvim = new NvimProcess(this);
     connect(m_nvim, &NvimProcess::redraw, m_grid, &GridWidget::handleRedraw);
-    connect(m_nvim, &NvimProcess::finished, this, &QMainWindow::close);
+    connect(m_nvim, &NvimProcess::finished, this, [this]() {
+        if (m_quitting || !m_cfg.switcherKeepRunning) {
+            close();
+            return;
+        }
+        // nvim exited (:q) but the window stays: drop the dead instance's
+        // grid state, start a fresh empty nvim and present the switcher over
+        // it (the ready handler re-attaches the UI and opens it).
+        m_grid->resetGrids();
+        m_showSwitcherOnReady = true;
+        m_nvim->start({});
+    });
     connect(m_grid, &GridWidget::gridSizeReady, this, [this](int rows, int cols) {
         m_nvim->request("nvim_ui_try_resize_grid", {1, cols, rows});
     });
-    connect(m_nvim, &NvimProcess::ready, this, [this, openFolder]() {
+    connect(m_nvim, &NvimProcess::ready, this, [this]() {
         // Folder open (e.g. `neobeam .`): point both nvim's cwd and every
         // terminal split (including any restored from the session) at the
         // folder, overriding whatever cwd nvim/the terminals started with.
-        if (!openFolder.isEmpty()) {
-            m_nvim->request("nvim_set_current_dir", {openFolder});
-            m_terminal->broadcastCwd(openFolder);
+        // Applies only to the first instance; keep_running restarts start
+        // in the default cwd until the switcher picks a project.
+        if (!m_pendingFolder.isEmpty()) {
+            m_nvim->request("nvim_set_current_dir", {m_pendingFolder});
+            m_terminal->broadcastCwd(m_pendingFolder);
+            m_pendingFolder.clear();
         }
         QTimer::singleShot(0, this, [this]() {
             int cols = m_grid->width() / m_grid->cellWidth();
@@ -382,6 +421,11 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             if (m_cfg.extPopupmenu) opts["ext_popupmenu"] = true;
             if (m_cfg.extTabline) opts["ext_tabline"] = true;
             m_nvim->request("nvim_ui_attach", {cols, rows, opts});
+
+            if (m_showSwitcherOnReady) {
+                m_showSwitcherOnReady = false;
+                openSwitcher();
+            }
         });
     });
 
@@ -563,6 +607,53 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         cwdTimer->start();
     }
 
+    // Project switcher overlay (pinned projects + recent folders/files).
+    m_switcher = new SwitcherWidget(cfg.accentColor, this);
+    connect(m_switcher, &SwitcherWidget::itemSelected, this,
+            &MainWindow::applySwitcherSelection);
+    connect(m_switcher, &SwitcherWidget::dismissed, this,
+            [this]() { m_grid->setFocus(); });
+
+    // Ctrl+Shift+P toggles the switcher manually.
+    auto *switcherShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this);
+    connect(switcherShortcut, &QShortcut::activated, this, [this]() {
+        if (m_switcher->isVisible())
+            m_switcher->dismiss();
+        else
+            openSwitcher();
+    });
+
+    // Recently-used tracking: poll nvim for its cwd and current file so the
+    // switcher list reflects what was actually worked on. Change-gated, so
+    // the session file is only touched when something new shows up.
+    if (m_cfg.switcherMaxRecent > 0) {
+        auto *mruTimer = new QTimer(this);
+        mruTimer->setInterval(2000);
+        connect(mruTimer, &QTimer::timeout, this, [this]() {
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return {vim.fn.getcwd(), vim.api.nvim_buf_get_name(0)}"),
+                 QVariantList{}},
+                [this](const QVariant &result) {
+                    const QVariantList r = result.toList();
+                    const QString cwd = r.value(0).toString();
+                    const QString file = r.value(1).toString();
+                    // The home directory is nvim's default cwd, not a project.
+                    if (!cwd.isEmpty() && cwd != m_lastMruCwd && cwd != QDir::homePath()
+                        && QDir(cwd).exists()) {
+                        m_lastMruCwd = cwd;
+                        m_session->addRecentFolder(cwd, m_cfg.switcherMaxRecent);
+                    }
+                    // Skip unnamed buffers and non-file buffers (term://, ...).
+                    if (!file.isEmpty() && file != m_lastMruFile
+                        && !file.contains(QLatin1String("://")) && QFileInfo(file).isFile()) {
+                        m_lastMruFile = file;
+                        m_session->addRecentFile(file, m_cfg.switcherMaxRecent);
+                    }
+                });
+        });
+        mruTimer->start();
+    }
+
     m_nvim->start(nvimArgs);
 
     // Ctrl+Tab cycles focus through the editor grid and each terminal split.
@@ -579,6 +670,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
 MainWindow::~MainWindow()
 {
+    // stop() delivers the process's finished signal synchronously; the
+    // keep_running handler must not restart nvim (or close()) mid-teardown.
+    m_quitting = true;
     if (m_nvim) {
         m_nvim->stop();
     }
@@ -587,6 +681,7 @@ MainWindow::~MainWindow()
 
 void MainWindow::closeEvent(QCloseEvent *event)
 {
+    m_quitting = true;
     // Persist session state. We always write it; the restore side is gated by
     // config, so saving unconditionally keeps the file ready if the user later
     // enables restore.
@@ -642,6 +737,93 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+void MainWindow::openSwitcher()
+{
+    m_switcher->open(switcherItems());
+}
+
+QList<SwitcherItem> MainWindow::switcherItems() const
+{
+    QList<SwitcherItem> items;
+    QSet<QString> seen;
+
+    for (const ProjectEntry &project : m_cfg.projects) {
+        SwitcherItem item;
+        item.kind = SwitcherItem::Project;
+        item.label = project.name;
+        item.path = project.path;
+        item.sideCommand = project.sideCommand;
+        items.append(item);
+        seen.insert(project.path);
+    }
+
+    for (const QString &path : m_session->recentFolders()) {
+        if (seen.contains(path) || !QDir(path).exists())
+            continue;
+        seen.insert(path);
+        SwitcherItem item;
+        item.kind = SwitcherItem::Folder;
+        item.label = QFileInfo(path).fileName();
+        item.path = path;
+        items.append(item);
+    }
+
+    for (const QString &path : m_session->recentFiles()) {
+        if (seen.contains(path) || !QFileInfo(path).isFile())
+            continue;
+        seen.insert(path);
+        SwitcherItem item;
+        item.kind = SwitcherItem::File;
+        item.label = QFileInfo(path).fileName();
+        item.path = path;
+        items.append(item);
+    }
+
+    return items;
+}
+
+void MainWindow::applySwitcherSelection(const SwitcherItem &item)
+{
+    const bool isFile = item.kind == SwitcherItem::File;
+    const QString dir = isFile ? QFileInfo(item.path).absolutePath() : item.path;
+
+    // nvim: cwd to the project directory, then open the file (or the folder
+    // itself, which brings up the configured file browser). nvim_cmd with an
+    // args list lets Neovim handle path escaping.
+    m_nvim->request("nvim_set_current_dir", {dir});
+    QVariantMap cmd;
+    cmd["cmd"] = QStringLiteral("edit");
+    cmd["args"] = QVariantList{item.path};
+    m_nvim->request("nvim_cmd", {cmd, QVariantMap{}});
+
+    // Every terminal, side terminal included, moves to the project directory.
+    m_terminal->broadcastCwd(dir);
+    m_sideTerminal->broadcastCwd(dir);
+    applyProjectSideCommand(dir);
+
+    if (m_cfg.switcherMaxRecent > 0) {
+        m_session->addRecentFolder(dir, m_cfg.switcherMaxRecent);
+        if (isFile)
+            m_session->addRecentFile(item.path, m_cfg.switcherMaxRecent);
+    }
+
+    m_grid->setFocus();
+}
+
+void MainWindow::applyProjectSideCommand(const QString &dir)
+{
+    QString command;
+    for (const ProjectEntry &project : m_cfg.projects) {
+        if (project.path == dir) {
+            command = project.sideCommand;
+            break;
+        }
+    }
+    // Affects shells started from now on (a freshly shown side terminal);
+    // shells already running keep whatever is in them.
+    m_sideTerminal->setExecCommand(command);
 }
 
 TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const

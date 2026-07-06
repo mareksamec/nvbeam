@@ -87,6 +87,10 @@ public:
     /// splits opened later.
     void changeFontSize(int delta);
 
+    /// Set the command sent to newly started shells (side terminal: the
+    /// per-project side_command). Shells already running are not touched.
+    void setExecCommand(const QString &command) { m_cfg.execCommand = command; }
+
 signals:
     void visibilityChanged(bool visible);
     /// Emitted when the user clicks the "send cwd" toolbar button; MainWindow

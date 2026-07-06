@@ -36,6 +36,7 @@ add_executable(neobeam
     src/gridwidget.cpp
     src/config.cpp
     src/session.cpp
+    src/switcher.cpp
     src/uiwidgets.cpp
     src/terminalpanel.cpp
     src/minimap.cpp

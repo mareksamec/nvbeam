@@ -57,6 +57,13 @@ NvimProcess::~NvimProcess()
 
 void NvimProcess::start(const QStringList &nvimArgs)
 {
+    // Reset RPC state so start() can be called again after the previous nvim
+    // instance exited (keep_running restarts): leftover partial messages and
+    // response callbacks belong to the dead process.
+    m_buffer.clear();
+    m_callbacks.clear();
+    m_decodeIncomplete = false;
+
     QStringList args = {"--embed"};
     args.append(nvimArgs);
     m_process->start("nvim", args);

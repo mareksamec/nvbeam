@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QString>
+#include <QStringList>
 
 class QSettings;
 
@@ -41,6 +42,13 @@ public:
     // --- Side terminal ---
     bool sideTerminalVisible() const;       // whether the side terminal was visible
     void setSideTerminalVisible(bool visible);
+
+    // --- Recently opened files/folders (project switcher) ---
+    // Most-recent-first, deduplicated, capped at maxEntries on insert.
+    QStringList recentFiles() const;
+    void addRecentFile(const QString &path, int maxEntries);
+    QStringList recentFolders() const;
+    void addRecentFolder(const QString &path, int maxEntries);
 
     /// Flush pending writes to disk.
     void sync();
