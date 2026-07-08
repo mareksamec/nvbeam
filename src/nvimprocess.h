@@ -33,6 +33,10 @@ signals:
     /// Emitted when a redraw notification arrives with its event list
     void redraw(const QVariantList &events);
 
+    /// Emitted for any non-"redraw" RPC notification, i.e. custom events
+    /// pushed from Lua via vim.rpcnotify (e.g. "neobeam_git_event").
+    void notification(const QString &method, const QVariantList &args);
+
     /// Emitted when Neovim is ready to receive commands
     void ready();
 

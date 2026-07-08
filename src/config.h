@@ -59,6 +59,7 @@ struct Config {
     bool extMessages = true;
     bool bufferline = true;           // show open buffers instead of tabpages
     bool extStatusline = true;        // native statusline widget
+    bool uiGitStatus = true;          // git branch/status segment in the statusline (push-updated)
     QString accentColor = "#50fa7b";  // greenish accent for native elements
     QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
     QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane

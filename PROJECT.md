@@ -80,10 +80,10 @@
     - [x] Neobeam window title
         - [x] Make Neobeam uppercase
         - [x] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
-    - [ ] Nvim buffer artifacts
-        - [ ] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
-        - [ ] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
-        - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.)
+    - [-] Nvim buffer artifacts
+        - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
+        - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
+        - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) (fix applied - message grid now composited above window grids; awaiting confirmation)
     - [ ] Neobeam UI statusline:
         - [ ] Add git status (optimize performance avoid frequent scanning, or use push model)
 

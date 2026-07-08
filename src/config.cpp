@@ -147,7 +147,7 @@ const KnownSection kKnownSections[] = {
                   "antialiasing", "hinting", "scrollback"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
-            "accent_color", "statusline_divider", "focus_border_color"}},
+            "git_status", "accent_color", "statusline_divider", "focus_border_color"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
     {"switcher", {"keep_running", "max_recent"}},
@@ -327,6 +327,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# ext_messages = true\n"
                 "# bufferline = true  # show open buffers instead of tabpages\n"
                 "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
+                "# git_status = true  # git branch + status counts in the statusline (push-updated, no polling)\n"
                 "# accent_color = \"#50fa7b\"\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
@@ -409,6 +410,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readColor(*ui, "ui", "accent_color", cfg.accentColor, issues);
             readBool(*ui, "ui", "bufferline", cfg.bufferline, issues);
             readBool(*ui, "ui", "statusline", cfg.extStatusline, issues);
+            readBool(*ui, "ui", "git_status", cfg.uiGitStatus, issues);
             QString divider;
             if (readString(*ui, "ui", "statusline_divider", divider, issues)) {
                 if (divider == "powerline" || divider == "pipe" || divider == "none")

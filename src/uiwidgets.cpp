@@ -354,12 +354,25 @@ void StatuslineWidget::refresh()
     const QColor dim("#565f89");
     const QColor fg("#c0caf5");
 
+    // Git segment: the gitsigns branch (from statusline.lua, includes the
+    // branch glyph) wins when present; the Qt-side provider fills in the
+    // branch when gitsigns is absent and always contributes the counts.
+    QString branchText = !m_branch.isEmpty() ? m_branch
+                                             : (m_git.valid ? m_git.branch : QString());
+    if (m_git.valid && !branchText.isEmpty()) {
+        if (m_git.staged)    branchText += QString(" +%1").arg(m_git.staged);
+        if (m_git.modified)  branchText += QString(" ~%1").arg(m_git.modified);
+        if (m_git.untracked) branchText += QString(" ?%1").arg(m_git.untracked);
+        if (m_git.ahead)     branchText += QString(" ↑%1").arg(m_git.ahead);
+        if (m_git.behind)    branchText += QString(" ↓%1").arg(m_git.behind);
+    }
+
     // Configure each slot: text, colours, visibility. Order must match the
     // layout slot order built in the constructor.
     struct Slot { QLabel *label; QString text; QColor fg; QColor bg; bool bold; bool visible; };
     const Slot cfg[] = {
         {m_modeLabel,   " " + m_mode + " ",                                    dark,              modeBg, true,  true},
-        {m_branchLabel, " " + m_branch + " ",                                  fg,                mid,    false, !m_branch.isEmpty()},
+        {m_branchLabel, " " + branchText + " ",                                fg,                mid,    false, !branchText.isEmpty()},
         {m_fileLabel,   " " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ", fg,                dark,   false, true},
         {m_diagLabel,   " " + m_diag + " ",                                    QColor("#f7768e"), mid,    false, !m_diag.isEmpty()},
         {m_encLabel,    " " + m_encoding + " ",                                dim,               mid,    false, !m_encoding.isEmpty()},
@@ -395,6 +408,12 @@ void StatuslineWidget::refresh()
     // The last visible slot has no following segment — hide its divider.
     if (prev >= 0 && m_dividers[prev])
         m_dividers[prev]->hide();
+}
+
+void StatuslineWidget::updateGit(const GitStatusInfo &info)
+{
+    m_git = info;
+    refresh();
 }
 
 void StatuslineWidget::setMode(const QString &mode)

@@ -13,6 +13,7 @@ class StatuslineWidget;
 class TerminalPanel;
 class MinimapWidget;
 class ImageRenderer;
+class GitStatus;
 class Session;
 class QSplitter;
 class QFrame;
@@ -72,6 +73,7 @@ private:
     TerminalPanel *m_terminal = nullptr;
     TerminalPanel *m_sideTerminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
+    GitStatus *m_gitStatus = nullptr; // push-model git provider for the statusline
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
