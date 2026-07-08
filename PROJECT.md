@@ -57,7 +57,7 @@
 - [x] Instead add (arrow down button) that sends current nvim cwd to all open terminals.
 - [x] When a folder is open with neobeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
 - [x] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
-- [-] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
+- [x] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
     - [x] Add config option for default command to run with side terminal e.g. claude, nanocoder
     - [x] Side terminal is not affected by the "Send cwd to all terminals button"
 - [x] Add independent font configuration for the side terminal.
@@ -70,9 +70,22 @@
     - [x] You can also projects in neobeam.toml that will be on top of the switcher list.
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
-- [x] Config
+- [-] Config
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
+- [ ] **Term + Project improvements**
+    - [ ] Terminal select + copy to PRIMARY + CLIPBOARD 
+        - [ ] Add separate [terminal] config option for this?
+        - [ ] How to handle possible conflict with tools like wl-copy?
+    - [ ] Neobeam window title
+        - [ ] Make Neobeam uppercase
+        - [ ] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
+    - [ ] Nvim buffer artifacts
+        - [ ] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
+        - [ ] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
+        - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.)
+    - [ ] Neobeam UI statusline:
+        - [ ] Add git status (optimize performance avoid frequent scanning, or use push model)
 
 ## Phase 8: Text selection mode
 - [ ] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
