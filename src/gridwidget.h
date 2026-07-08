@@ -35,6 +35,7 @@ struct Grid {
     int zindex = 0;
     bool hidden = false;
     bool isFloat = false;
+    bool isMsg = false;  // the message grid (msg_set_pos); composited above windows
     QVector<QVector<GridCell>> cells;
 
     void resize(int r, int c) {
