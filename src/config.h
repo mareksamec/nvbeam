@@ -41,6 +41,7 @@ struct Config {
     QStringList terminalShellArgs;        // args passed to shell
     QString terminalExecCommand;          // command executed after shell starts (e.g. "tmux")
     bool terminalRightClickPaste = false; // PuTTY-style right-click paste
+    bool terminalCopyOnSelect = true;     // copy selection to PRIMARY + CLIPBOARD as it is made
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)

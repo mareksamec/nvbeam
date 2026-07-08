@@ -7,8 +7,10 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QFile>
+#include <QPointer>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTimer>
 #include <QDebug>
 
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -215,6 +217,43 @@ void TerminalPanel::showEvent(QShowEvent *event)
     }
 #endif
     emit visibilityChanged(true);
+}
+
+bool TerminalPanel::eventFilter(QObject *watched, QEvent *event)
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    // Copy-on-select, CLIPBOARD half: installed on each terminal's internal
+    // Konsole::TerminalDisplay widget (createTermWidget). A left-button
+    // release ends every selection gesture (drag, double-click word,
+    // triple-click line, shift-extend).
+    if (event->type() == QEvent::MouseButtonRelease
+        && static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
+        QTermWidget *term = nullptr;
+        for (QObject *o = watched; o && !term; o = o->parent())
+            term = qobject_cast<QTermWidget *>(o);
+        if (term && m_terminals.contains(term)) {
+            // Deferred: the display's own release handler runs after this
+            // filter and clears the selection when the release turns out to
+            // be a plain click on an existing selection (aborted drag);
+            // reading afterwards avoids copying a selection that is being
+            // dismissed. PRIMARY is also rewritten so both targets always
+            // hold the same text.
+            QPointer<QTermWidget> guard(term);
+            QTimer::singleShot(0, this, [guard]() {
+                if (!guard)
+                    return;
+                const QString text = guard->selectedText(true);
+                if (text.isEmpty())
+                    return;
+                QClipboard *cb = QApplication::clipboard();
+                cb->setText(text, QClipboard::Clipboard);
+                if (cb->supportsSelection())
+                    cb->setText(text, QClipboard::Selection);
+            });
+        }
+    }
+#endif
+    return QWidget::eventFilter(watched, event);
 }
 
 void TerminalPanel::setWorkingDirectory(const QString &dir)
@@ -474,6 +513,19 @@ QTermWidget *TerminalPanel::createTermWidget()
     // NOTE: Sixel image protocol is not supported by upstream QTermWidget.
     // Tracking: https://github.com/lxqt/qtermwidget — no sixel code exists.
     // When/if upstream adds sixel support, enable it here.
+
+    // Copy-on-select: qtermwidget only mirrors the selection to PRIMARY on
+    // its own (TerminalDisplay::setSelection); its copyAvailable signal is
+    // never emitted (the ScreenWindow::selectionChanged connection is missing
+    // upstream, as of 2.4.0). The CLIPBOARD half therefore hooks mouse
+    // release on the internal display widget instead (see eventFilter()).
+    if (m_cfg.copyOnSelect) {
+        const auto children = term->findChildren<QWidget *>();
+        for (QWidget *child : children) {
+            if (child->inherits("Konsole::TerminalDisplay"))
+                child->installEventFilter(this);
+        }
+    }
 
     // Right-click paste (PuTTY-style)
     if (m_cfg.rightClickPaste) {

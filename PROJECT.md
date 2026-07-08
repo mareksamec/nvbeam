@@ -74,12 +74,12 @@
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
 - [ ] **Term + Project improvements**
-    - [ ] Terminal select + copy to PRIMARY + CLIPBOARD 
-        - [ ] Add separate [terminal] config option for this?
-        - [ ] How to handle possible conflict with tools like wl-copy?
-    - [ ] Neobeam window title
-        - [ ] Make Neobeam uppercase
-        - [ ] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
+    - [x] Terminal select + copy to PRIMARY + CLIPBOARD 
+        - [x] Add separate [terminal] config option for this? -> yes, [terminal] copy_on_select (default true)
+        - [x] How to handle possible conflict with tools like wl-copy? -> no conflict; standard last-writer-wins selection semantics, no coordination needed
+    - [x] Neobeam window title
+        - [x] Make Neobeam uppercase
+        - [x] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
     - [ ] Nvim buffer artifacts
         - [ ] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
         - [ ] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
@@ -105,3 +105,17 @@
 - [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
+
+## Upstream issues
+
+### qtermwidget
+- `QTermWidget::copyAvailable(bool)` is never emitted (verified in 2.4.0 sources). The only
+  emitter is the `TerminalDisplay::selectionChanged()` slot, but the connection from
+  `ScreenWindow::selectionChanged` to it is missing in `TerminalDisplay::setScreenWindow()`,
+  so there is no usable selection-change notification in the public API.
+  - Workaround in neobeam: copy-on-select (`[terminal] copy_on_select`) installs an event
+    filter on the internal `Konsole::TerminalDisplay` widget and copies the selection on
+    left-button release (`TerminalPanel::eventFilter`).
+  - If fixed upstream, the event filter can be replaced with a plain connect to
+    `QTermWidget::copyAvailable`.
+- No sixel image protocol support (blocks the "Enable sixel support" item above).

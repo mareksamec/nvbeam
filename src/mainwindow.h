@@ -57,6 +57,11 @@ private:
     /// matching dir, or clear it when dir is not a pinned project.
     void applyProjectSideCommand(const QString &dir);
 
+    /// Reflect nvim's cwd in the window title ("Neobeam - ~/path"). The home
+    /// directory (nvim's default startup cwd, not a project) and an empty cwd
+    /// show the plain "Neobeam" title.
+    void updateTitleCwd(const QString &cwd);
+
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -80,4 +85,5 @@ private:
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll
     QString m_lastMruCwd;
+    QString m_titleCwd;               // cwd currently shown in the window title
 };

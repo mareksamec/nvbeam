@@ -19,6 +19,7 @@ shell = "/usr/bin/zsh"  # shell program (empty = system default)
 # shell_args = []  # arguments passed to shell
 # exec_command = ""  # command to run after shell starts (e.g. "tmux")
 right_click_paste = true  # PuTTY-style right-click paste
+copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines

@@ -50,7 +50,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     : QMainWindow(parent)
     , m_cfg(cfg)
 {
-    setWindowTitle("neobeam");
+    setWindowTitle("Neobeam");
     resize(800, 600);
 
     // A single positional argument that is an existing directory means the
@@ -152,6 +152,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.shellArgs = cfg.terminalShellArgs;
     termCfg.execCommand = cfg.terminalExecCommand;
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
+    termCfg.copyOnSelect = cfg.terminalCopyOnSelect;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
@@ -406,6 +407,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         if (!m_pendingFolder.isEmpty()) {
             m_nvim->request("nvim_set_current_dir", {m_pendingFolder});
             m_terminal->broadcastCwd(m_pendingFolder);
+            updateTitleCwd(m_pendingFolder);
             m_pendingFolder.clear();
         }
         QTimer::singleShot(0, this, [this]() {
@@ -602,6 +604,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
                 [this](const QVariant &result) {
                     m_terminal->setWorkingDirectory(result.toString());
+                    updateTitleCwd(result.toString());
                 });
         });
         cwdTimer->start();
@@ -637,6 +640,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                     const QVariantList r = result.toList();
                     const QString cwd = r.value(0).toString();
                     const QString file = r.value(1).toString();
+                    // Title tracking piggybacks on this poll so `:cd` inside
+                    // nvim is reflected even when follow_cwd is disabled.
+                    updateTitleCwd(cwd);
                     // The home directory is nvim's default cwd, not a project.
                     if (!cwd.isEmpty() && cwd != m_lastMruCwd && cwd != QDir::homePath()
                         && QDir(cwd).exists()) {
@@ -801,6 +807,7 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     // Every terminal, side terminal included, moves to the project directory.
     m_terminal->broadcastCwd(dir);
     applyProjectSideCommand(dir);
+    updateTitleCwd(dir);
 
     if (m_cfg.switcherMaxRecent > 0) {
         m_session->addRecentFolder(dir, m_cfg.switcherMaxRecent);
@@ -809,6 +816,22 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     }
 
     m_grid->setFocus();
+}
+
+void MainWindow::updateTitleCwd(const QString &cwd)
+{
+    if (cwd == m_titleCwd)
+        return;
+    m_titleCwd = cwd;
+    const QString home = QDir::homePath();
+    if (cwd.isEmpty() || cwd == home) {
+        setWindowTitle(QStringLiteral("Neobeam"));
+        return;
+    }
+    QString shown = cwd;
+    if (shown.startsWith(home + QLatin1Char('/')))
+        shown = QLatin1Char('~') + shown.mid(home.size());
+    setWindowTitle(QStringLiteral("Neobeam - ") + shown);
 }
 
 void MainWindow::applyProjectSideCommand(const QString &dir)
