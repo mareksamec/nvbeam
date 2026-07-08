@@ -328,6 +328,11 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
     // The file segment stretches to fill available width.
     layout->setStretchFactor(m_fileLabel, 1);
 
+    // The branch segment mixes two colours (branch name + accent-coloured git
+    // counts), so it renders rich text. Explicit, because Qt's auto-detection
+    // would not recognise a "&nbsp;"-prefixed string as rich text.
+    m_branchLabel->setTextFormat(Qt::RichText);
+
     refresh();
 }
 
@@ -357,14 +362,26 @@ void StatuslineWidget::refresh()
     // Git segment: the gitsigns branch (from statusline.lua, includes the
     // branch glyph) wins when present; the Qt-side provider fills in the
     // branch when gitsigns is absent and always contributes the counts.
-    QString branchText = !m_branch.isEmpty() ? m_branch
-                                             : (m_git.valid ? m_git.branch : QString());
-    if (m_git.valid && !branchText.isEmpty()) {
-        if (m_git.staged)    branchText += QString(" +%1").arg(m_git.staged);
-        if (m_git.modified)  branchText += QString(" ~%1").arg(m_git.modified);
-        if (m_git.untracked) branchText += QString(" ?%1").arg(m_git.untracked);
-        if (m_git.ahead)     branchText += QString(" ↑%1").arg(m_git.ahead);
-        if (m_git.behind)    branchText += QString(" ↓%1").arg(m_git.behind);
+    // Rendered as rich text so the counts can use the accent colour while
+    // the branch name keeps the palette foreground; &nbsp; because rich
+    // text trims plain leading/trailing spaces.
+    const QString branchName = !m_branch.isEmpty()
+        ? m_branch : (m_git.valid ? m_git.branch : QString());
+    QString counts;
+    if (m_git.valid && !branchName.isEmpty()) {
+        if (m_git.staged)    counts += QString(" +%1").arg(m_git.staged);
+        if (m_git.modified)  counts += QString(" ~%1").arg(m_git.modified);
+        if (m_git.untracked) counts += QString(" ?%1").arg(m_git.untracked);
+        if (m_git.ahead)     counts += QString(" ↑%1").arg(m_git.ahead);
+        if (m_git.behind)    counts += QString(" ↓%1").arg(m_git.behind);
+    }
+    QString branchText;
+    if (!branchName.isEmpty()) {
+        branchText = QStringLiteral("&nbsp;") + branchName.toHtmlEscaped();
+        if (!counts.isEmpty())
+            branchText += QStringLiteral("<span style=\"color:%1;\">%2</span>")
+                              .arg(m_accent, counts.toHtmlEscaped());
+        branchText += QStringLiteral("&nbsp;");
     }
 
     // Configure each slot: text, colours, visibility. Order must match the
@@ -372,7 +389,7 @@ void StatuslineWidget::refresh()
     struct Slot { QLabel *label; QString text; QColor fg; QColor bg; bool bold; bool visible; };
     const Slot cfg[] = {
         {m_modeLabel,   " " + m_mode + " ",                                    dark,              modeBg, true,  true},
-        {m_branchLabel, " " + branchText + " ",                                fg,                mid,    false, !branchText.isEmpty()},
+        {m_branchLabel, branchText,                                            fg,                mid,    false, !branchText.isEmpty()},
         {m_fileLabel,   " " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ", fg,                dark,   false, true},
         {m_diagLabel,   " " + m_diag + " ",                                    QColor("#f7768e"), mid,    false, !m_diag.isEmpty()},
         {m_encLabel,    " " + m_encoding + " ",                                dim,               mid,    false, !m_encoding.isEmpty()},
