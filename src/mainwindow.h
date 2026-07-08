@@ -13,6 +13,7 @@ class StatuslineWidget;
 class TerminalPanel;
 class MinimapWidget;
 class ImageRenderer;
+class GitStatus;
 class Session;
 class QSplitter;
 class QFrame;
@@ -57,6 +58,11 @@ private:
     /// matching dir, or clear it when dir is not a pinned project.
     void applyProjectSideCommand(const QString &dir);
 
+    /// Reflect nvim's cwd in the window title ("Neobeam - ~/path"). The home
+    /// directory (nvim's default startup cwd, not a project) and an empty cwd
+    /// show the plain "Neobeam" title.
+    void updateTitleCwd(const QString &cwd);
+
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -67,6 +73,7 @@ private:
     TerminalPanel *m_terminal = nullptr;
     TerminalPanel *m_sideTerminal = nullptr;
     MinimapWidget *m_minimap = nullptr;
+    GitStatus *m_gitStatus = nullptr; // push-model git provider for the statusline
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
@@ -80,4 +87,5 @@ private:
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll
     QString m_lastMruCwd;
+    QString m_titleCwd;               // cwd currently shown in the window title
 };

@@ -20,6 +20,7 @@
 # shell_args = []  # arguments passed to shell
 # exec_command = ""  # command to run after shell starts (e.g. "tmux")
 # right_click_paste = false  # PuTTY-style right-click paste
+# copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
@@ -35,6 +36,7 @@
 # ext_messages = true
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
+# git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # "powerline", "pipe", "none"
 

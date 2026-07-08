@@ -28,6 +28,7 @@ struct TerminalConfig {
     QStringList shellArgs;
     QString execCommand;      // run after shell starts
     bool rightClickPaste = false;  // PuTTY-style right-click paste
+    bool copyOnSelect = true;      // copy selection to PRIMARY + CLIPBOARD as it is made
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
@@ -104,6 +105,10 @@ signals:
 
 protected:
     void showEvent(QShowEvent *event) override;
+    /// Watches the internal terminal display widgets for the copy-on-select
+    /// CLIPBOARD copy (qtermwidget only handles PRIMARY itself; see
+    /// createTermWidget()).
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
 public slots:
     void addTerminal();

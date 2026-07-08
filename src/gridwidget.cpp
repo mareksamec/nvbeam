@@ -255,6 +255,7 @@ void GridWidget::handleMsgSetPos(const QVariantList &args)
         m_grids[gridId].y = row;
         m_grids[gridId].x = 0;
         m_grids[gridId].hidden = false;
+        m_grids[gridId].isMsg = true;
     }
 }
 
@@ -371,22 +372,39 @@ void GridWidget::paintEvent(QPaintEvent *event)
     painter.fillRect(rect(), m_defaultBg);
     painter.setFont(m_font);
 
-    // Collect visible grids sorted by z-order (non-float first, then float by zindex)
+    // Collect visible grids sorted by compositor layer, mirroring nvim's own
+    // compositor: the global grid 1 at the bottom, tiled window grids above
+    // it, the message grid above those, floats on top (by zindex). Ties fall
+    // back to the grid id so the order is deterministic.
     QVector<int> gridOrder;
     for (auto it = m_grids.begin(); it != m_grids.end(); ++it) {
         if (!it->hidden) gridOrder.append(it.key());
     }
-    std::sort(gridOrder.begin(), gridOrder.end(), [this](int a, int b) {
+    auto layerOf = [this](int id) {
+        const Grid &g = m_grids[id];
+        if (g.isFloat) return 3;
+        if (g.isMsg) return 2;
+        return id == 1 ? 0 : 1;
+    };
+    std::sort(gridOrder.begin(), gridOrder.end(), [this, &layerOf](int a, int b) {
+        const int la = layerOf(a), lb = layerOf(b);
+        if (la != lb) return la < lb;
         const Grid &ga = m_grids[a];
         const Grid &gb = m_grids[b];
-        if (ga.isFloat != gb.isFloat) return !ga.isFloat; // non-float first
-        return ga.zindex < gb.zindex;
+        if (ga.zindex != gb.zindex) return ga.zindex < gb.zindex;
+        return a < b;
     });
 
     for (int gridId : gridOrder) {
         const Grid &grid = m_grids[gridId];
         int ox = grid.x * m_cellWidth;
         int oy = grid.y * m_cellHeight;
+
+        // Grids are opaque: grid 1 keeps stale content underneath windows by
+        // design (old separators, closed splits), so every grid must cover
+        // its whole rectangle including cells with the default background.
+        painter.fillRect(ox, oy, grid.cols * m_cellWidth, grid.rows * m_cellHeight,
+                         m_defaultBg);
 
         for (int row = 0; row < grid.rows; row++) {
             for (int col = 0; col < grid.cols; col++) {

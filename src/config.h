@@ -41,6 +41,7 @@ struct Config {
     QStringList terminalShellArgs;        // args passed to shell
     QString terminalExecCommand;          // command executed after shell starts (e.g. "tmux")
     bool terminalRightClickPaste = false; // PuTTY-style right-click paste
+    bool terminalCopyOnSelect = true;     // copy selection to PRIMARY + CLIPBOARD as it is made
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
@@ -58,6 +59,7 @@ struct Config {
     bool extMessages = true;
     bool bufferline = true;           // show open buffers instead of tabpages
     bool extStatusline = true;        // native statusline widget
+    bool uiGitStatus = true;          // git branch/status segment in the statusline (push-updated)
     QString accentColor = "#50fa7b";  // greenish accent for native elements
     QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
     QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane

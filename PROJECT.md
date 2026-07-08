@@ -57,7 +57,7 @@
 - [x] Instead add (arrow down button) that sends current nvim cwd to all open terminals.
 - [x] When a folder is open with neobeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
 - [x] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
-- [-] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
+- [x] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
     - [x] Add config option for default command to run with side terminal e.g. claude, nanocoder
     - [x] Side terminal is not affected by the "Send cwd to all terminals button"
 - [x] Add independent font configuration for the side terminal.
@@ -70,9 +70,22 @@
     - [x] You can also projects in neobeam.toml that will be on top of the switcher list.
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
-- [x] Config
+- [-] Config
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
+- [ ] **Term + Project improvements**
+    - [x] Terminal select + copy to PRIMARY + CLIPBOARD 
+        - [x] Add separate [terminal] config option for this? -> yes, [terminal] copy_on_select (default true)
+        - [x] How to handle possible conflict with tools like wl-copy? -> no conflict; standard last-writer-wins selection semantics, no coordination needed
+    - [x] Neobeam window title
+        - [x] Make Neobeam uppercase
+        - [x] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
+    - [-] Nvim buffer artifacts
+        - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
+        - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
+        - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) (fix applied - message grid now composited above window grids; awaiting confirmation)
+    - [ ] Neobeam UI statusline:
+        - [ ] Add git status (optimize performance avoid frequent scanning, or use push model)
 
 ## Phase 8: Text selection mode
 - [ ] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
@@ -92,3 +105,17 @@
 - [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
+
+## Upstream issues
+
+### qtermwidget
+- `QTermWidget::copyAvailable(bool)` is never emitted (verified in 2.4.0 sources). The only
+  emitter is the `TerminalDisplay::selectionChanged()` slot, but the connection from
+  `ScreenWindow::selectionChanged` to it is missing in `TerminalDisplay::setScreenWindow()`,
+  so there is no usable selection-change notification in the public API.
+  - Workaround in neobeam: copy-on-select (`[terminal] copy_on_select`) installs an event
+    filter on the internal `Konsole::TerminalDisplay` widget and copies the selection on
+    left-button release (`TerminalPanel::eventFilter`).
+  - If fixed upstream, the event filter can be replaced with a plain connect to
+    `QTermWidget::copyAvailable`.
+- No sixel image protocol support (blocks the "Enable sixel support" item above).

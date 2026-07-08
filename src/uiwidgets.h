@@ -9,6 +9,7 @@
 #include <QVariant>
 #include <QPainter>
 #include <QPaintEvent>
+#include "gitstatus.h"
 
 /// Native popup menu widget
 class PopupmenuWidget : public QWidget
@@ -74,6 +75,11 @@ public:
     /// Update the current mode display
     void setMode(const QString &mode);
 
+public slots:
+    /// Update the git segment (branch + staged/modified/untracked and
+    /// ahead/behind counts) from the push-model GitStatus provider.
+    void updateGit(const GitStatusInfo &info);
+
 private:
     // Per-segment selectable labels (concrete types live in the .cpp).
     QLabel *m_modeLabel = nullptr;
@@ -89,7 +95,8 @@ private:
     QString m_accent;
     QString m_mode = "NORMAL";
     QString m_file;
-    QString m_branch;
+    QString m_branch;   // from statusline.lua (gitsigns, includes the branch glyph)
+    GitStatusInfo m_git; // from the Qt-side GitStatus provider
     QString m_diag;
     QString m_pos;
     QString m_encoding;

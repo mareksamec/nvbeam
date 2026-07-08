@@ -163,6 +163,8 @@ void NvimProcess::parseMessages(const QByteArray &data)
             QString method = msgList[1].toString();
             if (method == "redraw") {
                 emit redraw(msgList[2].toList());
+            } else {
+                emit notification(method, msgList[2].toList());
             }
         }
     }

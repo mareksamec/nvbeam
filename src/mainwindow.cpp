@@ -5,6 +5,7 @@
 #include "terminalpanel.h"
 #include "minimap.h"
 #include "imagerenderer.h"
+#include "gitstatus.h"
 #include "config.h"
 #include "session.h"
 #include <QApplication>
@@ -50,7 +51,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     : QMainWindow(parent)
     , m_cfg(cfg)
 {
-    setWindowTitle("neobeam");
+    setWindowTitle("Neobeam");
     resize(800, 600);
 
     // A single positional argument that is an existing directory means the
@@ -152,6 +153,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.shellArgs = cfg.terminalShellArgs;
     termCfg.execCommand = cfg.terminalExecCommand;
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
+    termCfg.copyOnSelect = cfg.terminalCopyOnSelect;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
@@ -406,6 +408,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         if (!m_pendingFolder.isEmpty()) {
             m_nvim->request("nvim_set_current_dir", {m_pendingFolder});
             m_terminal->broadcastCwd(m_pendingFolder);
+            updateTitleCwd(m_pendingFolder);
             m_pendingFolder.clear();
         }
         QTimer::singleShot(0, this, [this]() {
@@ -425,6 +428,19 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             if (m_showSwitcherOnReady) {
                 m_showSwitcherOnReady = false;
                 openSwitcher();
+            }
+
+            // Register the git-event autocmd (lua/gitstatus.lua) with our RPC
+            // channel id so nvim can push notifications back. Re-runs on each
+            // keep_running restart; the augroup is cleared on re-registration.
+            if (m_gitStatus) {
+                m_nvim->request("nvim_get_api_info", {},
+                                [this](const QVariant &result) {
+                    const int chan = result.toList().value(0).toInt();
+                    const QString lua = loadLua("gitstatus.lua");
+                    if (chan > 0 && !lua.isEmpty())
+                        m_nvim->request("nvim_exec_lua", {lua, QVariantList{chan}});
+                });
             }
         });
     });
@@ -540,6 +556,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         });
     }
 
+    // Git segment of the statusline: push-model provider, refreshed only on
+    // cwd changes (via updateTitleCwd), nvim write/DirChanged notifications
+    // (lua/gitstatus.lua, registered in the ready handler) and .git changes
+    // seen by GitStatus's own file watcher. No polling.
+    if (cfg.extStatusline && cfg.uiGitStatus) {
+        m_gitStatus = new GitStatus(this);
+        connect(m_gitStatus, &GitStatus::changed,
+                m_statusline, &StatuslineWidget::updateGit);
+        connect(m_nvim, &NvimProcess::notification, this,
+                [this](const QString &method, const QVariantList &) {
+            if (method == QLatin1String("neobeam_git_event"))
+                m_gitStatus->refresh();
+        });
+    }
+
     // Minimap: poll buffer content and highlights (throttled).
     // Passes last known changedtick to Lua so it can skip the treesitter scan when only scroll changed.
     {
@@ -602,6 +633,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
                 [this](const QVariant &result) {
                     m_terminal->setWorkingDirectory(result.toString());
+                    updateTitleCwd(result.toString());
                 });
         });
         cwdTimer->start();
@@ -637,6 +669,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                     const QVariantList r = result.toList();
                     const QString cwd = r.value(0).toString();
                     const QString file = r.value(1).toString();
+                    // Title tracking piggybacks on this poll so `:cd` inside
+                    // nvim is reflected even when follow_cwd is disabled.
+                    updateTitleCwd(cwd);
                     // The home directory is nvim's default cwd, not a project.
                     if (!cwd.isEmpty() && cwd != m_lastMruCwd && cwd != QDir::homePath()
                         && QDir(cwd).exists()) {
@@ -801,6 +836,7 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     // Every terminal, side terminal included, moves to the project directory.
     m_terminal->broadcastCwd(dir);
     applyProjectSideCommand(dir);
+    updateTitleCwd(dir);
 
     if (m_cfg.switcherMaxRecent > 0) {
         m_session->addRecentFolder(dir, m_cfg.switcherMaxRecent);
@@ -809,6 +845,25 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     }
 
     m_grid->setFocus();
+}
+
+void MainWindow::updateTitleCwd(const QString &cwd)
+{
+    if (cwd == m_titleCwd)
+        return;
+    m_titleCwd = cwd;
+    // The git segment follows the same cwd-change choke point as the title.
+    if (m_gitStatus)
+        m_gitStatus->setWorkingDirectory(cwd);
+    const QString home = QDir::homePath();
+    if (cwd.isEmpty() || cwd == home) {
+        setWindowTitle(QStringLiteral("Neobeam"));
+        return;
+    }
+    QString shown = cwd;
+    if (shown.startsWith(home + QLatin1Char('/')))
+        shown = QLatin1Char('~') + shown.mid(home.size());
+    setWindowTitle(QStringLiteral("Neobeam - ") + shown);
 }
 
 void MainWindow::applyProjectSideCommand(const QString &dir)

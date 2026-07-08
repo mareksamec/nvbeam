@@ -143,11 +143,11 @@ const KnownSection kKnownSections[] = {
     {"font", {"family", "size", "hinting", "antialiasing"}},
     {"terminal", {"follow_cwd", "start_expanded", "height", "font", "font_size",
                   "color_scheme", "foreground", "background", "shell", "shell_args",
-                  "exec_command", "right_click_paste", "antialiasing", "hinting",
-                  "scrollback"}},
+                  "exec_command", "right_click_paste", "copy_on_select",
+                  "antialiasing", "hinting", "scrollback"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
-            "accent_color", "statusline_divider", "focus_border_color"}},
+            "git_status", "accent_color", "statusline_divider", "focus_border_color"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
     {"switcher", {"keep_running", "max_recent"}},
@@ -311,6 +311,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# shell_args = []  # arguments passed to shell\n"
                 "# exec_command = \"\"  # command to run after shell starts (e.g. \"tmux\")\n"
                 "# right_click_paste = false  # PuTTY-style right-click paste\n"
+                "# copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made\n"
                 "# antialiasing = true  # font antialiasing in terminal\n"
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "# scrollback = 1000  # scrollback buffer size in lines\n"
@@ -326,6 +327,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# ext_messages = true\n"
                 "# bufferline = true  # show open buffers instead of tabpages\n"
                 "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
+                "# git_status = true  # git branch + status counts in the statusline (push-updated, no polling)\n"
                 "# accent_color = \"#50fa7b\"\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
@@ -384,6 +386,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readStringList(*term, "terminal", "shell_args", cfg.terminalShellArgs, issues);
             readString(*term, "terminal", "exec_command", cfg.terminalExecCommand, issues);
             readBool(*term, "terminal", "right_click_paste", cfg.terminalRightClickPaste, issues);
+            readBool(*term, "terminal", "copy_on_select", cfg.terminalCopyOnSelect, issues);
             readBool(*term, "terminal", "antialiasing", cfg.terminalAntialiasing, issues);
             readHinting(*term, "terminal", "hinting", cfg.terminalHinting, issues);
             if (readInt(*term, "terminal", "scrollback", cfg.terminalScrollback, issues)) {
@@ -407,6 +410,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readColor(*ui, "ui", "accent_color", cfg.accentColor, issues);
             readBool(*ui, "ui", "bufferline", cfg.bufferline, issues);
             readBool(*ui, "ui", "statusline", cfg.extStatusline, issues);
+            readBool(*ui, "ui", "git_status", cfg.uiGitStatus, issues);
             QString divider;
             if (readString(*ui, "ui", "statusline_divider", divider, issues)) {
                 if (divider == "powerline" || divider == "pipe" || divider == "none")
