@@ -339,6 +339,23 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     applyHeight();
 }
 
+void MessageWidget::focusLog()
+{
+    if (!m_expanded)
+        m_toggle->setChecked(true); // toggled() handler expands the log
+    m_log->setFocus();
+}
+
+bool MessageWidget::logHasFocus() const
+{
+    return m_log->hasFocus();
+}
+
+void MessageWidget::collapse()
+{
+    m_toggle->setChecked(false); // toggled() handler collapses the log
+}
+
 void MessageWidget::applyHeight()
 {
     const int lines = m_expanded ? 12 : 2;

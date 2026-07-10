@@ -83,6 +83,13 @@ class MessageWidget : public QWidget
     Q_OBJECT
 public:
     explicit MessageWidget(const QString &accent, QWidget *parent = nullptr);
+    /// Move keyboard focus into the log, expanding it first so arrow/page
+    /// keys have something to scroll (Ctrl+Shift+M).
+    void focusLog();
+    bool logHasFocus() const;
+    /// Collapse back to the two-line view (Ctrl+Shift+M out; a plain click
+    /// away leaves the pane expanded).
+    void collapse();
     void showMsg(const QString &kind, const QVariantList &content, bool replaceLast);
     void clear();
     void showMode(const QVariantList &content);

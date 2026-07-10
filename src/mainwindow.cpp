@@ -265,6 +265,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_grid->setSelectionModeActive(!m_grid->selectionModeActive());
     });
 
+    // Ctrl+Shift+M toggles keyboard focus between the message log and the
+    // nvim grid (Ctrl+Tab from the log also returns to the grid).
+    auto *msgFocusShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), this);
+    connect(msgFocusShortcut, &QShortcut::activated, this, [this]() {
+        if (!m_messages->isVisible()) return; // ext_messages disabled
+        if (m_messages->logHasFocus()) {
+            // Shortcut-out collapses; clicking away elsewhere leaves the
+            // pane expanded (see the header toggle).
+            m_messages->collapse();
+            m_grid->setFocus();
+        } else {
+            m_messages->focusLog();
+        }
+    });
+
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
     // the panel whose button was clicked.
     auto connectCwdBroadcast = [this](TerminalPanel *panel) {
@@ -823,7 +838,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if ((ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab)
             && (ke->modifiers() & Qt::ControlModifier)) {
             // Key_Backtab is what Ctrl+Shift+Tab produces.
-            cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
+            // From the message log, Ctrl+Tab returns straight to the grid
+            // instead of entering the grid/terminal cycle.
+            if (m_messages->logHasFocus())
+                m_grid->setFocus();
+            else
+                cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
         // Ctrl+- / Ctrl+= change the font size of the focused terminal panel.
