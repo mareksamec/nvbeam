@@ -3,9 +3,23 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v0.2.0-rc1)'
+        required: true
+        type: string
+      prerelease:
+        description: 'Mark the release as a pre-release'
+        type: boolean
+        default: true
 
 permissions:
   contents: write
+
+env:
+  # Tag-push runs use the pushed tag; manual runs use the tag input.
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   build-deb:
@@ -73,7 +87,8 @@ jobs:
           # from the checkout: set pkgver from the tag and pack the tree into the
           # local tarball the PKGBUILD expects (prefix must match ${pkgname}-${pkgver}).
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
-          pkgver="${GITHUB_REF_NAME#v}"   # "v0.1.1" -> "0.1.1"
+          pkgver="${RELEASE_TAG#v}"       # "v0.1.1" -> "0.1.1"
+          pkgver="${pkgver//-/_}"         # makepkg forbids hyphens in pkgver ("0.2.0-rc1" -> "0.2.0_rc1")
           sed -i "s/^pkgver=.*/pkgver=${pkgver}/" packaging/arch/PKGBUILD
           git archive --format=tar.gz \
             --prefix="neobeam-${pkgver}/" \
@@ -108,6 +123,12 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          # On manual runs the tag doesn't exist yet — create it at the
+          # dispatched commit. On tag pushes the existing tag is reused
+          # and target_commitish is ignored.
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ inputs.prerelease || false }}
           generate_release_notes: true
           files: |
             *.deb
