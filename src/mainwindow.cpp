@@ -136,8 +136,18 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     editorRow->addWidget(m_minimap);
     editorLayout->addLayout(editorRow, 1);
 
+    // ext_messages implies ext_cmdline: nvim externalizes the command line
+    // too, so a native bar has to render it. Sits between the grid and the
+    // message log, hidden unless a cmdline is active.
+    m_cmdline = new CmdlineWidget(cfg.accentColor, editorArea);
+    if (cfg.extMessages)
+        editorLayout->addWidget(m_cmdline);
+
     m_messages = new MessageWidget(cfg.accentColor, editorArea);
-    editorLayout->addWidget(m_messages);
+    if (cfg.extMessages)
+        editorLayout->addWidget(m_messages);
+    else
+        m_messages->hide(); // not in the layout; would otherwise paint at (0,0)
 
     m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
     if (cfg.extStatusline)
@@ -462,6 +472,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             opts["ext_multigrid"] = true;
             if (m_cfg.extPopupmenu) opts["ext_popupmenu"] = true;
             if (m_cfg.extTabline) opts["ext_tabline"] = true;
+            if (m_cfg.extMessages) opts["ext_messages"] = true;
             m_nvim->request("nvim_ui_attach", {cols, rows, opts});
 
             if (m_showSwitcherOnReady) {
@@ -570,6 +581,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_win_set_cursor", {0, QVariantList{line + 1, 0}});
     });
 
+    connect(m_grid, &GridWidget::cmdlineShow, m_cmdline, &CmdlineWidget::showCmdline);
+    connect(m_grid, &GridWidget::cmdlinePos, m_cmdline, &CmdlineWidget::setPos);
+    connect(m_grid, &GridWidget::cmdlineHide, m_cmdline, &CmdlineWidget::hideCmdline);
+    connect(m_grid, &GridWidget::cmdlineSpecialChar, m_cmdline, &CmdlineWidget::setSpecialChar);
     connect(m_grid, &GridWidget::msgShow, m_messages, &MessageWidget::showMsg);
     connect(m_grid, &GridWidget::msgClear, m_messages, &MessageWidget::clear);
     connect(m_grid, &GridWidget::msgShowmode, m_messages, &MessageWidget::showMode);

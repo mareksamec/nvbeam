@@ -1,10 +1,15 @@
 #include "uiwidgets.h"
+#include "logging.h"
 #include <QHBoxLayout>
 #include <QFontMetrics>
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QGuiApplication>
 #include <QClipboard>
+#include <QPlainTextEdit>
+#include <QPushButton>
+#include <QScrollBar>
+#include <QTime>
 
 // --- PopupmenuWidget ---
 
@@ -32,7 +37,6 @@ PopupmenuWidget::PopupmenuWidget(const QString &accent, QWidget *parent)
 void PopupmenuWidget::show(const QVariantList &items, int selected, int row, int col,
                             int grid, int cellWidth, int cellHeight)
 {
-    Q_UNUSED(grid)
     m_list->clear();
     for (const auto &item : items) {
         QVariantList entry = item.toList();
@@ -49,7 +53,15 @@ void PopupmenuWidget::show(const QVariantList &items, int selected, int row, int
     int h = maxVisible * itemH + 6;
     int w = qMin(450, qMax(220, m_list->sizeHintForColumn(0) + 30));
 
-    move(col * cellWidth, (row + 1) * cellHeight);
+    if (grid == -1) {
+        // Wildmenu anchored to the external cmdline (ext_cmdline): col is a
+        // byte position in the cmdline. Place the popup above the bottom edge
+        // of the grid area, roughly under the completed word.
+        const int parentH = parentWidget() ? parentWidget()->height() : 0;
+        move(qMax(0, col) * cellWidth, qMax(0, parentH - h));
+    } else {
+        move(col * cellWidth, (row + 1) * cellHeight);
+    }
     setFixedSize(w, h);
     select(selected);
     setVisible(true);
@@ -145,40 +157,253 @@ void TablineWidget::updateBuffers(const QVariantList &buffers, int currentBuf)
     blockSignals(false);
 }
 
-// --- MessageWidget ---
+// --- CmdlineWidget ---
 
-MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
+CmdlineWidget::CmdlineWidget(const QString &accent, QWidget *parent)
     : QWidget(parent)
+    , m_accent(accent)
 {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 4, 12, 4);
     m_label = new QLabel(this);
+    m_label->setTextFormat(Qt::RichText);
     m_label->setStyleSheet("color: #c0caf5; font-family: monospace; font-size: 10pt;");
-    m_modeLabel = new QLabel(this);
-    m_modeLabel->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 10pt;").arg(accent));
     layout->addWidget(m_label, 1);
-    layout->addWidget(m_modeLabel);
+    setAttribute(Qt::WA_StyledBackground);
     setStyleSheet("background-color: #1a1b26;");
     setFixedHeight(26);
     setVisible(false);
 }
 
+void CmdlineWidget::showCmdline(const QVariantList &content, int pos, const QString &firstc,
+                                const QString &prompt, int indent, int level)
+{
+    Q_UNUSED(level)
+    m_content.clear();
+    for (const auto &chunk : content) {
+        QVariantList c = chunk.toList();
+        if (c.size() >= 2) m_content += c[1].toString();
+    }
+    m_firstc = firstc;
+    m_prompt = prompt;
+    m_indent = indent;
+    m_bytePos = pos;
+    m_special.clear();
+    qCDebug(nbMessages).nospace() << "cmdline_show firstc=" << firstc
+                                  << " pos=" << pos << " text=" << m_content;
+    render();
+    setVisible(true);
+}
+
+void CmdlineWidget::setPos(int pos, int level)
+{
+    Q_UNUSED(level)
+    m_bytePos = pos;
+    m_special.clear();
+    render();
+}
+
+void CmdlineWidget::hideCmdline()
+{
+    m_special.clear();
+    setVisible(false);
+}
+
+void CmdlineWidget::setSpecialChar(const QString &c, bool shift)
+{
+    Q_UNUSED(shift)
+    // Pending-input placeholder (e.g. '"' after Ctrl-R): shown at the cursor
+    // until the next cmdline_show/pos replaces it.
+    m_special = c;
+    render();
+}
+
+void CmdlineWidget::render()
+{
+    // The cursor position is a byte offset into the UTF-8 content; split
+    // there, then re-decode so multibyte characters stay intact.
+    const QByteArray utf8 = m_content.toUtf8();
+    const int pos = qBound(0, m_bytePos, int(utf8.size()));
+    const QString left = QString::fromUtf8(utf8.constData(), pos);
+    QString rest = QString::fromUtf8(utf8.constData() + pos, utf8.size() - pos);
+
+    // Block cursor: highlight the pending special char if any, else the
+    // character under the cursor, else a trailing space.
+    QString cursorCh = m_special;
+    if (cursorCh.isEmpty()) {
+        if (!rest.isEmpty()) {
+            cursorCh = rest.left(1);
+            rest.remove(0, 1);
+        } else {
+            cursorCh = QStringLiteral(" ");
+        }
+    }
+
+    const auto esc = [](const QString &s) {
+        QString e = s.toHtmlEscaped();
+        e.replace(QStringLiteral(" "), QStringLiteral("&nbsp;"));
+        return e;
+    };
+    QString html;
+    html += QStringLiteral("<span style=\"color:%1;font-weight:bold;\">%2</span>")
+                .arg(m_accent, esc(m_firstc + m_prompt));
+    html += esc(QString(m_indent, QChar(' ')));
+    html += esc(left);
+    html += QStringLiteral("<span style=\"background-color:%1;color:#1a1b26;\">%2</span>")
+                .arg(m_accent, esc(cursorCh));
+    html += esc(rest);
+    m_label->setText(html);
+}
+
+// --- MessageWidget ---
+
+namespace {
+
+/// Read-only log view; selecting text auto-copies it on release, mirroring
+/// the statusline's SelectableLabel and the grid's behaviour.
+class SelectableLogEdit : public QPlainTextEdit
+{
+public:
+    explicit SelectableLogEdit(QWidget *parent = nullptr)
+        : QPlainTextEdit(parent)
+    {
+        setReadOnly(true);
+        setFocusPolicy(Qt::ClickFocus); // selectable, but Tab/typing stays with the grid
+        setTextInteractionFlags(Qt::TextSelectableByMouse);
+        setLineWrapMode(QPlainTextEdit::NoWrap);
+        setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        setFrameShape(QFrame::NoFrame);
+    }
+
+protected:
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        QPlainTextEdit::mouseReleaseEvent(event);
+        // QTextCursor encodes block breaks as U+2029; normalize for the clipboard.
+        QString sel = textCursor().selectedText();
+        sel.replace(QChar(0x2029), QChar('\n'));
+        if (!sel.isEmpty())
+            QGuiApplication::clipboard()->setText(sel);
+    }
+};
+
+} // namespace
+
+MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
+    : QWidget(parent)
+{
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    // Header: expand/collapse toggle on the left, mode indicator on the right.
+    auto *header = new QWidget(this);
+    auto *headerLayout = new QHBoxLayout(header);
+    headerLayout->setContentsMargins(6, 2, 12, 2);
+    headerLayout->setSpacing(0);
+
+    m_toggle = new QPushButton(QStringLiteral("▸ Messages"), header);
+    m_toggle->setCheckable(true);
+    m_toggle->setFlat(true);
+    m_toggle->setCursor(Qt::PointingHandCursor);
+    m_toggle->setFocusPolicy(Qt::NoFocus);
+    m_toggle->setStyleSheet(
+        "QPushButton { color: #888; background: transparent; border: none; "
+        "font-family: monospace; font-size: 9pt; padding: 0 4px; text-align: left; }"
+        "QPushButton:hover { color: #c0caf5; }");
+    headerLayout->addWidget(m_toggle);
+    headerLayout->addStretch(1);
+
+    m_modeLabel = new QLabel(header);
+    m_modeLabel->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 10pt;").arg(accent));
+    headerLayout->addWidget(m_modeLabel);
+    layout->addWidget(header);
+
+    m_log = new SelectableLogEdit(this);
+    QFont logFont("monospace", 10);
+    m_log->setFont(logFont);
+    // Cap history so a chatty plugin cannot grow the document unbounded.
+    m_log->setMaximumBlockCount(1000);
+    m_log->setStyleSheet(QString(
+        "QPlainTextEdit { background-color: #1a1b26; color: #c0caf5; "
+        "selection-background-color: %1; selection-color: #1a1b26; }").arg(accent));
+    layout->addWidget(m_log);
+
+    setStyleSheet("background-color: #1a1b26;");
+
+    connect(m_toggle, &QPushButton::toggled, this, [this](bool on) {
+        m_expanded = on;
+        m_toggle->setText(on ? QStringLiteral("▾ Messages") : QStringLiteral("▸ Messages"));
+        applyHeight();
+    });
+    applyHeight();
+}
+
+void MessageWidget::applyHeight()
+{
+    const int lines = m_expanded ? 12 : 2;
+    const QFontMetrics fm(m_log->font());
+    const int chrome = int(m_log->document()->documentMargin()) * 2;
+    m_log->setFixedHeight(fm.lineSpacing() * lines + chrome);
+    m_log->setVerticalScrollBarPolicy(m_expanded ? Qt::ScrollBarAsNeeded
+                                                 : Qt::ScrollBarAlwaysOff);
+    // Keep the newest entries in view after the viewport change.
+    QScrollBar *sb = m_log->verticalScrollBar();
+    sb->setValue(sb->maximum());
+}
+
 void MessageWidget::showMsg(const QString &kind, const QVariantList &content, bool replaceLast)
 {
-    Q_UNUSED(kind) Q_UNUSED(replaceLast)
+    // Fires on every n/N/incsearch step; pure noise in a persistent log.
+    if (kind == QLatin1String("search_count")) return;
+
     QString text;
     for (const auto &chunk : content) {
         QVariantList c = chunk.toList();
         if (c.size() >= 2) text += c[1].toString();
     }
-    m_label->setText(text);
-    setVisible(!text.isEmpty());
+    text.replace('\r', '\n'); // some vimscript messages separate lines with \r
+    if (text.trimmed().isEmpty()) return;
+
+    qCDebug(nbMessages).nospace() << "msg_show kind=" << kind
+                                  << " replace_last=" << replaceLast << " text=" << text;
+
+    static const QSet<QString> errorKinds = {
+        QStringLiteral("emsg"), QStringLiteral("echoerr"), QStringLiteral("lua_error"),
+        QStringLiteral("rpc_error"), QStringLiteral("shell_err")};
+    QColor color("#c0caf5");
+    if (errorKinds.contains(kind)) color = QColor("#f7768e");
+    else if (kind == QLatin1String("wmsg")) color = QColor("#e0af68");
+
+    QScrollBar *sb = m_log->verticalScrollBar();
+    const bool atBottom = sb->value() >= sb->maximum();
+
+    QTextCursor cur(m_log->document());
+    cur.movePosition(QTextCursor::End);
+    if (replaceLast && m_lastMsgPos >= 0 && m_lastMsgPos <= cur.position()) {
+        cur.setPosition(m_lastMsgPos, QTextCursor::KeepAnchor);
+        cur.removeSelectedText();
+    }
+    m_lastMsgPos = cur.position();
+    if (cur.position() > 0) cur.insertBlock();
+
+    QTextCharFormat stampFmt;
+    stampFmt.setForeground(QColor("#565f89"));
+    cur.insertText(QStringLiteral("[%1] ").arg(QTime::currentTime().toString("HH:mm:ss")),
+                   stampFmt);
+    QTextCharFormat msgFmt;
+    msgFmt.setForeground(color);
+    cur.insertText(text, msgFmt);
+
+    // Follow the tail unless the user scrolled up to read history.
+    if (atBottom) sb->setValue(sb->maximum());
 }
 
 void MessageWidget::clear()
 {
-    m_label->clear();
-    setVisible(false);
+    // msg_clear dismisses the active message in nvim's own UI; the log keeps
+    // history, so only drop the replace_last anchor.
+    m_lastMsgPos = -1;
 }
 
 void MessageWidget::showMode(const QVariantList &content)
@@ -189,7 +414,6 @@ void MessageWidget::showMode(const QVariantList &content)
         if (c.size() >= 2) text += c[1].toString();
     }
     m_modeLabel->setText(text);
-    if (!text.isEmpty()) setVisible(true);
 }
 
 void MessageWidget::showRuler(const QVariantList &content)

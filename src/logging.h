@@ -9,3 +9,4 @@
 // journald instead — add QT_FORCE_STDERR_LOGGING=1 to keep them on stderr.
 Q_DECLARE_LOGGING_CATEGORY(nbMinimap)  // neobeam.minimap — view polls + content scans
 Q_DECLARE_LOGGING_CATEGORY(nbRedraw)   // neobeam.redraw  — per-event redraw stream (very chatty)
+Q_DECLARE_LOGGING_CATEGORY(nbMessages) // neobeam.messages — ext_messages msg_show events reaching the log

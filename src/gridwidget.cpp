@@ -101,6 +101,10 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
     else if (name == "popupmenu_select") handlePopupmenuSelect(args);
     else if (name == "popupmenu_hide") handlePopupmenuHide(args);
     else if (name == "tabline_update") handleTablineUpdate(args);
+    else if (name == "cmdline_show") handleCmdlineShow(args);
+    else if (name == "cmdline_pos") handleCmdlinePos(args);
+    else if (name == "cmdline_hide") emit cmdlineHide();
+    else if (name == "cmdline_special_char") handleCmdlineSpecialChar(args);
     else if (name == "msg_show") handleMsgShow(args);
     else if (name == "msg_clear") handleMsgClear(args);
     else if (name == "msg_showmode") handleMsgShowmode(args);
@@ -378,6 +382,26 @@ void GridWidget::handleTablineUpdate(const QVariantList &args)
     if (args.size() < 2) return;
     // [curtab, tabs, ...]
     emit tablineUpdate(args[0].toInt(), args[1].toList());
+}
+
+void GridWidget::handleCmdlineShow(const QVariantList &args)
+{
+    if (args.size() < 6) return;
+    // [content, pos, firstc, prompt, indent, level]
+    emit cmdlineShow(args[0].toList(), args[1].toInt(), args[2].toString(),
+                     args[3].toString(), args[4].toInt(), args[5].toInt());
+}
+
+void GridWidget::handleCmdlinePos(const QVariantList &args)
+{
+    if (args.size() < 2) return;
+    emit cmdlinePos(args[0].toInt(), args[1].toInt());
+}
+
+void GridWidget::handleCmdlineSpecialChar(const QVariantList &args)
+{
+    if (args.size() < 2) return;
+    emit cmdlineSpecialChar(args[0].toString(), args[1].toBool());
 }
 
 void GridWidget::handleMsgShow(const QVariantList &args)
