@@ -113,6 +113,13 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
 - [x] Debug/verify infra: QLoggingCategory trace points (neobeam.minimap, neobeam.redraw; silent by default, QT_LOGGING_RULES to enable) + project verify skill (.claude/skills/verify) covering offscreen runs and RPC-level Lua testing.
 - [ ] Decoder, longer term (only if still needed): decode redraw events directly into grid cells without building QVariant trees. Do not start here.
 
+
+## Pipeline adjustments
+ - [ ] Allow to publish release build from branch
+ - [ ] Do not run build pipelines in PR/branch when only .md files are updated.
+ - [ ] Add BSD build pipeline
+ - [ ] Create comprehensive project documentation with examples on GitHub - suggest best approach.
+
 ## Fixes/Adjustments
 
 ### General
