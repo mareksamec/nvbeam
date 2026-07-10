@@ -121,4 +121,4 @@
     left-button release (`TerminalPanel::eventFilter`).
   - If fixed upstream, the event filter can be replaced with a plain connect to
     `QTermWidget::copyAvailable`.
-- No sixel image protocol support (blocks the "Enable sixel support" item above).
+- No sixel image protocol support (blocks the "Enable sixel support" item above). QtermWidget issue here: [552](https://github.com/lxqt/qtermwidget/issues/552)
