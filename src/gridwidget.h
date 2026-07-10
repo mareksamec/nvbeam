@@ -65,7 +65,13 @@ public:
     /// Configure terminal-style mouse selection behavior
     void setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor);
 
+    bool selectionModeActive() const { return m_selectionModeActive; }
+
 public slots:
+    /// Text selection mode: forces terminal-style selection regardless of
+    /// nvim's 'mouse' option (as if mouse= were empty). Beam pointer while on.
+    void setSelectionModeActive(bool on);
+
     void handleRedraw(const QVariantList &events);
 
     /// Drop all grid state from the previous nvim instance. Called before a
@@ -100,6 +106,9 @@ signals:
     /// Emitted when the grid gains or loses keyboard focus, so the enclosing
     /// editor area (tabline/minimap/statusline included) can show a focus highlight.
     void focusChanged(bool hasFocus);
+
+    /// Emitted when text selection mode is toggled, so UI toggles can sync.
+    void selectionModeChanged(bool active);
 
 protected:
     bool event(QEvent *event) override;
@@ -156,6 +165,7 @@ private:
         int col = 0;
     };
     GridHit gridAt(const QPoint &pos);
+    GridHit hitInGrid(const QPoint &pos, int gridId) const;
 
     QFont m_font;
     int m_cellWidth = 0;
@@ -190,6 +200,16 @@ private:
     int m_selStartCol = 0;
     int m_selEndRow = 0;
     int m_selEndCol = 0;
+
+    // Text selection mode (Phase 8)
+    bool m_selectionModeActive = false;
+    bool m_selectionExplicit = false;   // selection came from the mode / Shift+drag
+    // Deferred Shift+LeftMouse press: promoted to a one-shot selection on drag,
+    // forwarded to nvim on release without drag (keeps <S-LeftMouse> working).
+    bool m_pendingSelectPress = false;
+    int m_pendingGrid = 0;
+    int m_pendingRow = 0;
+    int m_pendingCol = 0;
 
     // Multi-grid state
     QHash<int, Grid> m_grids;
