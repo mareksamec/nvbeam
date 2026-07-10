@@ -84,15 +84,18 @@
         - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
         - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
         - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) (fix applied - message grid now composited above window grids; awaiting confirmation)
-    - [ ] Neobeam UI statusline:
-        - [ ] Add git status (optimize performance avoid frequent scanning, or use push model)
+    - [x] Neobeam UI statusline:
+        - [x] Add git status (optimize performance avoid frequent scanning, or use push model) -> push model: nvim autocmd rpcnotify + .git HEAD/index file watcher + cwd changes, debounced async `git status`; counts in accent_color ([ui] git_status option)
 
 ## Phase 8: Text selection mode
-- [ ] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
-    - [ ] The cursor is set to beam and you have a selection in the term.
-    - [ ] Selected text is copied to Clipboard
-    - [ ] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + .
-    - [ ] Drag selection in this mode won't trigger nvim visual selection mode.
+- [x] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
+    - [x] The cursor is set to beam and you have a selection in the term. -> mouse pointer becomes I-beam while mode is on; nvim caret stays nvim-controlled
+    - [x] Selected text is copied to Clipboard -> CLIPBOARD + PRIMARY, same targets as the terminal panels; explicit selections copy regardless of [mouse] auto_copy
+    - [x] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + . -> both: checkable "⌶" button in the bottom-right strip + Ctrl+Shift+.
+    - [x] Holding Shift and drag selecting will also trigger this mode if not active (terminal like selectin behaviour) -> one-shot for that drag only; press is deferred so a plain Shift+click still reaches nvim as <S-LeftMouse>
+    - [x] Drag selection in this mode won't trigger nvim visual selection mode.
+    - [x] Fix uncovered along the way: drag coords are now clamped to the grid the selection started in, so dragging across a split/float no longer produces a garbage selection.
+    - [x] Selection highlight follows the text on scroll (shifted by grid_scroll deltas); dropped once the selected rows scroll out of the window instead of floating over new content.
 
 
 ## Fixes/Adjustments
@@ -118,4 +121,4 @@
     left-button release (`TerminalPanel::eventFilter`).
   - If fixed upstream, the event filter can be replaced with a plain connect to
     `QTermWidget::copyAvailable`.
-- No sixel image protocol support (blocks the "Enable sixel support" item above).
+- No sixel image protocol support (blocks the "Enable sixel support" item above). QtermWidget issue here: [552](https://github.com/lxqt/qtermwidget/issues/552)

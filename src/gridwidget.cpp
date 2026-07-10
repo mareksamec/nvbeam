@@ -53,6 +53,7 @@ void GridWidget::resetGrids()
     m_cursorRow = 0;
     m_cursorCol = 0;
     m_selecting = false;
+    m_pendingSelectPress = false;
     m_selStartRow = m_selEndRow = 0;
     m_selStartCol = m_selEndCol = 0;
     // Highlight table and default colors are redefined by the new instance on
@@ -175,6 +176,28 @@ void GridWidget::handleGridScroll(const QVariantList &args)
         for (int r = top; r < top - rows; r++)
             for (int c = left; c < right; c++)
                 grid.cells[r][c] = GridCell{};
+    }
+
+    // Keep any selection glued to the text it covers: shift it with the
+    // scroll, drop it once the selected rows leave the scrolled region.
+    if ((hasSelection() || m_selecting) && gridId == m_selStartGrid) {
+        bool startIn = m_selStartRow >= top && m_selStartRow < bot;
+        bool endIn = m_selEndRow >= top && m_selEndRow < bot;
+        if (startIn || endIn) {
+            int newStart = m_selStartRow - rows;
+            int newEnd = m_selEndRow - rows;
+            if (newStart >= top && newStart < bot && newEnd >= top && newEnd < bot) {
+                m_selStartRow = newStart;
+                m_selEndRow = newEnd;
+            } else if (m_selecting) {
+                // Mid-drag: clamp instead of cancelling so the drag survives
+                m_selStartRow = qBound(top, newStart, bot - 1);
+                m_selEndRow = qBound(top, newEnd, bot - 1);
+            } else {
+                m_selStartRow = m_selEndRow = 0;
+                m_selStartCol = m_selEndCol = 0;
+            }
+        }
     }
 }
 
@@ -624,25 +647,53 @@ GridWidget::GridHit GridWidget::gridAt(const QPoint &pos)
     return {1, qBound(0, pixelRow, 0), qBound(0, pixelCol, 0)};
 }
 
+GridWidget::GridHit GridWidget::hitInGrid(const QPoint &pos, int gridId) const
+{
+    // Pointer position in gridId's local cell coords, clamped to its bounds.
+    // Used while a selection is in progress so it stays anchored to the grid
+    // it started in regardless of what the pointer is currently over.
+    auto it = m_grids.constFind(gridId);
+    if (it == m_grids.constEnd() || it->rows <= 0 || it->cols <= 0)
+        return {gridId, 0, 0};
+    int row = pos.y() / m_cellHeight - it->y;
+    int col = pos.x() / m_cellWidth - it->x;
+    return {gridId, qBound(0, row, it->rows - 1), qBound(0, col, it->cols - 1)};
+}
+
 void GridWidget::mousePressEvent(QMouseEvent *event)
 {
     auto hit = gridAt(event->pos());
     m_mousePressed = true;
     m_mouseGrid = hit.gridId;
 
-    // Terminal-style selection: intercept left-click when nvim mouse is empty
-    bool useTerminalSelection = m_terminalSelectionEnabled &&
-                                m_nvimMouseOpt.isEmpty() &&
-                                event->button() == Qt::LeftButton;
+    // Terminal-style selection: explicit selection mode, or left-click when
+    // nvim mouse is empty
+    bool useTerminalSelection = event->button() == Qt::LeftButton &&
+                                (m_selectionModeActive ||
+                                 (m_terminalSelectionEnabled &&
+                                  m_nvimMouseOpt.isEmpty()));
 
     if (useTerminalSelection) {
         m_selecting = true;
+        m_selectionExplicit = m_selectionModeActive;
         m_selStartGrid = hit.gridId;
         m_selStartRow = hit.row;
         m_selStartCol = hit.col;
         m_selEndRow = hit.row;
         m_selEndCol = hit.col;
         update();
+        return;
+    }
+
+    // Shift+left outside selection mode: candidate for a one-shot terminal
+    // selection, but only once the pointer actually drags. The press is
+    // deferred so a plain Shift+click still reaches nvim (<S-LeftMouse>).
+    if (event->button() == Qt::LeftButton &&
+        event->modifiers().testFlag(Qt::ShiftModifier)) {
+        m_pendingSelectPress = true;
+        m_pendingGrid = hit.gridId;
+        m_pendingRow = hit.row;
+        m_pendingCol = hit.col;
         return;
     }
 
@@ -661,18 +712,36 @@ void GridWidget::mouseReleaseEvent(QMouseEvent *event)
     auto hit = gridAt(event->pos());
     m_mousePressed = false;
 
+    if (m_pendingSelectPress && event->button() == Qt::LeftButton) {
+        // Shift+click without a drag: deliver the deferred press, then the
+        // release, so nvim's <S-LeftMouse> behaves as usual.
+        m_pendingSelectPress = false;
+        QString mod = modifierPrefix(event->modifiers(), false);
+        emit inputMouse("left", "press", mod, m_pendingGrid, m_pendingRow, m_pendingCol);
+        emit inputMouse("left", "release", mod, hit.gridId, hit.row, hit.col);
+        return;
+    }
+
     if (m_selecting && event->button() == Qt::LeftButton) {
         m_selecting = false;
-        m_selEndRow = hit.row;
-        m_selEndCol = hit.col;
+        auto end = hitInGrid(event->pos(), m_selStartGrid);
+        m_selEndRow = end.row;
+        m_selEndCol = end.col;
 
-        // Extract selected text from grid cells and copy to clipboard
-        if (m_mouseAutoCopy) {
+        // Extract selected text and copy to CLIPBOARD + PRIMARY (same targets
+        // as the terminal panels). Explicit selections (mode / Shift+drag)
+        // always copy; the implicit mouse= path honors the config toggle.
+        if (m_selectionExplicit || m_mouseAutoCopy) {
             QString text = extractSelectedText();
             if (!text.isEmpty()) {
-                QGuiApplication::clipboard()->setText(text);
+                QClipboard *cb = QGuiApplication::clipboard();
+                cb->setText(text);
+                if (cb->supportsSelection())
+                    cb->setText(text, QClipboard::Selection);
             }
         }
+        if (!m_selectionModeActive)
+            unsetCursor();  // end of a one-shot Shift+drag selection
         update();
         return;
     }
@@ -691,15 +760,36 @@ void GridWidget::mouseMoveEvent(QMouseEvent *event)
 {
     if (!m_mousePressed) return;
 
-    auto hit = gridAt(event->pos());
+    if (m_pendingSelectPress) {
+        // Deferred Shift+press: a move of at least one cell promotes it to a
+        // one-shot terminal-style selection.
+        auto hit = hitInGrid(event->pos(), m_pendingGrid);
+        if (hit.row != m_pendingRow || hit.col != m_pendingCol) {
+            m_pendingSelectPress = false;
+            m_selecting = true;
+            m_selectionExplicit = true;
+            m_selStartGrid = m_pendingGrid;
+            m_selStartRow = m_pendingRow;
+            m_selStartCol = m_pendingCol;
+            m_selEndRow = hit.row;
+            m_selEndCol = hit.col;
+            setCursor(Qt::IBeamCursor);
+            update();
+        }
+        return;
+    }
 
     if (m_selecting) {
+        // Keep the selection anchored to the grid it started in, even when
+        // the pointer crosses into another split or float.
+        auto hit = hitInGrid(event->pos(), m_selStartGrid);
         m_selEndRow = hit.row;
         m_selEndCol = hit.col;
         update();
         return;
     }
 
+    auto hit = gridAt(event->pos());
     QString mod = modifierPrefix(event->modifiers(), false);
     emit inputMouse("left", "drag", mod, m_mouseGrid, hit.row, hit.col);
 }
@@ -760,6 +850,23 @@ void GridWidget::setMouseConfig(bool terminalSelection, bool autoCopy, const QCo
     m_terminalSelectionEnabled = terminalSelection;
     m_mouseAutoCopy = autoCopy;
     m_selectionColor = selColor;
+}
+
+void GridWidget::setSelectionModeActive(bool on)
+{
+    if (m_selectionModeActive == on) return;
+    m_selectionModeActive = on;
+    if (on) {
+        setCursor(Qt::IBeamCursor);
+    } else {
+        unsetCursor();
+        m_selecting = false;
+        m_pendingSelectPress = false;
+        m_selStartRow = m_selEndRow = 0;
+        m_selStartCol = m_selEndCol = 0;
+    }
+    update();
+    emit selectionModeChanged(on);
 }
 
 void GridWidget::focusInEvent(QFocusEvent *event)

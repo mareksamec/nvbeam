@@ -236,6 +236,13 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
     connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
 
+    // Ctrl+Shift+. toggles text selection mode (terminal-style selection in
+    // the nvim buffer regardless of nvim's 'mouse' option).
+    auto *selModeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Period), this);
+    connect(selModeShortcut, &QShortcut::activated, this, [this]() {
+        m_grid->setSelectionModeActive(!m_grid->selectionModeActive());
+    });
+
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
     // the panel whose button was clicked.
     auto connectCwdBroadcast = [this](TerminalPanel *panel) {
@@ -304,12 +311,26 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     sideTermBtn->setStyleSheet(btnStyle);
     btnLayout->addWidget(sideTermBtn);
 
+    auto *selModeBtn = new QPushButton("⌶", central);
+    selModeBtn->setToolTip("Toggle text selection mode (Ctrl+Shift+.)");
+    selModeBtn->setCheckable(true);
+    selModeBtn->setChecked(false);
+    selModeBtn->setFixedSize(28, 20);
+    selModeBtn->setStyleSheet(btnStyle);
+    btnLayout->addWidget(selModeBtn);
+
     btnBar->setFixedHeight(24);
     layout->addWidget(btnBar);
 
     connect(minimapBtn, &QPushButton::toggled, m_minimap, &QWidget::setVisible);
     connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
     connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
+
+    // Selection-mode button and Ctrl+Shift+. stay in sync via the grid's
+    // signal; setSelectionModeActive no-ops on repeat values, so the
+    // button<->grid connection loop terminates.
+    connect(selModeBtn, &QPushButton::toggled, m_grid, &GridWidget::setSelectionModeActive);
+    connect(m_grid, &GridWidget::selectionModeChanged, selModeBtn, &QPushButton::setChecked);
 
     // Side terminal opens in nvim's current cwd: resolve it first, seed the
     // panel with it, and only then show (showing starts the pending shell, so
