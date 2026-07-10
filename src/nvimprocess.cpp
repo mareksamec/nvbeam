@@ -358,7 +358,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         int len = byte & 0x1f;
         offset++;
         if (offset + len > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
-        QString str = QString::fromUtf8(data.mid(offset, len));
+        QString str = QString::fromUtf8(data.constData() + offset, len);
         offset += len;
         return QVariant(str);
     }
@@ -433,7 +433,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         if (offset + 1 > data.size()) { offset--; m_decodeIncomplete = true; return QVariant(); }
         int len = static_cast<uint8_t>(data[offset++]);
         if (offset + len > data.size()) { offset -= 2; m_decodeIncomplete = true; return QVariant(); }
-        QString str = QString::fromUtf8(data.mid(offset, len));
+        QString str = QString::fromUtf8(data.constData() + offset, len);
         offset += len;
         return QVariant(str);
     }
@@ -442,7 +442,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         uint16_t len = qFromBigEndian<uint16_t>(data.constData() + offset);
         offset += 2;
         if (offset + len > data.size()) { offset -= 3; m_decodeIncomplete = true; return QVariant(); }
-        QString str = QString::fromUtf8(data.mid(offset, len));
+        QString str = QString::fromUtf8(data.constData() + offset, len);
         offset += len;
         return QVariant(str);
     }
@@ -451,7 +451,7 @@ QVariant NvimProcess::decodeMsgpack(const QByteArray &data, int &offset)
         uint32_t len = qFromBigEndian<uint32_t>(data.constData() + offset);
         offset += 4;
         if (offset + static_cast<int>(len) > data.size()) { offset -= 5; m_decodeIncomplete = true; return QVariant(); }
-        QString str = QString::fromUtf8(data.mid(offset, len));
+        QString str = QString::fromUtf8(data.constData() + offset, len);
         offset += len;
         return QVariant(str);
     }

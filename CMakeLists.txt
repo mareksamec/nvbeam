@@ -42,6 +42,7 @@ add_executable(neobeam
     src/terminalpanel.cpp
     src/minimap.cpp
     src/imagerenderer.cpp
+    src/logging.cpp
 )
 
 target_include_directories(neobeam PRIVATE

@@ -97,6 +97,21 @@
     - [x] Fix uncovered along the way: drag coords are now clamped to the grid the selection started in, so dragging across a split/float no longer produces a garbage selection.
     - [x] Selection highlight follows the text on scroll (shifted by grid_scroll deltas); dropped once the selected rows scroll out of the window instead of floating over new content.
 
+## Phase 9: Performance
+
+Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (quick wins first):
+
+- [x] Minimap: debounce the content rebuild (treesitter scan) to ~300ms after the last changedtick change; keep only the cheap viewport-only query on the short per-flush interval. -> split into neobeam.minimap_view() (per flush) + neobeam.minimap_scan() (300ms debounce, restarted while ticks keep changing)
+- [x] Minimap: skip the scan entirely when the minimap is hidden. -> both timers no-op while hidden; re-show kicks one view poll which schedules a scan if the tick moved
+- [x] Minimap: persist the lua fg_cache across calls in a global table, invalidate on ColorScheme autocmd.
+- [x] Lua plumbing: stop re-reading .lua files from disk and re-compiling full chunks per timer fire. -> both: loadLua() caches sources, and statusline/bufferline/minimap register functions in a `neobeam` table on attach; timers call one-line `return neobeam.*()` chunks
+- [x] Replace idle polling with push: cwd poll (500ms) and MRU poll (2s) become `DirChanged`/`BufEnter` autocmds + rpcnotify (lua/events.lua), same pattern as gitstatus.lua. Initial cwd/file pushed once at registration.
+- [ ] Paint path, step 1: cache font descent + four QFont variants (normal/bold/italic/bold-italic) as members; batch consecutive cells with the same hlId into runs (one fillRect + one drawText per run). Currently one drawText per cell, ~15k cells per full repaint.
+- [ ] Paint path, step 2: per-grid QPixmap backing store updated incrementally. grid_line paints only changed rows, grid_scroll becomes a blit, paintEvent composites pixmaps + cursor + selection overlay. Cursor-only moves repaint two small rects via update(rect) instead of the whole window.
+- [x] Decoder quick win: use `QString::fromUtf8(data.constData() + offset, len)` in decodeMsgpack to avoid the intermediate mid() copy per string.
+- [x] Fix uncovered along the way: infinite RPC feedback loop at idle. nvim re-emits a win_viewport_margins + tabline_update + flush batch after every RPC request it serves, and each flush re-armed the statusline/bufferline/minimap pollers whose next request triggered the same batch again. flushed() now fires only for batches carrying real content events. This loop was likely a large share of the 20-25% baseline; it also starved the debounced minimap scan (dark minimap).
+- [x] Debug/verify infra: QLoggingCategory trace points (neobeam.minimap, neobeam.redraw; silent by default, QT_LOGGING_RULES to enable) + project verify skill (.claude/skills/verify) covering offscreen runs and RPC-level Lua testing.
+- [ ] Decoder, longer term (only if still needed): decode redraw events directly into grid cells without building QVariant trees. Do not start here.
 
 ## Fixes/Adjustments
 

@@ -8,8 +8,10 @@
 #include "gitstatus.h"
 #include "config.h"
 #include "session.h"
+#include "logging.h"
 #include <QApplication>
 #include <QCloseEvent>
+#include <QDebug>
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
@@ -19,6 +21,7 @@
 #include <QFontMetrics>
 #include <QFrame>
 #include <QGuiApplication>
+#include <QHash>
 #include <QHBoxLayout>
 #include <QPushButton>
 #include <QSet>
@@ -28,9 +31,15 @@
 #include <QVBoxLayout>
 #include <QWheelEvent>
 
-/// Load a Lua script from the lua/ directory next to the executable
+/// Load a Lua script from the lua/ directory next to the executable.
+/// Sources are cached after the first successful read; the scripts are only
+/// (re)sent to nvim on attach, never per poll.
 static QString loadLua(const QString &name)
 {
+    static QHash<QString, QString> cache;
+    const auto cached = cache.constFind(name);
+    if (cached != cache.constEnd())
+        return *cached;
     // Try the installed share dir first (/usr/bin/neobeam -> /usr/share/neobeam/lua),
     // then the source-tree layout used when running from the build directory.
     QStringList searchPaths = {
@@ -40,8 +49,11 @@ static QString loadLua(const QString &name)
     };
     for (const auto &path : searchPaths) {
         QFile f(path);
-        if (f.open(QIODevice::ReadOnly | QIODevice::Text))
-            return QString::fromUtf8(f.readAll());
+        if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QString src = QString::fromUtf8(f.readAll());
+            cache.insert(name, src);
+            return src;
+        }
     }
     qWarning("Failed to load lua/%s", qPrintable(name));
     return {};
@@ -323,6 +335,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     layout->addWidget(btnBar);
 
     connect(minimapBtn, &QPushButton::toggled, m_minimap, &QWidget::setVisible);
+    // Polls are skipped while the minimap is hidden, so kick one viewport
+    // poll on re-show; it schedules a content scan if the buffer changed.
+    connect(minimapBtn, &QPushButton::toggled, this, [this](bool on) {
+        if (on && m_minimapViewTimer)
+            m_minimapViewTimer->start();
+    });
     connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
     connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
 
@@ -451,18 +469,35 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 openSwitcher();
             }
 
-            // Register the git-event autocmd (lua/gitstatus.lua) with our RPC
-            // channel id so nvim can push notifications back. Re-runs on each
-            // keep_running restart; the augroup is cleared on re-registration.
-            if (m_gitStatus) {
-                m_nvim->request("nvim_get_api_info", {},
-                                [this](const QVariant &result) {
-                    const int chan = result.toList().value(0).toInt();
-                    const QString lua = loadLua("gitstatus.lua");
-                    if (chan > 0 && !lua.isEmpty())
-                        m_nvim->request("nvim_exec_lua", {lua, QVariantList{chan}});
-                });
+            // Register the bundled Lua helpers once per nvim instance: they
+            // define functions in a `neobeam` table, and the poll timers call
+            // tiny `return neobeam.*()` chunks instead of resending and
+            // recompiling whole files on every fire.
+            for (const char *script : {"statusline.lua", "bufferline.lua", "minimap.lua"}) {
+                const QString lua = loadLua(QString::fromLatin1(script));
+                if (!lua.isEmpty())
+                    m_nvim->request("nvim_exec_lua", {lua, QVariantList{}});
             }
+
+            // Autocmd-based push notifications need our RPC channel id.
+            // Re-runs on each keep_running restart; the augroups are cleared
+            // on re-registration.
+            m_nvim->request("nvim_get_api_info", {},
+                            [this](const QVariant &result) {
+                const int chan = result.toList().value(0).toInt();
+                if (chan <= 0) return;
+                // Git-event autocmd (lua/gitstatus.lua) for the statusline.
+                if (m_gitStatus) {
+                    const QString lua = loadLua("gitstatus.lua");
+                    if (!lua.isEmpty())
+                        m_nvim->request("nvim_exec_lua", {lua, QVariantList{chan}});
+                }
+                // Cwd/current-file push (lua/events.lua): replaces the old
+                // 500ms cwd poll and 2s MRU poll.
+                const QString events = loadLua("events.lua");
+                if (!events.isEmpty())
+                    m_nvim->request("nvim_exec_lua", {events, QVariantList{chan}});
+            });
         });
     });
 
@@ -546,10 +581,13 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         bufTimer->setSingleShot(true);
         bufTimer->setInterval(100);
         connect(bufTimer, &QTimer::timeout, this, [this]() {
-            QString lua = loadLua("bufferline.lua");
-            if (lua.isEmpty()) return;
-            m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
+            // `neobeam and ...` guards the window between attach and helper
+            // registration (both run in the ready handler).
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return neobeam and neobeam.bufferline()"), QVariantList{}},
+                [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
+                if (data.isEmpty()) return;
                 int currentBuf = data["current"].toInt();
                 QVariantList bufs = data["bufs"].toList();
                 m_tabline->updateBuffers(bufs, currentBuf);
@@ -566,10 +604,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         statusTimer->setSingleShot(true);
         statusTimer->setInterval(100);
         connect(statusTimer, &QTimer::timeout, this, [this]() {
-            QString lua = loadLua("statusline.lua");
-            if (lua.isEmpty()) return;
-            m_nvim->request("nvim_exec_lua", {lua, QVariantList{}}, [this](const QVariant &result) {
-                m_statusline->updateStatus(result.toMap());
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return neobeam and neobeam.statusline()"), QVariantList{}},
+                [this](const QVariant &result) {
+                const QVariantMap data = result.toMap();
+                if (!data.isEmpty())
+                    m_statusline->updateStatus(data);
             });
         });
         connect(m_grid, &GridWidget::flushed, statusTimer, [statusTimer]() {
@@ -592,32 +632,30 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         });
     }
 
-    // Minimap: poll buffer content and highlights (throttled).
-    // Passes last known changedtick to Lua so it can skip the treesitter scan when only scroll changed.
+    // Minimap, two-tier: a cheap viewport-only poll per flush keeps the
+    // scroll/cursor overlay live, while the expensive content rebuild (a full
+    // synchronous treesitter scan inside nvim) is debounced to run once after
+    // edits settle. Previously the scan ran up to 50x/s while typing. Both
+    // tiers no-op while the minimap is hidden.
     {
-        auto *minimapTimer = new QTimer(this);
-        minimapTimer->setSingleShot(true);
-        minimapTimer->setInterval(20);
-        connect(minimapTimer, &QTimer::timeout, this, [this]() {
-            QString lua = loadLua("minimap.lua");
-            if (lua.isEmpty()) return;
-            // Pass last tick as argument; Lua returns full data only when tick changed.
-            m_nvim->request("nvim_exec_lua", {lua, QVariantList{m_minimapLastTick}}, [this](const QVariant &result) {
+        m_minimapScanTimer = new QTimer(this);
+        m_minimapScanTimer->setSingleShot(true);
+        m_minimapScanTimer->setInterval(300);
+        connect(m_minimapScanTimer, &QTimer::timeout, this, [this]() {
+            if (!m_minimap->isVisible()) return;
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return neobeam and neobeam.minimap_scan()"), QVariantList{}},
+                [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
+                qCDebug(nbMinimap) << "scan: empty" << data.isEmpty()
+                                   << "lines" << data["lines"].toList().size()
+                                   << "tick" << data["tick"].toInt();
+                if (data.isEmpty()) return;
                 int tick   = data["tick"].toInt();
                 int total  = data["total"].toInt();
                 int top    = data["top"].toInt() - 1;
                 int bot    = data["bot"].toInt();
                 int cursor = data["cursor"].toInt() - 1;
-                int visibleLines = bot - top;
-
-                if (!data.contains("lines")) {
-                    // Tick unchanged: only scroll/cursor moved — cheap overlay-only repaint.
-                    m_minimap->setViewport(top, visibleLines, cursor);
-                    return;
-                }
-
-                // Tick changed: rebuild highlight pixmap.
                 // Only "lock in" this tick once the scan covered the whole capped
                 // span (max 2000 lines, matching minimap.lua). This prevents a
                 // partial scan from suppressing future refreshes via the tick gate.
@@ -637,28 +675,66 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                     }
                     lines.append(ml);
                 }
-                m_minimap->updateContent(lines, total, top, visibleLines, cursor);
+                m_minimap->updateContent(lines, total, top, bot - top, cursor);
             });
         });
-        connect(m_grid, &GridWidget::flushed, minimapTimer, [minimapTimer]() {
-            if (!minimapTimer->isActive()) minimapTimer->start();
+
+        m_minimapViewTimer = new QTimer(this);
+        m_minimapViewTimer->setSingleShot(true);
+        m_minimapViewTimer->setInterval(20);
+        connect(m_minimapViewTimer, &QTimer::timeout, this, [this]() {
+            if (!m_minimap->isVisible()) return;
+            m_nvim->request("nvim_exec_lua",
+                {QStringLiteral("return neobeam and neobeam.minimap_view()"), QVariantList{}},
+                [this](const QVariant &result) {
+                QVariantMap data = result.toMap();
+                qCDebug(nbMinimap) << "view: empty" << data.isEmpty()
+                                   << "tick" << data["tick"].toInt()
+                                   << "last" << m_minimapLastTick;
+                if (data.isEmpty()) return;
+                int top    = data["top"].toInt() - 1;
+                int bot    = data["bot"].toInt();
+                int cursor = data["cursor"].toInt() - 1;
+                m_minimap->setViewport(top, bot - top, cursor);
+                // Content changed: (re)start the scan debounce, so the rebuild
+                // runs once, shortly after the last change.
+                if (data["tick"].toInt() != m_minimapLastTick)
+                    m_minimapScanTimer->start();
+            });
+        });
+        connect(m_grid, &GridWidget::flushed, m_minimapViewTimer, [this]() {
+            if (!m_minimapViewTimer->isActive()) m_minimapViewTimer->start();
         });
     }
 
-    // Terminal cwd tracking: poll nvim cwd and update terminal panel
-    if (cfg.terminalFollowCwd) {
-        auto *cwdTimer = new QTimer(this);
-        cwdTimer->setInterval(500);
-        connect(cwdTimer, &QTimer::timeout, this, [this]() {
-            m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return vim.fn.getcwd()"), QVariantList{}},
-                [this](const QVariant &result) {
-                    m_terminal->setWorkingDirectory(result.toString());
-                    updateTitleCwd(result.toString());
-                });
-        });
-        cwdTimer->start();
-    }
+    // Cwd and current-file tracking is push-based: lua/events.lua (registered
+    // in the ready handler) notifies on DirChanged/BufEnter plus once at
+    // registration, so nothing polls while nvim is idle. Feeds terminal
+    // follow-cwd, the window title and the switcher's recently-used list.
+    connect(m_nvim, &NvimProcess::notification, this,
+            [this](const QString &method, const QVariantList &args) {
+        if (method == QLatin1String("neobeam_cwd")) {
+            const QString cwd = args.value(0).toString();
+            if (cwd.isEmpty()) return;
+            if (m_cfg.terminalFollowCwd)
+                m_terminal->setWorkingDirectory(cwd);
+            updateTitleCwd(cwd);
+            // The home directory is nvim's default cwd, not a project.
+            if (m_cfg.switcherMaxRecent > 0 && cwd != m_lastMruCwd
+                && cwd != QDir::homePath() && QDir(cwd).exists()) {
+                m_lastMruCwd = cwd;
+                m_session->addRecentFolder(cwd, m_cfg.switcherMaxRecent);
+            }
+        } else if (method == QLatin1String("neobeam_file")) {
+            const QString file = args.value(0).toString();
+            // Skip unnamed buffers and non-file buffers (term://, ...).
+            if (m_cfg.switcherMaxRecent > 0 && !file.isEmpty() && file != m_lastMruFile
+                && !file.contains(QLatin1String("://")) && QFileInfo(file).isFile()) {
+                m_lastMruFile = file;
+                m_session->addRecentFile(file, m_cfg.switcherMaxRecent);
+            }
+        }
+    });
 
     // Project switcher overlay (pinned projects + recent folders/files).
     m_switcher = new SwitcherWidget(cfg.accentColor, this);
@@ -675,40 +751,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         else
             openSwitcher();
     });
-
-    // Recently-used tracking: poll nvim for its cwd and current file so the
-    // switcher list reflects what was actually worked on. Change-gated, so
-    // the session file is only touched when something new shows up.
-    if (m_cfg.switcherMaxRecent > 0) {
-        auto *mruTimer = new QTimer(this);
-        mruTimer->setInterval(2000);
-        connect(mruTimer, &QTimer::timeout, this, [this]() {
-            m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return {vim.fn.getcwd(), vim.api.nvim_buf_get_name(0)}"),
-                 QVariantList{}},
-                [this](const QVariant &result) {
-                    const QVariantList r = result.toList();
-                    const QString cwd = r.value(0).toString();
-                    const QString file = r.value(1).toString();
-                    // Title tracking piggybacks on this poll so `:cd` inside
-                    // nvim is reflected even when follow_cwd is disabled.
-                    updateTitleCwd(cwd);
-                    // The home directory is nvim's default cwd, not a project.
-                    if (!cwd.isEmpty() && cwd != m_lastMruCwd && cwd != QDir::homePath()
-                        && QDir(cwd).exists()) {
-                        m_lastMruCwd = cwd;
-                        m_session->addRecentFolder(cwd, m_cfg.switcherMaxRecent);
-                    }
-                    // Skip unnamed buffers and non-file buffers (term://, ...).
-                    if (!file.isEmpty() && file != m_lastMruFile
-                        && !file.contains(QLatin1String("://")) && QFileInfo(file).isFile()) {
-                        m_lastMruFile = file;
-                        m_session->addRecentFile(file, m_cfg.switcherMaxRecent);
-                    }
-                });
-        });
-        mruTimer->start();
-    }
 
     m_nvim->start(nvimArgs);
 

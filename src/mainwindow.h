@@ -17,6 +17,7 @@ class GitStatus;
 class Session;
 class QSplitter;
 class QFrame;
+class QTimer;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -81,6 +82,8 @@ private:
     Session *m_session = nullptr;
     Config m_cfg;
     int m_minimapLastTick = 0; // last changedtick seen from Neovim, used to skip highlight rebuilds on scroll
+    QTimer *m_minimapViewTimer = nullptr; // cheap viewport poll, per flush
+    QTimer *m_minimapScanTimer = nullptr; // debounced content rebuild (treesitter scan)
 
     bool m_quitting = false;          // window closing; don't restart nvim on exit
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches

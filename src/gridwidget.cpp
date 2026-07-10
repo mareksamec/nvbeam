@@ -13,6 +13,7 @@
 #include <QGuiApplication>
 #include <QClipboard>
 #include <QDebug>
+#include "logging.h"
 #include <cmath>
 #include <algorithm>
 
@@ -63,6 +64,24 @@ void GridWidget::resetGrids()
 
 void GridWidget::processEvent(const QString &name, const QVariantList &args)
 {
+    qCDebug(nbRedraw) << name;
+    if (name == "flush") {
+        // nvim re-emits win_viewport_margins + tabline_update + flush after
+        // every RPC request it serves. Emitting flushed() for those batches
+        // would re-arm the flush-driven pollers (statusline/bufferline/
+        // minimap), whose next request triggers the same batch again: an
+        // infinite RPC loop that burns CPU while idle. Only batches carrying
+        // real content wake the pollers.
+        if (m_flushDirty) {
+            m_flushDirty = false;
+            emit flushed();
+        }
+        return;
+    }
+    if (name != QLatin1String("win_viewport_margins") &&
+        name != QLatin1String("tabline_update"))
+        m_flushDirty = true;
+
     if (name == "grid_resize") handleGridResize(args);
     else if (name == "grid_line") handleGridLine(args);
     else if (name == "grid_clear") handleGridClear(args);
@@ -89,7 +108,6 @@ void GridWidget::processEvent(const QString &name, const QVariantList &args)
     else if (name == "busy_start") m_busy = true;
     else if (name == "busy_stop") m_busy = false;
     else if (name == "option_set") handleOptionSet(args);
-    else if (name == "flush") emit flushed();
 }
 
 void GridWidget::handleGridResize(const QVariantList &args)
