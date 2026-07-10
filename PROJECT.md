@@ -84,14 +84,15 @@
         - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
         - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
         - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) (fix applied - message grid now composited above window grids; awaiting confirmation)
-    - [ ] Neobeam UI statusline:
-        - [ ] Add git status (optimize performance avoid frequent scanning, or use push model)
+    - [x] Neobeam UI statusline:
+        - [x] Add git status (optimize performance avoid frequent scanning, or use push model) -> push model: nvim autocmd rpcnotify + .git HEAD/index file watcher + cwd changes, debounced async `git status`; counts in accent_color ([ui] git_status option)
 
 ## Phase 8: Text selection mode
 - [ ] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
     - [ ] The cursor is set to beam and you have a selection in the term.
     - [ ] Selected text is copied to Clipboard
     - [ ] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + .
+    - [ ] Holding Ctrl and drag selecting will also trigger this mode if not active (terminal like selectin behaviour)
     - [ ] Drag selection in this mode won't trigger nvim visual selection mode.
 
 
