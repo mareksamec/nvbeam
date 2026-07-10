@@ -187,6 +187,10 @@ private:
     bool m_mousePressed = false;
     int m_mouseGrid = 0;
 
+    // True when the current redraw batch carried content events; a "flush"
+    // only emits flushed() (and wakes the RPC pollers) when set.
+    bool m_flushDirty = false;
+
     // Neovim mouse option tracking
     QString m_nvimMouseOpt = "a"; // tracks vim's 'mouse' option value
 
