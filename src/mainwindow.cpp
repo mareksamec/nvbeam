@@ -136,8 +136,18 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     editorRow->addWidget(m_minimap);
     editorLayout->addLayout(editorRow, 1);
 
+    // ext_messages implies ext_cmdline: nvim externalizes the command line
+    // too, so a native bar has to render it. Sits between the grid and the
+    // message log, hidden unless a cmdline is active.
+    m_cmdline = new CmdlineWidget(cfg.accentColor, editorArea);
+    if (cfg.extMessages)
+        editorLayout->addWidget(m_cmdline);
+
     m_messages = new MessageWidget(cfg.accentColor, editorArea);
-    editorLayout->addWidget(m_messages);
+    if (cfg.extMessages)
+        editorLayout->addWidget(m_messages);
+    else
+        m_messages->hide(); // not in the layout; would otherwise paint at (0,0)
 
     m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
     if (cfg.extStatusline)
@@ -253,6 +263,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *selModeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Period), this);
     connect(selModeShortcut, &QShortcut::activated, this, [this]() {
         m_grid->setSelectionModeActive(!m_grid->selectionModeActive());
+    });
+
+    // Ctrl+Shift+M toggles keyboard focus between the message log and the
+    // nvim grid (Ctrl+Tab from the log also returns to the grid).
+    auto *msgFocusShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), this);
+    connect(msgFocusShortcut, &QShortcut::activated, this, [this]() {
+        if (!m_messages->isVisible()) return; // ext_messages disabled
+        if (m_messages->logHasFocus()) {
+            // Shortcut-out collapses; clicking away elsewhere leaves the
+            // pane expanded (see the header toggle).
+            m_messages->collapse();
+            m_grid->setFocus();
+        } else {
+            m_messages->focusLog();
+        }
     });
 
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
@@ -462,6 +487,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             opts["ext_multigrid"] = true;
             if (m_cfg.extPopupmenu) opts["ext_popupmenu"] = true;
             if (m_cfg.extTabline) opts["ext_tabline"] = true;
+            if (m_cfg.extMessages) opts["ext_messages"] = true;
             m_nvim->request("nvim_ui_attach", {cols, rows, opts});
 
             if (m_showSwitcherOnReady) {
@@ -570,6 +596,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_win_set_cursor", {0, QVariantList{line + 1, 0}});
     });
 
+    connect(m_grid, &GridWidget::cmdlineShow, m_cmdline, &CmdlineWidget::showCmdline);
+    connect(m_grid, &GridWidget::cmdlinePos, m_cmdline, &CmdlineWidget::setPos);
+    connect(m_grid, &GridWidget::cmdlineHide, m_cmdline, &CmdlineWidget::hideCmdline);
+    connect(m_grid, &GridWidget::cmdlineSpecialChar, m_cmdline, &CmdlineWidget::setSpecialChar);
     connect(m_grid, &GridWidget::msgShow, m_messages, &MessageWidget::showMsg);
     connect(m_grid, &GridWidget::msgClear, m_messages, &MessageWidget::clear);
     connect(m_grid, &GridWidget::msgShowmode, m_messages, &MessageWidget::showMode);
@@ -808,7 +838,12 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         if ((ke->key() == Qt::Key_Tab || ke->key() == Qt::Key_Backtab)
             && (ke->modifiers() & Qt::ControlModifier)) {
             // Key_Backtab is what Ctrl+Shift+Tab produces.
-            cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
+            // From the message log, Ctrl+Tab returns straight to the grid
+            // instead of entering the grid/terminal cycle.
+            if (m_messages->logHasFocus())
+                m_grid->setFocus();
+            else
+                cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
             return true;
         }
         // Ctrl+- / Ctrl+= change the font size of the focused terminal panel.

@@ -91,6 +91,11 @@ signals:
     void popupmenuSelect(int selected);
     void popupmenuHide();
     void tablineUpdate(int curtab, const QVariantList &tabs);
+    void cmdlineShow(const QVariantList &content, int pos, const QString &firstc,
+                     const QString &prompt, int indent, int level);
+    void cmdlinePos(int pos, int level);
+    void cmdlineHide();
+    void cmdlineSpecialChar(const QString &c, bool shift);
     void msgShow(const QString &kind, const QVariantList &content, bool replaceLast);
     void msgClear();
     void msgShowmode(const QVariantList &content);
@@ -141,6 +146,9 @@ private:
     void handleWinHide(const QVariantList &args);
     void handleWinClose(const QVariantList &args);
     void handleMsgSetPos(const QVariantList &args);
+    void handleCmdlineShow(const QVariantList &args);
+    void handleCmdlinePos(const QVariantList &args);
+    void handleCmdlineSpecialChar(const QVariantList &args);
     void handlePopupmenuShow(const QVariantList &args);
     void handlePopupmenuSelect(const QVariantList &args);
     void handlePopupmenuHide(const QVariantList &args);

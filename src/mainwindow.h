@@ -9,6 +9,7 @@ class NvimProcess;
 class PopupmenuWidget;
 class TablineWidget;
 class MessageWidget;
+class CmdlineWidget;
 class StatuslineWidget;
 class TerminalPanel;
 class MinimapWidget;
@@ -70,6 +71,7 @@ private:
     PopupmenuWidget *m_popupmenu = nullptr;
     TablineWidget *m_tabline = nullptr;
     MessageWidget *m_messages = nullptr;
+    CmdlineWidget *m_cmdline = nullptr;
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
     TerminalPanel *m_sideTerminal = nullptr;

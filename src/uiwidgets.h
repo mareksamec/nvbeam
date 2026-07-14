@@ -11,6 +11,9 @@
 #include <QPaintEvent>
 #include "gitstatus.h"
 
+class QPlainTextEdit;
+class QPushButton;
+
 /// Native popup menu widget
 class PopupmenuWidget : public QWidget
 {
@@ -45,20 +48,63 @@ private:
     bool m_bufferMode = false;
 };
 
-/// Native message area widget
+/// Native command line bar (ext_cmdline, implied by ext_messages): renders the
+/// active : / ? / prompt line with a block cursor while nvim keeps handling
+/// the input. Hidden when no cmdline is active. cmdline_block_* events
+/// (multi-line :function input) are not rendered.
+class CmdlineWidget : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit CmdlineWidget(const QString &accent, QWidget *parent = nullptr);
+
+public slots:
+    void showCmdline(const QVariantList &content, int pos, const QString &firstc,
+                     const QString &prompt, int indent, int level);
+    void setPos(int pos, int level);
+    void hideCmdline();
+    void setSpecialChar(const QString &c, bool shift);
+
+private:
+    void render();
+
+    QLabel *m_label;
+    QString m_accent;
+    QString m_firstc, m_prompt, m_content, m_special;
+    int m_bytePos = 0; // cursor position, a byte offset into m_content's UTF-8
+    int m_indent = 0;
+};
+
+/// Native message area (ext_messages): a timestamped log of msg_show events,
+/// two lines tall by default, expandable via a "Messages" header button.
+/// Text is mouse-selectable and auto-copies on release like the statusline.
 class MessageWidget : public QWidget
 {
     Q_OBJECT
 public:
     explicit MessageWidget(const QString &accent, QWidget *parent = nullptr);
+    /// Move keyboard focus into the log, expanding it first so arrow/page
+    /// keys have something to scroll (Ctrl+Shift+M).
+    void focusLog();
+    bool logHasFocus() const;
+    /// Collapse back to the two-line view (Ctrl+Shift+M out; a plain click
+    /// away leaves the pane expanded).
+    void collapse();
     void showMsg(const QString &kind, const QVariantList &content, bool replaceLast);
     void clear();
     void showMode(const QVariantList &content);
     void showRuler(const QVariantList &content);
 
 private:
-    QLabel *m_label;
+    void applyHeight();
+
+    QPlainTextEdit *m_log;
+    QPushButton *m_toggle;
     QLabel *m_modeLabel;
+    // Document position where the last message starts, so replace_last can
+    // overwrite it in place (nvim uses it for progress-style updates).
+    int m_lastMsgPos = -1;
+    bool m_expanded = false;
 };
 
 /// Native statusline widget displaying mode, file, position, diagnostics
