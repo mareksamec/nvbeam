@@ -1,0 +1,30 @@
+name: OpenBSD
+
+# Manual-only: the QEMU VM build takes 15-30 minutes, so it is not part of
+# regular PR CI. Trigger it from the Actions tab when needed.
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'OpenBSD release to build on'
+        required: false
+        default: '7.7'
+        type: string
+
+jobs:
+  build-openbsd:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build in OpenBSD VM
+        uses: vmactions/openbsd-vm@v1
+        with:
+          release: ${{ inputs.release }}
+          usesh: true
+          prepare: |
+            pkg_add cmake ninja git qt6-qtbase
+          run: |
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=OFF
+            cmake --build build
