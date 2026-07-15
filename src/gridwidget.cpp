@@ -11,6 +11,7 @@
 #include <QMimeData>
 #include <QUrl>
 #include <QGuiApplication>
+#include <QStyleHints>
 #include <QClipboard>
 #include <QDebug>
 #include "logging.h"
@@ -31,6 +32,18 @@ GridWidget::GridWidget(const QFont &font, QWidget *parent)
     setAttribute(Qt::WA_OpaquePaintEvent);
     setMouseTracking(true);
     setAcceptDrops(true); // accept file drops onto the buffer area
+
+    // Holds a dragless Shift+click for the double-click window so a
+    // Shift+double-click becomes a word selection instead of reaching nvim.
+    m_deferredClickTimer.setSingleShot(true);
+    m_deferredClickTimer.setInterval(QGuiApplication::styleHints()->mouseDoubleClickInterval());
+    connect(&m_deferredClickTimer, &QTimer::timeout, this, [this]() {
+        // isActive() is already false inside timeout; forward directly.
+        emit inputMouse("left", "press", m_deferredMod,
+                        m_pendingGrid, m_pendingRow, m_pendingCol);
+        emit inputMouse("left", "release", m_deferredMod,
+                        m_deferredReleaseGrid, m_deferredReleaseRow, m_deferredReleaseCol);
+    });
 }
 
 void GridWidget::handleRedraw(const QVariantList &events)
@@ -55,6 +68,8 @@ void GridWidget::resetGrids()
     m_cursorCol = 0;
     m_selecting = false;
     m_pendingSelectPress = false;
+    m_skipNextRelease = false;
+    m_deferredClickTimer.stop();
     m_selStartRow = m_selEndRow = 0;
     m_selStartCol = m_selEndCol = 0;
     // Highlight table and default colors are redefined by the new instance on
@@ -645,6 +660,7 @@ bool GridWidget::event(QEvent *ev)
 
 void GridWidget::keyPressEvent(QKeyEvent *event)
 {
+    flushDeferredClick(); // keep input ordering: held Shift+click goes first
     QString keys = keyToNvim(event);
     if (!keys.isEmpty()) emit inputKey(keys);
 }
@@ -674,9 +690,12 @@ GridWidget::GridHit GridWidget::gridAt(const QPoint &pos)
         }
     }
 
-    // Check non-float grids
+    // Check non-float grids. Grid 1 is the backdrop: it spans the whole
+    // window but holds no buffer text under ext_multigrid, so it must never
+    // shadow a window grid (QHash iteration order is arbitrary); it serves
+    // as the fallback below instead.
     for (auto it = m_grids.begin(); it != m_grids.end(); ++it) {
-        if (it->hidden || it->isFloat) continue;
+        if (it.key() == 1 || it->hidden || it->isFloat) continue;
         const Grid &g = *it;
         int localCol = pixelCol - g.x;
         int localRow = pixelRow - g.y;
@@ -686,7 +705,10 @@ GridWidget::GridHit GridWidget::gridAt(const QPoint &pos)
     }
 
     // Fallback to grid 1
-    return {1, qBound(0, pixelRow, 0), qBound(0, pixelCol, 0)};
+    auto g1 = m_grids.constFind(1);
+    if (g1 != m_grids.constEnd() && g1->rows > 0 && g1->cols > 0)
+        return {1, qBound(0, pixelRow, g1->rows - 1), qBound(0, pixelCol, g1->cols - 1)};
+    return {1, 0, 0};
 }
 
 GridWidget::GridHit GridWidget::hitInGrid(const QPoint &pos, int gridId) const
@@ -704,6 +726,10 @@ GridWidget::GridHit GridWidget::hitInGrid(const QPoint &pos, int gridId) const
 
 void GridWidget::mousePressEvent(QMouseEvent *event)
 {
+    // A Shift+click held back for the double-click window must reach nvim
+    // before any newer input.
+    flushDeferredClick();
+
     auto hit = gridAt(event->pos());
     m_mousePressed = true;
     m_mouseGrid = hit.gridId;
@@ -754,13 +780,23 @@ void GridWidget::mouseReleaseEvent(QMouseEvent *event)
     auto hit = gridAt(event->pos());
     m_mousePressed = false;
 
+    if (m_skipNextRelease && event->button() == Qt::LeftButton) {
+        // Release that ends a double-click word selection: already handled.
+        m_skipNextRelease = false;
+        return;
+    }
+
     if (m_pendingSelectPress && event->button() == Qt::LeftButton) {
-        // Shift+click without a drag: deliver the deferred press, then the
-        // release, so nvim's <S-LeftMouse> behaves as usual.
+        // Shift+click without a drag: hold the deferred press/release for the
+        // double-click window. A Shift+double-click must become a word
+        // selection, not two <S-LeftMouse> clicks in nvim; a single click is
+        // forwarded unchanged once the window expires.
         m_pendingSelectPress = false;
-        QString mod = modifierPrefix(event->modifiers(), false);
-        emit inputMouse("left", "press", mod, m_pendingGrid, m_pendingRow, m_pendingCol);
-        emit inputMouse("left", "release", mod, hit.gridId, hit.row, hit.col);
+        m_deferredMod = modifierPrefix(event->modifiers(), false);
+        m_deferredReleaseGrid = hit.gridId;
+        m_deferredReleaseRow = hit.row;
+        m_deferredReleaseCol = hit.col;
+        m_deferredClickTimer.start();
         return;
     }
 
@@ -770,18 +806,11 @@ void GridWidget::mouseReleaseEvent(QMouseEvent *event)
         m_selEndRow = end.row;
         m_selEndCol = end.col;
 
-        // Extract selected text and copy to CLIPBOARD + PRIMARY (same targets
-        // as the terminal panels). Explicit selections (mode / Shift+drag)
-        // always copy; the implicit mouse= path honors the config toggle.
-        if (m_selectionExplicit || m_mouseAutoCopy) {
-            QString text = extractSelectedText();
-            if (!text.isEmpty()) {
-                QClipboard *cb = QGuiApplication::clipboard();
-                cb->setText(text);
-                if (cb->supportsSelection())
-                    cb->setText(text, QClipboard::Selection);
-            }
-        }
+        // Copy to CLIPBOARD + PRIMARY (same targets as the terminal panels).
+        // Explicit selections (mode / Shift+drag) always copy; the implicit
+        // mouse= path honors the config toggle.
+        if (m_selectionExplicit || m_mouseAutoCopy)
+            copySelection();
         if (!m_selectionModeActive)
             unsetCursor();  // end of a one-shot Shift+drag selection
         update();
@@ -834,6 +863,85 @@ void GridWidget::mouseMoveEvent(QMouseEvent *event)
     auto hit = gridAt(event->pos());
     QString mod = modifierPrefix(event->modifiers(), false);
     emit inputMouse("left", "drag", mod, m_mouseGrid, hit.row, hit.col);
+}
+
+void GridWidget::mouseDoubleClickEvent(QMouseEvent *event)
+{
+    // Terminal-style word selection: selection mode, Shift held, or the
+    // implicit mouse= path. Nothing is forwarded to nvim in this case.
+    bool wantSelection = event->button() == Qt::LeftButton &&
+                         (m_selectionModeActive ||
+                          event->modifiers().testFlag(Qt::ShiftModifier) ||
+                          (m_terminalSelectionEnabled && m_nvimMouseOpt.isEmpty()));
+    if (wantSelection) {
+        // Drop the Shift+click held back on the first release: it is part of
+        // this double-click, not a standalone <S-LeftMouse>.
+        m_deferredClickTimer.stop();
+        m_pendingSelectPress = false;
+        m_selecting = false;
+        selectWordAt(gridAt(event->pos()));
+        m_skipNextRelease = true;
+        return;
+    }
+
+    // Same as QWidget's default: treat the second press like a press so nvim
+    // can do its own multi-click handling.
+    mousePressEvent(event);
+}
+
+void GridWidget::selectWordAt(const GridHit &hit)
+{
+    auto it = m_grids.constFind(hit.gridId);
+    if (it == m_grids.constEnd()) return;
+    const Grid &grid = *it;
+    if (hit.row < 0 || hit.row >= grid.rows ||
+        hit.col < 0 || hit.col >= grid.cols) return;
+
+    // Three character classes, xterm-style: whitespace, word (alnum + _),
+    // other symbols. The selection expands over the run of the clicked class.
+    auto charClass = [](const QString &t) -> int {
+        if (t.isEmpty()) return 0; // double-width continuation cell
+        const QChar ch = t.at(0);
+        if (ch.isSpace()) return 0;
+        if (ch.isLetterOrNumber() || ch == QLatin1Char('_')) return 1;
+        return 2;
+    };
+
+    const auto &row = grid.cells[hit.row];
+    int cls = charClass(row[hit.col].text);
+    if (cls == 0) return; // double-clicked whitespace: nothing to select
+
+    int c1 = hit.col, c2 = hit.col;
+    while (c1 > 0 && charClass(row[c1 - 1].text) == cls) c1--;
+    while (c2 + 1 < grid.cols && charClass(row[c2 + 1].text) == cls) c2++;
+
+    m_selectionExplicit = true;
+    m_selStartGrid = hit.gridId;
+    m_selStartRow = m_selEndRow = hit.row;
+    m_selStartCol = c1;
+    m_selEndCol = c2;
+    copySelection();
+    update();
+}
+
+void GridWidget::copySelection()
+{
+    const QString text = extractSelectedText();
+    if (text.isEmpty()) return;
+    QClipboard *cb = QGuiApplication::clipboard();
+    cb->setText(text);
+    if (cb->supportsSelection())
+        cb->setText(text, QClipboard::Selection);
+}
+
+void GridWidget::flushDeferredClick()
+{
+    if (!m_deferredClickTimer.isActive()) return;
+    m_deferredClickTimer.stop();
+    emit inputMouse("left", "press", m_deferredMod,
+                    m_pendingGrid, m_pendingRow, m_pendingCol);
+    emit inputMouse("left", "release", m_deferredMod,
+                    m_deferredReleaseGrid, m_deferredReleaseRow, m_deferredReleaseCol);
 }
 
 void GridWidget::wheelEvent(QWheelEvent *event)
@@ -904,6 +1012,7 @@ void GridWidget::setSelectionModeActive(bool on)
         unsetCursor();
         m_selecting = false;
         m_pendingSelectPress = false;
+        m_skipNextRelease = false;
         m_selStartRow = m_selEndRow = 0;
         m_selStartCol = m_selEndCol = 0;
     }

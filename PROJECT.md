@@ -63,13 +63,14 @@
 - [x] Add independent font configuration for the side terminal.
 - [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
 - [x] Add option to keep neobeam running when nvim buffer is exited
-- [x] Project switcher
+- [-] Project switcher
     - [x] Add project switcher - when neobeam is started without argument a project switcher with fzf search through recently opened folders and files (Like nvim Telescope)
     - [x] Switcher can use qt gui elements with typing area and a drop down list, maybe something like k runner in the middle of open neobeam window
     - [x] When a file is selected, cwd of nvim and all terminals (including side term) changes to the directory where the selected file is.
     - [x] You can also projects in neobeam.toml that will be on top of the switcher list.
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
+    - [ ] When a project is selected with Project switcher, Neobeam window title should change to <Project name> - <path> the word "Neobeam" Should not show. e.g.:  Myproject - ~/projects/myproject
 - [-] Config
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
@@ -96,6 +97,8 @@
     - [x] Drag selection in this mode won't trigger nvim visual selection mode.
     - [x] Fix uncovered along the way: drag coords are now clamped to the grid the selection started in, so dragging across a split/float no longer produces a garbage selection.
     - [x] Selection highlight follows the text on scroll (shifted by grid_scroll deltas); dropped once the selected rows scroll out of the window instead of floating over new content.
+    - [x] Fix: multi-line selection copied empty lines. gridAt() iterated m_grids (QHash, randomized order) and grid 1 - the full-window backdrop that holds no buffer text under ext_multigrid - could match before the window grid, so the overlay drew at the right pixels but extraction read blank cells. Grid 1 is now excluded from the hit loop and only used as fallback. -> awaiting visual confirmation
+    - [x] Shift + double click (or double click while the mode is on) selects the word under the pointer and copies it (xterm-style char classes: word = alnum + underscore). Previously there was no double-click handler at all: the deferred Shift+press leaked to nvim as two quick <S-LeftMouse> clicks, nvim drew its own visual word selection, and nothing was copied. A dragless Shift+click is now held for the double-click interval before being forwarded (flushed early on any other press/keypress), so plain Shift+click still reaches nvim as <S-LeftMouse>. -> awaiting visual confirmation
 
 ## Phase 9: Performance
 

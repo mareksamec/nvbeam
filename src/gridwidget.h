@@ -123,6 +123,7 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseDoubleClickEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
@@ -160,6 +161,8 @@ private:
     void handleOptionSet(const QVariantList &args);
     void recalculateGrid();
     QString extractSelectedText() const;
+    void copySelection();
+    void flushDeferredClick();
     void paintSelection(QPainter &p) const;
     bool hasSelection() const {
         return m_selStartRow != m_selEndRow || m_selStartCol != m_selEndCol;
@@ -174,6 +177,7 @@ private:
     };
     GridHit gridAt(const QPoint &pos);
     GridHit hitInGrid(const QPoint &pos, int gridId) const;
+    void selectWordAt(const GridHit &hit);
 
     QFont m_font;
     int m_cellWidth = 0;
@@ -222,6 +226,16 @@ private:
     int m_pendingGrid = 0;
     int m_pendingRow = 0;
     int m_pendingCol = 0;
+    // A dragless Shift+click is held for the double-click window before being
+    // forwarded, so a Shift+double-click becomes a word selection instead.
+    QTimer m_deferredClickTimer;
+    QString m_deferredMod;
+    int m_deferredReleaseGrid = 0;
+    int m_deferredReleaseRow = 0;
+    int m_deferredReleaseCol = 0;
+    // Set when a double-click word selection consumed the click; the matching
+    // release must not reach nvim or restart a selection.
+    bool m_skipNextRelease = false;
 
     // Multi-grid state
     QHash<int, Grid> m_grids;
