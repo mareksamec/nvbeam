@@ -934,6 +934,15 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     // Every terminal, side terminal included, moves to the project directory.
     m_terminal->broadcastCwd(dir);
     applyProjectSideCommand(dir);
+    // Pinned projects title the window with their name; folder/file picks
+    // fall back to the plain cwd title.
+    if (item.kind == SwitcherItem::Project) {
+        m_titleProject = item.label;
+        m_titleProjectDir = dir;
+    } else {
+        m_titleProject.clear();
+        m_titleProjectDir.clear();
+    }
     updateTitleCwd(dir);
 
     if (m_cfg.switcherMaxRecent > 0) {
@@ -947,21 +956,35 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
 
 void MainWindow::updateTitleCwd(const QString &cwd)
 {
-    if (cwd == m_titleCwd)
-        return;
-    m_titleCwd = cwd;
-    // The git segment follows the same cwd-change choke point as the title.
-    if (m_gitStatus)
-        m_gitStatus->setWorkingDirectory(cwd);
-    const QString home = QDir::homePath();
-    if (cwd.isEmpty() || cwd == home) {
-        setWindowTitle(QStringLiteral("Neobeam"));
-        return;
+    // Leaving the project directory ends the project context; re-selecting it
+    // in the switcher sets m_titleProject again before calling here.
+    if (cwd != m_titleProjectDir) {
+        m_titleProject.clear();
+        m_titleProjectDir.clear();
     }
+    if (cwd != m_titleCwd) {
+        m_titleCwd = cwd;
+        // The git segment follows the same cwd-change choke point as the title.
+        if (m_gitStatus)
+            m_gitStatus->setWorkingDirectory(cwd);
+    }
+    const QString home = QDir::homePath();
     QString shown = cwd;
-    if (shown.startsWith(home + QLatin1Char('/')))
+    if (shown == home)
+        shown = QStringLiteral("~");
+    else if (shown.startsWith(home + QLatin1Char('/')))
         shown = QLatin1Char('~') + shown.mid(home.size());
-    setWindowTitle(QStringLiteral("Neobeam - ") + shown);
+    QString title;
+    if (!m_titleProject.isEmpty())
+        title = m_titleProject + QStringLiteral(" - ") + shown;
+    else if (cwd.isEmpty() || cwd == home)
+        title = QStringLiteral("Neobeam");
+    else
+        title = QStringLiteral("Neobeam - ") + shown;
+    if (title != windowTitle()) {
+        qCDebug(nbTitle) << "title:" << title;
+        setWindowTitle(title);
+    }
 }
 
 void MainWindow::applyProjectSideCommand(const QString &dir)

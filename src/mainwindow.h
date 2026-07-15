@@ -62,7 +62,9 @@ private:
 
     /// Reflect nvim's cwd in the window title ("Neobeam - ~/path"). The home
     /// directory (nvim's default startup cwd, not a project) and an empty cwd
-    /// show the plain "Neobeam" title.
+    /// show the plain "Neobeam" title. While a switcher-selected project is
+    /// active (cwd still inside its directory) the title is
+    /// "<project name> - ~/path" instead, with no "Neobeam".
     void updateTitleCwd(const QString &cwd);
 
 
@@ -93,4 +95,6 @@ private:
     QString m_lastMruFile;            // change gates for the recent-files poll
     QString m_lastMruCwd;
     QString m_titleCwd;               // cwd currently shown in the window title
+    QString m_titleProject;           // switcher-selected project name shown in the title
+    QString m_titleProjectDir;        // its directory; leaving it drops the name
 };

@@ -71,20 +71,20 @@
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
     - [ ] When a project is selected with Project switcher, Neobeam window title should change to <Project name> - <path> the word "Neobeam" Should not show. e.g.:  Myproject - ~/projects/myproject
-- [-] Config
+- [x] Config
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
-- [ ] **Term + Project improvements**
+- [x] **Term + Project improvements**
     - [x] Terminal select + copy to PRIMARY + CLIPBOARD 
         - [x] Add separate [terminal] config option for this? -> yes, [terminal] copy_on_select (default true)
         - [x] How to handle possible conflict with tools like wl-copy? -> no conflict; standard last-writer-wins selection semantics, no coordination needed
     - [x] Neobeam window title
         - [x] Make Neobeam uppercase
         - [x] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
-    - [-] Nvim buffer artifacts
+    - [x] Nvim buffer artifacts
         - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
         - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
-        - [ ] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) -> new approach on fix/warning-error-area: ext_messages now actually passed at ui_attach (was configured but never sent, so the message grid was in use); MessageWidget reworked into a timestamped, expandable 2-line message log below the buffer ("Messages" toggle, scrollbar, selectable + auto-copy like statusline). Verified headless (msg_show kinds echomsg/lua_error arrive incl. full traceback, msg_set_pos gone); awaiting visual confirmation
+        - [x] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) -> new approach on fix/warning-error-area: ext_messages now actually passed at ui_attach (was configured but never sent, so the message grid was in use); MessageWidget reworked into a timestamped, expandable 2-line message log below the buffer ("Messages" toggle, scrollbar, selectable + auto-copy like statusline). Verified headless (msg_show kinds echomsg/lua_error arrive incl. full traceback, msg_set_pos gone); awaiting visual confirmation
     - [x] Neobeam UI statusline:
         - [x] Add git status (optimize performance avoid frequent scanning, or use push model) -> push model: nvim autocmd rpcnotify + .git HEAD/index file watcher + cwd changes, debounced async `git status`; counts in accent_color ([ui] git_status option)
 
