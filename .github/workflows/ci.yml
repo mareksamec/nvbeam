@@ -67,23 +67,6 @@ jobs:
       - name: Build
         run: cmake --build build -j$(nproc)
 
-  build-openbsd:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build in OpenBSD VM
-        uses: vmactions/openbsd-vm@v1
-        with:
-          release: "7.7"
-          usesh: true
-          prepare: |
-            pkg_add cmake ninja git qt6-qtbase
-          run: |
-            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=OFF
-            cmake --build build
-
   build-arch:
     runs-on: ubuntu-latest
     container: archlinux:latest

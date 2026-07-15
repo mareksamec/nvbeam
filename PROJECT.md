@@ -121,7 +121,7 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
 ## Pipeline adjustments
  - [ ] Allow to publish release build from branch
  - [ ] Do not run build pipelines in PR/branch when only .md files are updated.
- - [ ] Add BSD build pipeline
+ - [x] Add BSD build pipeline -> separate manual-only workflow (.github/workflows/openbsd.yml, vmactions/openbsd-vm, workflow_dispatch with release input); OpenBSD port skeleton in packaging/openbsd/
  - [ ] Create comprehensive project documentation with examples on GitHub - suggest best approach.
 
 ## Fixes/Adjustments
@@ -134,6 +134,32 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
 - [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
+
+## Project rename
+
+Planned rename neobeam → neoqute ("neobeam" is already used by multiple projects on GitHub).
+Since the repo is still private and no packages are published, this is a clean find-and-replace +
+file renames with no user migration or compatibility shims needed. Do it in one commit/branch —
+the Lua RPC event names exist on both the C++ and Lua side and must change together.
+
+- [ ] Verify `neoqute` is free on GitHub and AUR before starting (note: name echoes qutebrowser, unrelated project — accept or reconsider)
+- [ ] Rename the GitHub repo
+- [ ] Build system:
+    - [ ] `CMakeLists.txt`: `project(neobeam ...)`, target name (changes installed binary to `bin/neoqute`), `NEOBEAM_*` variables and compile definitions (`NEOBEAM_HAS_TERMINAL`, `NEOBEAM_ICON_SIZES`, `NEOBEAM_TERMINAL` option — also referenced in both workflows)
+    - [ ] Icon pipeline: rename `resources/icons/neobeam.svg` + placeholder SVG, generated `neobeam_<size>.png` names in `cmake/AppIcons.cmake` and `main.cpp`
+- [ ] Qt application identity:
+    - [ ] `main.cpp`: `setApplicationName` (determines config dir `~/.config/neoqute/`), `setDesktopFileName`
+    - [ ] `config.cpp`: hardcoded `neobeam.toml` filename, generated config template text, default window title `"Neobeam - ~/path"`, `neobeam -k` hints
+- [ ] Desktop file + packaging:
+    - [ ] `packaging/neobeam.desktop`: filename, `Name`, `Exec`, `Icon`, `StartupWMClass` (must match `setApplicationName` for taskbar grouping)
+    - [ ] `packaging/arch/PKGBUILD` + `packaging/aur/neobeam-git/`: pkgname, dir name, `url=`, regenerate `.SRCINFO`
+    - [ ] `.github/workflows/release.yml`: tarball prefix and artifact names
+- [ ] Lua/RPC layer (rename C++ and Lua sides together):
+    - [ ] `_G.neobeam` table, augroup names, RPC event names (`neobeam_cwd`, `neobeam_file`, `neobeam_git_event`, `neobeam_image_show/hide`) — listeners in `mainwindow.cpp` match these strings exactly
+    - [ ] `lua/neobeam-plugin.lua` filename (and the `neobeam_preview.lua` install name it documents)
+    - [ ] QLoggingCategory names (`neobeam.minimap`, `neobeam.redraw`, `neobeam.title`) + verify skill references
+- [ ] Config examples + docs: `neobeam.toml`, `neobeam.toml.example`, `README.md`, `PROJECT.md`, `AGENTS.md`
+- [ ] `Neoblue.colorscheme` stays — separate name, no need to touch
 
 ## Upstream issues
 
