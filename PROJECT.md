@@ -63,14 +63,15 @@
 - [x] Add independent font configuration for the side terminal.
 - [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
 - [x] Add option to keep neobeam running when nvim buffer is exited
-- [-] Project switcher
+- [x] Project switcher
     - [x] Add project switcher - when neobeam is started without argument a project switcher with fzf search through recently opened folders and files (Like nvim Telescope)
     - [x] Switcher can use qt gui elements with typing area and a drop down list, maybe something like k runner in the middle of open neobeam window
     - [x] When a file is selected, cwd of nvim and all terminals (including side term) changes to the directory where the selected file is.
     - [x] You can also projects in neobeam.toml that will be on top of the switcher list.
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
-    - [ ] When a project is selected with Project switcher, Neobeam window title should change to <Project name> - <path> the word "Neobeam" Should not show. e.g.:  Myproject - ~/projects/myproject
+    - [x] When a project is selected with Project switcher, Neobeam window title should change to <Project name> - <path> the word "Neobeam" Should not show. e.g.:  Myproject - ~/projects/myproject -> project name shows while nvim cwd stays in the project dir; cd elsewhere reverts to "Neobeam - ~/path". New neobeam.title debug trace category for headless checks.
+    - [x] Configurable window title: [ui] window_title template, empty = default behaviour. Placeholders %p project name, %d cwd (~), %D cwd (absolute), %f file name, %F file path (~), %% literal. Current file pushed via existing neobeam_file BufEnter notification; unknown placeholders render literally and warn in `neobeam -k`.
 - [x] Config
     - [x] Add simple config validation e.g. `neobeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.

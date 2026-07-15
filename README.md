@@ -160,8 +160,14 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # ext_messages = true
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
+# git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # powerline, pipe, none
+# focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
+# window_title = ""  # custom title template (empty = default "Neobeam - ~/path",
+#                    # or "<project> - ~/path" after a switcher project pick).
+#                    # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,
+#                    # %f file name, %F file path (~-shortened), %% literal %
 
 # [mouse]
 # terminal_selection = true   # terminal-style select/copy when vim mouse= is empty
@@ -227,8 +233,11 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `ext_messages` — Native message area (default: `true`)
 - `bufferline` — Show open buffers in tabline instead of tabpages (default: `true`)
 - `statusline` — Native statusline widget (default: `true`)
+- `git_status` — Git branch + status counts in the statusline, push-updated with no polling (default: `true`)
 - `accent_color` — Accent color for UI elements (default: `"#50fa7b"`)
 - `statusline_divider` — Statusline segment divider style: `powerline`, `pipe`, `none` (default: `powerline`)
+- `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: `"#61afef"`)
+- `window_title` — Custom window title template. Empty uses the default title: `Neobeam - ~/path`, plain `Neobeam` for the home directory, or `<project name> - ~/path` after picking a pinned project in the switcher. Placeholders: `%p` project name (empty when no project is active), `%d` cwd (`~`-shortened), `%D` cwd (absolute), `%f` current file name, `%F` current file path (`~`-shortened), `%%` literal `%` (default: `""`)
 
 **`[mouse]`**
 - `terminal_selection` — Terminal-style select/copy in nvim buffers when vim `mouse=` is empty (default: `true`)

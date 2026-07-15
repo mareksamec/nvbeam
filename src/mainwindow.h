@@ -60,12 +60,17 @@ private:
     /// matching dir, or clear it when dir is not a pinned project.
     void applyProjectSideCommand(const QString &dir);
 
-    /// Reflect nvim's cwd in the window title ("Neobeam - ~/path"). The home
-    /// directory (nvim's default startup cwd, not a project) and an empty cwd
-    /// show the plain "Neobeam" title. While a switcher-selected project is
-    /// active (cwd still inside its directory) the title is
-    /// "<project name> - ~/path" instead, with no "Neobeam".
+    /// Track nvim's cwd for the window title (and feed the git segment),
+    /// then re-render the title via applyWindowTitle().
     void updateTitleCwd(const QString &cwd);
+
+    /// Compose and set the window title. With [ui] window_title set, renders
+    /// that template (%p project, %d/%D cwd, %f/%F file, %% literal).
+    /// Otherwise: "Neobeam - ~/path", plain "Neobeam" for an empty/home cwd
+    /// (nvim's default startup cwd, not a project), or "<project> - ~/path"
+    /// with no "Neobeam" while a switcher-selected project is active (cwd
+    /// still in its directory).
+    void applyWindowTitle();
 
 
     NvimProcess *m_nvim = nullptr;
@@ -97,4 +102,5 @@ private:
     QString m_titleCwd;               // cwd currently shown in the window title
     QString m_titleProject;           // switcher-selected project name shown in the title
     QString m_titleProjectDir;        // its directory; leaving it drops the name
+    QString m_titleFile;              // current buffer's file path, for %f/%F in [ui] window_title
 };

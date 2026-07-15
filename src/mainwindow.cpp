@@ -757,6 +757,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             }
         } else if (method == QLatin1String("neobeam_file")) {
             const QString file = args.value(0).toString();
+            // %f/%F in [ui] window_title: unnamed and non-file buffers
+            // (term://, ...) show as empty rather than a raw buffer name.
+            m_titleFile = file.contains(QLatin1String("://")) ? QString() : file;
+            applyWindowTitle();
             // Skip unnamed buffers and non-file buffers (term://, ...).
             if (m_cfg.switcherMaxRecent > 0 && !file.isEmpty() && file != m_lastMruFile
                 && !file.contains(QLatin1String("://")) && QFileInfo(file).isFile()) {
@@ -954,6 +958,17 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     m_grid->setFocus();
 }
 
+// ~-shorten a path for display in the window title.
+static QString tildify(const QString &path)
+{
+    const QString home = QDir::homePath();
+    if (path == home)
+        return QStringLiteral("~");
+    if (path.startsWith(home + QLatin1Char('/')))
+        return QLatin1Char('~') + path.mid(home.size());
+    return path;
+}
+
 void MainWindow::updateTitleCwd(const QString &cwd)
 {
     // Leaving the project directory ends the project context; re-selecting it
@@ -968,19 +983,40 @@ void MainWindow::updateTitleCwd(const QString &cwd)
         if (m_gitStatus)
             m_gitStatus->setWorkingDirectory(cwd);
     }
-    const QString home = QDir::homePath();
-    QString shown = cwd;
-    if (shown == home)
-        shown = QStringLiteral("~");
-    else if (shown.startsWith(home + QLatin1Char('/')))
-        shown = QLatin1Char('~') + shown.mid(home.size());
+    applyWindowTitle();
+}
+
+void MainWindow::applyWindowTitle()
+{
     QString title;
-    if (!m_titleProject.isEmpty())
-        title = m_titleProject + QStringLiteral(" - ") + shown;
-    else if (cwd.isEmpty() || cwd == home)
+    if (!m_cfg.uiWindowTitle.isEmpty()) {
+        const QString &tpl = m_cfg.uiWindowTitle;
+        title.reserve(tpl.size());
+        for (int i = 0; i < tpl.size(); ++i) {
+            const QChar c = tpl.at(i);
+            if (c != QLatin1Char('%') || i + 1 == tpl.size()) {
+                title += c;
+                continue;
+            }
+            const QChar token = tpl.at(++i);
+            switch (token.unicode()) {
+            case 'p': title += m_titleProject; break;
+            case 'd': title += tildify(m_titleCwd); break;
+            case 'D': title += m_titleCwd; break;
+            case 'f': title += QFileInfo(m_titleFile).fileName(); break;
+            case 'F': title += tildify(m_titleFile); break;
+            case '%': title += QLatin1Char('%'); break;
+            // Unknown placeholders render literally; config load warns.
+            default: title += c; title += token; break;
+            }
+        }
+    } else if (!m_titleProject.isEmpty()) {
+        title = m_titleProject + QStringLiteral(" - ") + tildify(m_titleCwd);
+    } else if (m_titleCwd.isEmpty() || m_titleCwd == QDir::homePath()) {
         title = QStringLiteral("Neobeam");
-    else
-        title = QStringLiteral("Neobeam - ") + shown;
+    } else {
+        title = QStringLiteral("Neobeam - ") + tildify(m_titleCwd);
+    }
     if (title != windowTitle()) {
         qCDebug(nbTitle) << "title:" << title;
         setWindowTitle(title);
