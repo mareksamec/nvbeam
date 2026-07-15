@@ -147,7 +147,8 @@ const KnownSection kKnownSections[] = {
                   "antialiasing", "hinting", "scrollback"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
-            "git_status", "accent_color", "statusline_divider", "focus_border_color"}},
+            "git_status", "accent_color", "statusline_divider", "focus_border_color",
+            "window_title"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
     {"switcher", {"keep_running", "max_recent"}},
@@ -331,6 +332,10 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# accent_color = \"#50fa7b\"\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
+                "# window_title = \"\"  # custom title template (empty = default \"Neobeam - ~/path\",\n"
+                "#                     # or \"<project> - ~/path\" after a switcher project pick).\n"
+                "#                     # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,\n"
+                "#                     # %f file name, %F file path (~-shortened), %% literal %\n"
                 "\n"
                 "# [mouse]\n"
                 "# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty\n"
@@ -421,6 +426,21 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                                           "(expected powerline, pipe or none)").arg(divider));
             }
             readColor(*ui, "ui", "focus_border_color", cfg.focusBorderColor, issues);
+            if (readString(*ui, "ui", "window_title", cfg.uiWindowTitle, issues)) {
+                // Unknown placeholders render literally; flag them so a typo
+                // like %P is caught by `neobeam -k` instead of shipping as-is.
+                const QString &tpl = cfg.uiWindowTitle;
+                for (int i = 0; i + 1 < tpl.size(); ++i) {
+                    if (tpl.at(i) != QLatin1Char('%'))
+                        continue;
+                    const QChar token = tpl.at(++i);
+                    if (!QStringLiteral("pdDfF%").contains(token))
+                        report(issues, ConfigIssue::Warning,
+                               QStringLiteral("[ui] window_title: unknown placeholder \"%%1\" "
+                                              "(expected %p, %d, %D, %f, %F or %%)")
+                                   .arg(token));
+                }
+            }
         }
 
         if (const auto *mouse = sectionTable(data, "mouse")) {
