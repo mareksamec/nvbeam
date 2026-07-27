@@ -156,10 +156,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Highlight the whole editor column (tabline/grid/minimap/statusline) with
     // a 1px border while the grid holds keyboard focus.
     m_editorArea->setStyleSheet(QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    // Neobeam has no TTY, so nvim never gets the terminal focus-report
+    // escape sequences that normally fire FocusGained/FocusLost (and thus
+    // :checktime on external file changes). Emit the same autocmd events
+    // ourselves so nvim behaves as it would in a real terminal.
     connect(m_grid, &GridWidget::focusChanged, this, [this](bool focused) {
         m_editorArea->setStyleSheet(focused
             ? QStringLiteral("QFrame#nbEditorArea { border: 1px solid %1; }").arg(m_cfg.focusBorderColor)
             : QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+        const QString autocmdEvent = focused ? QStringLiteral("FocusGained") : QStringLiteral("FocusLost");
+        qCDebug(nbFocus) << "grid" << (focused ? "focused" : "unfocused") << "-> doautocmd" << autocmdEvent;
+        m_nvim->request("nvim_command", {QStringLiteral("doautocmd <nomodeline> %1").arg(autocmdEvent)});
     });
 
     // Embedded terminal panel (VSCode-like, below statusline)
