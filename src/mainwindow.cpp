@@ -156,10 +156,25 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Highlight the whole editor column (tabline/grid/minimap/statusline) with
     // a 1px border while the grid holds keyboard focus.
     m_editorArea->setStyleSheet(QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+    // Neobeam has no TTY, so nvim never gets the terminal focus-report
+    // escape sequences that normally fire FocusGained/FocusLost. Emit the
+    // same autocmd events ourselves so nvim behaves as it would in a real
+    // terminal. Firing the event alone isn't enough to reload external file
+    // changes though: unlike real GUI Vim (where focus-triggered timestamp
+    // checking is built in), nvim only rechecks on FocusGained if the user's
+    // own config defines a `checktime` autocmd for it, which most don't. So
+    // run checktime ourselves alongside the event to match GUI Vim's behavior
+    // regardless of the user's config.
     connect(m_grid, &GridWidget::focusChanged, this, [this](bool focused) {
         m_editorArea->setStyleSheet(focused
             ? QStringLiteral("QFrame#nbEditorArea { border: 1px solid %1; }").arg(m_cfg.focusBorderColor)
             : QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
+        const QString autocmdEvent = focused ? QStringLiteral("FocusGained") : QStringLiteral("FocusLost");
+        qCDebug(nbFocus) << "grid" << (focused ? "focused" : "unfocused") << "-> doautocmd" << autocmdEvent;
+        const QString cmd = focused
+            ? QStringLiteral("doautocmd <nomodeline> FocusGained | checktime")
+            : QStringLiteral("doautocmd <nomodeline> FocusLost");
+        m_nvim->request("nvim_command", {cmd});
     });
 
     // Embedded terminal panel (VSCode-like, below statusline)
