@@ -1,6 +1,7 @@
 #include "terminalpanel.h"
 #include <QShowEvent>
 #include <QVBoxLayout>
+#include <QDesktopServices>
 #include <QDir>
 #include <QMouseEvent>
 #include <QApplication>
@@ -11,6 +12,7 @@
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
+#include <QUrl>
 #include <QDebug>
 
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -551,6 +553,13 @@ QTermWidget *TerminalPanel::createTermWidget()
     } else {
         term->setProperty("_nb_pending", true);
     }
+
+    // Ctrl+click opens URLs/emails under the cursor (QTermWidget already
+    // underlines them on hover and emits this on Ctrl+click or "Open Link"
+    // from the context menu; neobeam just has to act on it).
+    connect(term, &QTermWidget::urlActivated, this, [](const QUrl &url, bool) {
+        QDesktopServices::openUrl(url);
+    });
 
     connect(term, &QTermWidget::termGetFocus, this, [this, term]() {
         m_currentTerm = term;
