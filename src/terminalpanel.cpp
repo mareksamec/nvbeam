@@ -8,7 +8,9 @@
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QFile>
+#include <QMenu>
 #include <QPointer>
+#include <QRegularExpression>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTimer>
@@ -86,6 +88,111 @@ QColor schemeBackgroundColor(const QString &scheme)
             return {};
     }
     return QColor(rgb[0], rgb[1], rgb[2]);
+}
+
+// --- Link detection ---------------------------------------------------------
+//
+// qtermwidget detects links itself (UrlFilter, underlined on hover, opened on
+// click) but only ones written with an explicit scheme and laid out on a single
+// terminal line. The helpers below cover what its filter misses and cannot be
+// taught, since the filter chain is not reachable through the public API:
+// scheme-less links and links a TUI application wrapped across lines itself.
+
+/// Characters a URL may be built from (RFC 3986 unreserved + reserved + the
+/// percent sign of escapes). ASCII-only on purpose: the spaces, quotes and
+/// box-drawing characters TUI applications frame their output with therefore
+/// end a match instead of becoming part of the link.
+const QString kUrlBodyChars = QStringLiteral("A-Za-z0-9\\-._~:/?#\\[\\]@!$&'()*+,;=%");
+
+/// Single pass, leftmost match wins: scheme URL, www host, host with a path,
+/// bare e-mail address. Hosts without a "www." prefix need a path so that
+/// ordinary dotted words (vim.fn.getcwd, main.cpp) are not taken for links.
+const QRegularExpression &linkPattern()
+{
+    static const QRegularExpression re(
+        QStringLiteral("[A-Za-z][A-Za-z0-9+.\\-]*://[%1]+"
+                       "|www\\.[A-Za-z0-9\\-]+(?:\\.[A-Za-z0-9\\-]+)+[%1]*"
+                       "|[A-Za-z0-9\\-]+(?:\\.[A-Za-z0-9\\-]+)+/[%1]*"
+                       "|[A-Za-z0-9._%+\\-]+@[A-Za-z0-9\\-]+(?:\\.[A-Za-z0-9\\-]+)+")
+            .arg(kUrlBodyChars));
+    return re;
+}
+
+/// Turn matched text into something openable: trailing sentence punctuation is
+/// dropped, a scheme-less host gets https:// and a bare address mailto:.
+/// Returns an invalid QUrl when nothing usable is left.
+QUrl normalizeLink(QString text)
+{
+    static const QString kTrailing = QStringLiteral(".,;:!?'\"");
+    while (!text.isEmpty() && kTrailing.contains(text.back()))
+        text.chop(1);
+    // A closing bracket belongs to the link only if it has an opener inside it
+    // (wiki-style paths like /Foo_(bar) are common enough to matter).
+    while (text.size() > 1) {
+        const QChar last = text.back();
+        const QChar opener = last == QLatin1Char(')') ? QLatin1Char('(')
+                           : last == QLatin1Char(']') ? QLatin1Char('[')
+                                                      : QChar();
+        if (opener.isNull() || text.count(opener) >= text.count(last))
+            break;
+        text.chop(1);
+    }
+    if (text.isEmpty())
+        return {};
+
+    QUrl url(text, QUrl::StrictMode);
+    if (url.scheme().isEmpty()) {
+        const bool address = text.contains(QLatin1Char('@')) && !text.contains(QLatin1Char('/'));
+        url = QUrl((address ? QStringLiteral("mailto:") : QStringLiteral("https://")) + text,
+                   QUrl::StrictMode);
+    }
+    return url.isValid() ? url : QUrl();
+}
+
+/// First link in text, or an invalid QUrl when it holds none.
+QUrl firstLinkIn(const QString &text)
+{
+    const QRegularExpressionMatch match = linkPattern().match(text);
+    return match.hasMatch() ? normalizeLink(match.captured(0)) : QUrl();
+}
+
+/// Resolve the link in a terminal selection.
+///
+/// A selection whose lines hold nothing but URL characters - once the padding
+/// and frame characters a TUI application surrounds its lines with are stripped
+/// off both ends - is read as one link the application wrapped itself and joined
+/// back together ("https://exa" + "│ mple.com/x"). Any line with an internal
+/// separator means the selection is prose containing a link, which is then
+/// searched line by line so nothing gets glued to the link.
+QUrl linkInSelection(const QString &selection)
+{
+    static const QRegularExpression frame(
+        QStringLiteral("^[^%1]+|[^%1]+$").arg(kUrlBodyChars));
+    static const QRegularExpression separator(QStringLiteral("[^%1]").arg(kUrlBodyChars));
+
+    const QStringList lines = selection.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    QStringList fragments;
+    bool wrapped = true;
+    for (const QString &line : lines) {
+        const QString inner = QString(line).remove(frame);
+        if (inner.isEmpty())
+            continue;
+        if (inner.contains(separator))
+            wrapped = false;
+        fragments << inner;
+    }
+
+    if (wrapped && !fragments.isEmpty()) {
+        const QUrl joined = firstLinkIn(fragments.join(QString()));
+        if (joined.isValid())
+            return joined;
+    }
+    for (const QString &line : lines) {
+        const QUrl url = firstLinkIn(line);
+        if (url.isValid())
+            return url;
+    }
+    return {};
 }
 
 } // namespace
@@ -333,6 +440,25 @@ void TerminalPanel::adoptProject(const QString &dir, const QString &command)
 #endif
 }
 
+bool TerminalPanel::openSelectedLink()
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (!m_currentTerm)
+        return false;
+    // Line breaks are kept (preserveLineBreaks) because linkInSelection needs
+    // them to tell a link wrapped across lines from prose around a link.
+    const QUrl url = linkInSelection(m_currentTerm->selectedText(true));
+    if (!url.isValid()) {
+        qWarning() << "No link found in the terminal selection";
+        return false;
+    }
+    QDesktopServices::openUrl(url);
+    return true;
+#else
+    return false;
+#endif
+}
+
 void TerminalPanel::addTerminal()
 {
 #ifdef NEOBEAM_HAS_TERMINAL
@@ -529,13 +655,16 @@ QTermWidget *TerminalPanel::createTermWidget()
         }
     }
 
-    // Right-click paste (PuTTY-style)
-    if (m_cfg.rightClickPaste) {
-        term->setContextMenuPolicy(Qt::CustomContextMenu);
-        connect(term, &QWidget::customContextMenuRequested, this, [term]() {
-            term->pasteClipboard();
-        });
-    }
+    // Double-click selects a whole URL rather than stopping at the query
+    // string, which also makes openSelectedLink() a one-gesture fallback.
+    term->setWordCharacters(m_cfg.wordCharacters);
+
+    // Right-click: link actions when a link sits under the cursor, otherwise
+    // the configured PuTTY-style paste. Installed regardless of the paste
+    // setting, since qtermwidget itself binds no context menu.
+    term->setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(term, &QWidget::customContextMenuRequested, this,
+            [this, term](const QPoint &pos) { showContextMenu(term, pos); });
 
     // Shell program
     if (!m_cfg.shell.isEmpty())
@@ -554,9 +683,12 @@ QTermWidget *TerminalPanel::createTermWidget()
         term->setProperty("_nb_pending", true);
     }
 
-    // Ctrl+click opens URLs/emails under the cursor (QTermWidget already
-    // underlines them on hover and emits this on Ctrl+click or "Open Link"
-    // from the context menu; neobeam just has to act on it).
+    // Click opens URLs/emails under the cursor (QTermWidget underlines them on
+    // hover and emits this on click; neobeam just has to act on it). Every
+    // split of both panels is created here, so the bottom and the side terminal
+    // handle links identically. Links its UrlFilter does not recognize -
+    // scheme-less ones, or ones a TUI application wrapped across lines - are
+    // covered by openSelectedLink() instead.
     connect(term, &QTermWidget::urlActivated, this, [](const QUrl &url, bool) {
         QDesktopServices::openUrl(url);
     });
@@ -604,6 +736,40 @@ QFrame *TerminalPanel::wrapTerminal(QTermWidget *term)
     m_wrapperFor.insert(term, wrapper);
     updateFocusHighlight(m_currentTerm); // keep existing highlight consistent as splits are added/removed
     return wrapper;
+}
+
+void TerminalPanel::showContextMenu(QTermWidget *term, const QPoint &pos)
+{
+    // The hotspot's matched text is read up front instead of reusing the
+    // hotspot's own QActions: the filter chain (and with it every hotspot) is
+    // rebuilt on any terminal output, which would leave a menu built from those
+    // actions holding dangling pointers.
+    QUrl url;
+    if (Filter::HotSpot *spot = term->getHotSpotAt(pos)) {
+        if (spot->type() == Filter::HotSpot::Link) {
+            if (auto *match = dynamic_cast<Konsole::RegExpFilter::HotSpot *>(spot))
+                url = normalizeLink(match->capturedTexts().value(0));
+        }
+    }
+    if (!url.isValid()) {
+        if (m_cfg.rightClickPaste)
+            term->pasteClipboard();
+        return;
+    }
+
+    QMenu menu(this);
+    const QString bg = panelBackgroundColor().name();
+    menu.setStyleSheet(QStringLiteral(
+        "QMenu { background: %1; color: #cdd6f4; border: 1px solid #333; }"
+        "QMenu::item { padding: 4px 16px; }"
+        "QMenu::item:selected { background: #333; }").arg(bg));
+    QAction *openAct = menu.addAction(QStringLiteral("Open Link"));
+    QAction *copyAct = menu.addAction(QStringLiteral("Copy Link"));
+    const QAction *chosen = menu.exec(term->mapToGlobal(pos));
+    if (chosen == openAct)
+        QDesktopServices::openUrl(url);
+    else if (chosen == copyAct)
+        QApplication::clipboard()->setText(url.toString());
 }
 
 void TerminalPanel::updateFocusHighlight(QTermWidget *focused)

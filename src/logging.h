@@ -12,3 +12,4 @@ Q_DECLARE_LOGGING_CATEGORY(nbRedraw)   // neobeam.redraw  — per-event redraw s
 Q_DECLARE_LOGGING_CATEGORY(nbMessages) // neobeam.messages — ext_messages msg_show events reaching the log
 Q_DECLARE_LOGGING_CATEGORY(nbTitle)    // neobeam.title   — window title recomputation (cwd/project changes)
 Q_DECLARE_LOGGING_CATEGORY(nbFocus)    // neobeam.focus   — FocusGained/FocusLost forwarded to nvim
+Q_DECLARE_LOGGING_CATEGORY(nbSession)  // neobeam.session — startup restore decisions (terminal panels)

@@ -191,6 +191,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.execCommand = cfg.terminalExecCommand;
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
     termCfg.copyOnSelect = cfg.terminalCopyOnSelect;
+    termCfg.wordCharacters = cfg.terminalWordCharacters;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
@@ -214,6 +215,11 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             break;
         }
     }
+    // Whether this launch has a side terminal command at all. Without one there
+    // is no CLI tool to come back to, so the panel starts collapsed even when
+    // the session says it was open - the case of opening a single file
+    // ("Open with Neobeam", a file picker) rather than a pinned project.
+    const bool haveSideCommand = !sideCfg.execCommand.isEmpty();
     sideCfg.sidePanel = true;
     // Independent font: fall back to the bottom terminal's font when unset.
     if (!cfg.sideTerminalFont.isEmpty())
@@ -268,6 +274,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
     connect(termCloseSplitShortcut, &QShortcut::activated, this,
             [focusedPanel]() { focusedPanel()->removeCurrentTerminal(); });
+
+    // Ctrl+Shift+L opens the link in the focused terminal's selection. This is
+    // the fallback for links qtermwidget's URL filter does not detect on its
+    // own (see TerminalPanel::openSelectedLink); it only acts on the panel that
+    // has focus, so it can never open a stale selection from the other one.
+    auto *termLinkShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), this);
+    connect(termLinkShortcut, &QShortcut::activated, this, [this]() {
+        if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget()))
+            panel->openSelectedLink();
+    });
 
     // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
     auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
@@ -433,12 +449,19 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     if (startExpanded)
         termBtn->setChecked(true);
 
-    // Side terminal visibility. Shown directly rather than via the button:
-    // the button handler queries nvim's cwd, but m_nvim does not exist yet.
-    // At startup the shell's default cwd matches nvim's anyway. showEvent
-    // syncs the button and seeds the panel width.
-    if (restoreTerm && m_session->sideTerminalVisible())
+    // Side terminal visibility: restored only when this launch actually has a
+    // side command (see haveSideCommand above). Shown directly rather than via
+    // the button: the button handler queries nvim's cwd, but m_nvim does not
+    // exist yet. At startup the shell's default cwd matches nvim's anyway.
+    // showEvent syncs the button and seeds the panel width.
+    const bool restoreSide = restoreTerm && m_session->sideTerminalVisible();
+    m_sideTerminalSuppressed = restoreSide && !haveSideCommand;
+    if (restoreSide && haveSideCommand)
         m_sideTerminal->show();
+    qCDebug(nbSession) << "restore: terminal" << restoreTerm << "expanded" << startExpanded
+                       << "| side terminal saved visible" << m_session->sideTerminalVisible()
+                       << "side command" << haveSideCommand
+                       << "-> shown" << (restoreSide && haveSideCommand);
 
     // Editor/terminal split proportions. If no saved state, seed the terminal
     // with its configured startup height.
@@ -841,7 +864,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
             m_session->setTerminalSplitterState(m_terminal->splitterState());
             m_session->setTerminalExpanded(m_terminal->isExpanded());
         }
-        if (m_sideTerminal)
+        // A launch without a side command deliberately starts the panel
+        // collapsed; leaving it that way must not erase the remembered state
+        // for the next launch that does have a command.
+        if (m_sideTerminal && !(m_sideTerminalSuppressed && !m_sideTerminal->isVisible()))
             m_session->setSideTerminalVisible(m_sideTerminal->isVisible());
         m_session->sync();
     }
@@ -889,6 +915,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+bool MainWindow::focusNextPrevChild(bool next)
+{
+    // Shift+Tab (Qt::Key_Backtab) arrives here from the terminal:
+    // Konsole::TerminalDisplay swallows plain Tab itself but deliberately
+    // leaves the backwards direction to the window (TerminalDisplay::
+    // focusNextPrevChild). Accepting it would move keyboard focus out of the
+    // panel; refusing it makes Qt fall through to the terminal's key handler,
+    // which sends the expected ESC[Z to the shell - Shift+Tab is a real binding
+    // in TUI applications (Codex CLI, fzf, ...). Everything outside the
+    // terminals keeps normal Tab navigation.
+    if (terminalPanelFor(QApplication::focusWidget()))
+        return false;
+    return QMainWindow::focusNextPrevChild(next);
 }
 
 void MainWindow::openSwitcher()

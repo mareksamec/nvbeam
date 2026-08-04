@@ -34,6 +34,9 @@ protected:
     /// App-level filter used to catch Ctrl+Tab and the terminal font-size
     /// keys/wheel before the grid/terminal consume them.
     bool eventFilter(QObject *watched, QEvent *event) override;
+    /// Refuse Tab focus navigation while a terminal has focus, so Shift+Tab
+    /// reaches the shell instead of moving focus out of the panel.
+    bool focusNextPrevChild(bool next) override;
 
 private:
     /// Cycle keyboard focus through the Neovim grid and each terminal split,
@@ -95,6 +98,8 @@ private:
     QTimer *m_minimapScanTimer = nullptr; // debounced content rebuild (treesitter scan)
 
     bool m_quitting = false;          // window closing; don't restart nvim on exit
+    bool m_sideTerminalSuppressed = false; // side terminal kept collapsed at startup (no side
+                                           // command); its saved state is not overwritten on close
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll

@@ -29,6 +29,11 @@ struct TerminalConfig {
     QString execCommand;      // run after shell starts
     bool rightClickPaste = false;  // PuTTY-style right-click paste
     bool copyOnSelect = true;      // copy selection to PRIMARY + CLIPBOARD as it is made
+    // Non-alphanumeric characters that count as part of a word for
+    // double-click selection. Konsole's default is ":@-./_~"; the query-string
+    // characters are added so a double-click grabs a whole URL, which is what
+    // openSelectedLink() then works on.
+    QString wordCharacters = ":@-./_~?&=%#+";
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
@@ -97,6 +102,13 @@ public:
     /// corrupt its input).
     void adoptProject(const QString &dir, const QString &command);
 
+    /// Open the first link found in the active split's selection. This is the
+    /// fallback for links qtermwidget's own URL filter does not detect (TUI
+    /// applications that wrap a URL themselves, or links written without a
+    /// scheme): select the link text, then trigger this. Returns false when the
+    /// selection holds no link.
+    bool openSelectedLink();
+
 signals:
     void visibilityChanged(bool visible);
     /// Emitted when the user clicks the "send cwd" toolbar button; MainWindow
@@ -139,6 +151,10 @@ private:
     /// Apply the focus-highlight border to the split containing `focused`
     /// and clear it on every other split.
     void updateFocusHighlight(QTermWidget *focused);
+    /// Right-click handler: offers Open/Copy Link when a link was detected
+    /// under the cursor, and otherwise falls back to the configured
+    /// PuTTY-style paste.
+    void showContextMenu(QTermWidget *term, const QPoint &pos);
 
     QTermWidget *m_currentTerm = nullptr;
     QList<QTermWidget *> m_terminals;

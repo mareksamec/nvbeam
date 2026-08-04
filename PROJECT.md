@@ -135,9 +135,25 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
 ### Improvements 2026-08-03
-- [ ] It seems something in neobeam terminals captures Shift+Tab for the terminals (e.g. Shift+Tab is used in Codex CLI)
-- [ ] Some links are still not clickable (when part of some TUI apps). Check if handling is same for the side terminal as main terminal.
-- [ ] If Neobeam is opened without side terminal command e.e.g "Open file with Neobeam" or from file picker, start with side terminal collapsed)
+- [x] It seems something in neobeam terminals captures Shift+Tab for the terminals (e.g. Shift+Tab is used in Codex CLI)
+    - It was Qt's own focus navigation: `Konsole::TerminalDisplay::focusNextPrevChild()` swallows
+      plain Tab but deliberately leaves Shift+Tab (`Key_Backtab`) to the window, which moved focus
+      out of the panel. `MainWindow::focusNextPrevChild()` now refuses navigation while a terminal
+      has focus, so Qt falls through to the terminal's key handler and the shell gets `ESC[Z`.
+- [x] Some links are still not clickable (when part of some TUI apps). Check if handling is same for the side terminal as main terminal.
+    - Handling is identical for both panels: every split of both is created by
+      `TerminalPanel::createTermWidget()`, which is the only place `urlActivated` is wired.
+    - qtermwidget's `UrlFilter` only matches URLs with an explicit scheme, on a single line.
+      Added on the neobeam side: right-click on a detected link offers Open/Copy Link (it used to
+      just paste with `right_click_paste`), a wider matcher behind Ctrl+Shift+L that resolves the
+      link in the terminal selection (scheme-less hosts, e-mail, fragments an application wrapped
+      across lines), and `[terminal] word_characters` so a double-click grabs a whole URL.
+    - Still impossible: OSC 8 hyperlinks (see Upstream issues below) - the URL never reaches the
+      screen buffer, so nothing in neobeam can recover it.
+- [x] If Neobeam is opened without side terminal command e.e.g "Open file with Neobeam" or from file picker, start with side terminal collapsed)
+    - The saved "side terminal was visible" state is only restored when the launch resolves a
+      `side_command`, and a suppressed panel does not overwrite that saved state on close, so the
+      next launch inside the project still brings it back.
 - [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
 
 ## Project rename
@@ -179,3 +195,11 @@ the Lua RPC event names exist on both the C++ and Lua side and must change toget
   - If fixed upstream, the event filter can be replaced with a plain connect to
     `QTermWidget::copyAvailable`.
 - No sixel image protocol support (blocks the "Enable sixel support" item above). QtermWidget issue here: [552](https://github.com/lxqt/qtermwidget/issues/552)
+- No OSC 8 hyperlink support (verified in 2.4.0: `Vt102Emulation` parses no `ESC ] 8 ; ; uri ST`
+  sequence, so the URI is discarded and only the display text reaches the screen buffer). TUI
+  applications that print a label with a hidden URL are therefore unclickable in neobeam, and no
+  workaround is possible from the outside - the filter chain that produces link hotspots is not
+  reachable through the public API either (`TerminalDisplay::filterChain()` needs a header
+  qtermwidget does not install).
+  - Workaround for the cases that *are* recoverable (scheme-less URLs, links an application wrapped
+    across lines): select the link and press Ctrl+Shift+L (`TerminalPanel::openSelectedLink`).
