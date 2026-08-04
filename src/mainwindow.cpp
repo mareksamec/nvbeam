@@ -429,6 +429,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             });
     });
     connect(m_sideTerminal, &TerminalPanel::visibilityChanged, sideTermBtn, &QPushButton::setChecked);
+    // Once the panel has been open in this session its visibility is real user
+    // state again, so closeEvent may persist it (see m_sideTerminalSuppressed).
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this, [this](bool visible) {
+        if (visible)
+            m_sideTerminalSuppressed = false;
+    });
 
     setCentralWidget(central);
 
@@ -1092,6 +1098,17 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     // are fixed up in place, a running plain shell just cds, and anything
     // else is respawned fresh (see TerminalPanel::adoptProject).
     m_sideTerminal->adoptProject(dir, command);
+
+    // A project that declares a side command wants its CLI tool in view, so the
+    // panel is opened here rather than waiting for the toolbar button. This is
+    // the switcher's path into a project (also taken after nvim exits with
+    // keep_running): no folder was on the command line, so startup could not
+    // resolve a side command and left the panel collapsed. Shown after
+    // adoptProject, whose pending shells start on the show. Projects without a
+    // command leave the panel as it is - hidden stays hidden, and a panel the
+    // user opened for a plain shell is kept.
+    if (!command.isEmpty() && !m_sideTerminal->isVisible())
+        m_sideTerminal->show();
 }
 
 TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const

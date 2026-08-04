@@ -259,7 +259,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 
 **`[session]`**
 - `restore_window` — Restore the window size and the editor/terminal panel proportions. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
-- `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`). The side terminal is only restored when the launch has a `side_command` (a pinned project opened as a folder); opening a single file starts with it collapsed, without forgetting the remembered state
+- `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`). The side terminal is only restored when the launch has a `side_command` (a pinned project opened as a folder); opening a single file starts with it collapsed, without forgetting the remembered state. Starting with no arguments has no project yet, so the side terminal opens when a project with a `side_command` is picked in the switcher
 
 **`[switcher]`**
 - `keep_running` — When nvim exits, keep neobeam running and show the project switcher instead of closing the window (default: `true`)
@@ -270,7 +270,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `name` — Display name in the switcher; empty uses the folder name (default: `""`)
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
 
-The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory.
+The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a `side_command` also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
 
 Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 

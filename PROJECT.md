@@ -154,6 +154,9 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
     - The saved "side terminal was visible" state is only restored when the launch resolves a
       `side_command`, and a suppressed panel does not overwrite that saved state on close, so the
       next launch inside the project still brings it back.
+    - Starting with no arguments (switcher, also the `keep_running` restart after `:q`) resolves no
+      project at startup, so `applyProjectSideCommand()` now opens the side terminal when the picked
+      project defines a `side_command` - that path never showed the panel at all before.
 - [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
 
 ## Project rename
