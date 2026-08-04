@@ -134,6 +134,11 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
 - [x] Add Shift+Insert and Ctrl+Shift+V bindings to paste clipboard to terminal
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
+### Improvements 2026-08-03
+- [ ] It seems something in neobeam terminals captures Shift+Tab for the terminals (e.g. Shift+Tab is used in Codex CLI)
+- [ ] Some links are still not clickable (when part of some TUI apps). Check if handling is same for the side terminal as main terminal.
+- [ ] If Neobeam is opened without side terminal command e.e.g "Open file with Neobeam" or from file picker, start with side terminal collapsed)
+- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
 
 ## Project rename
 
