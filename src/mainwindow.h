@@ -34,6 +34,9 @@ protected:
     /// App-level filter used to catch Ctrl+Tab and the terminal font-size
     /// keys/wheel before the grid/terminal consume them.
     bool eventFilter(QObject *watched, QEvent *event) override;
+    /// Refuse Tab focus navigation while a terminal has focus, so Shift+Tab
+    /// reaches the shell instead of moving focus out of the panel.
+    bool focusNextPrevChild(bool next) override;
 
 private:
     /// Cycle keyboard focus through the Neovim grid and each terminal split,
@@ -72,6 +75,11 @@ private:
     /// still in its directory).
     void applyWindowTitle();
 
+    /// Request nvim resize grid 1 to the given cell size, deduped against the
+    /// last size actually sent so an unchanged request (e.g. a duplicate
+    /// fired by GridWidget's own resizeEvent right after a pre-warmed call)
+    /// is a no-op.
+    void resizeNvimGrid(int cols, int rows);
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -90,11 +98,15 @@ private:
     SwitcherWidget *m_switcher = nullptr;
     Session *m_session = nullptr;
     Config m_cfg;
+    int m_lastGridCols = -1;   // last size actually sent via resizeNvimGrid(), to dedupe
+    int m_lastGridRows = -1;
     int m_minimapLastTick = 0; // last changedtick seen from Neovim, used to skip highlight rebuilds on scroll
     QTimer *m_minimapViewTimer = nullptr; // cheap viewport poll, per flush
     QTimer *m_minimapScanTimer = nullptr; // debounced content rebuild (treesitter scan)
 
     bool m_quitting = false;          // window closing; don't restart nvim on exit
+    bool m_sideTerminalSuppressed = false; // side terminal kept collapsed at startup (no side
+                                           // command); its saved state is not overwritten on close
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll

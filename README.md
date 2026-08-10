@@ -97,6 +97,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+- | Decrease terminal font size (when a terminal is focused) |
 | Ctrl+Mouse wheel | Increase/decrease terminal font size (over a terminal) |
 | Ctrl+Shift+P | Toggle the project switcher |
+| Ctrl+Shift+L | Open the link in the focused terminal's selection |
 
 ### Project switcher
 
@@ -118,6 +119,14 @@ Drop files from your file manager onto Neobeam to open them.
 Dropping multiple files opens each one with the chosen command. Paths are passed to Neovim with proper escaping, so spaces and special characters are handled correctly.
 
 **Onto the terminal**, the file path is pasted into the active shell (single-quoted) instead of being opened.
+
+### Terminal links
+
+Both terminals (bottom panel and side terminal) handle links the same way. URLs and e-mail addresses written with a scheme are underlined on hover and open in your browser on click; right-clicking one offers **Open Link** / **Copy Link**.
+
+Some links cannot be recognized that way — a URL written without a scheme (`www.example.com`, `github.com/user/repo`), or one a TUI application wrapped across lines inside its own frame. For those, select the link text and press **Ctrl+Shift+L**: neobeam takes the link from the selection, joins fragments split across lines, and completes a missing scheme. A double-click selects a whole URL in one go (see `[terminal] word_characters`).
+
+Links that an application only sends as an OSC 8 hyperlink (clickable text whose URL is never printed) cannot be opened at all — qtermwidget does not implement that escape sequence, so the URL never reaches neobeam.
 
 ## Configuration
 
@@ -145,6 +154,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # shell_args = []  # arguments passed to shell
 # exec_command = ""  # command to run after shell starts (e.g. "tmux")
 # right_click_paste = false  # PuTTY-style right-click paste
+# copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made
+# word_characters = ":@-./_~?&=%#+"  # non-alphanumerics kept when a double-click selects a word
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
@@ -217,7 +228,9 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `shell` — Shell program to launch; empty uses the system default (default: `""`)
 - `shell_args` — Arguments passed to the shell (default: `[]`)
 - `exec_command` — Command run after the shell starts, e.g. `"tmux"` (default: `""`)
-- `right_click_paste` — PuTTY-style right-click paste in the terminal (default: `false`)
+- `right_click_paste` — PuTTY-style right-click paste in the terminal. Right-clicking a link opens the Open/Copy Link menu instead (default: `false`)
+- `copy_on_select` — Copy the terminal selection to PRIMARY and CLIPBOARD as it is made (default: `true`)
+- `word_characters` — Non-alphanumeric characters that count as part of a word when double-clicking in the terminal. The default extends Konsole's `":@-./_~"` with the query-string characters so a double-click selects a whole URL (default: `":@-./_~?&=%#+"`)
 - `antialiasing` — Enable font antialiasing in the terminal (default: `true`)
 - `hinting` — Terminal font hinting: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
 - `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
@@ -246,7 +259,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 
 **`[session]`**
 - `restore_window` — Restore the window size and the editor/terminal panel proportions. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
-- `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`)
+- `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`). The side terminal is only restored when the launch has a `side_command` (a pinned project opened as a folder); opening a single file starts with it collapsed, without forgetting the remembered state. Starting with no arguments has no project yet, so the side terminal opens when a project with a `side_command` is picked in the switcher
 
 **`[switcher]`**
 - `keep_running` — When nvim exits, keep neobeam running and show the project switcher instead of closing the window (default: `true`)
@@ -257,7 +270,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `name` — Display name in the switcher; empty uses the folder name (default: `""`)
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
 
-The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory.
+The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a `side_command` also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
 
 Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 

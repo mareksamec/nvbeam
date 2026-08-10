@@ -42,6 +42,11 @@ struct Config {
     QString terminalExecCommand;          // command executed after shell starts (e.g. "tmux")
     bool terminalRightClickPaste = false; // PuTTY-style right-click paste
     bool terminalCopyOnSelect = true;     // copy selection to PRIMARY + CLIPBOARD as it is made
+    // Non-alphanumeric characters that count as part of a word when
+    // double-clicking in the terminal. The default extends Konsole's
+    // ":@-./_~" with the query-string characters so a double-click selects a
+    // whole URL (which Ctrl+Shift+L then opens).
+    QString terminalWordCharacters = ":@-./_~?&=%#+";
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)

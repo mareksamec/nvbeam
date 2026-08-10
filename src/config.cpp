@@ -144,7 +144,7 @@ const KnownSection kKnownSections[] = {
     {"terminal", {"follow_cwd", "start_expanded", "height", "font", "font_size",
                   "color_scheme", "foreground", "background", "shell", "shell_args",
                   "exec_command", "right_click_paste", "copy_on_select",
-                  "antialiasing", "hinting", "scrollback"}},
+                  "word_characters", "antialiasing", "hinting", "scrollback"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "accent_color", "statusline_divider", "focus_border_color",
@@ -313,6 +313,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# exec_command = \"\"  # command to run after shell starts (e.g. \"tmux\")\n"
                 "# right_click_paste = false  # PuTTY-style right-click paste\n"
                 "# copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made\n"
+                "# word_characters = \":@-./_~?&=%#+\"  # non-alphanumerics kept when a double-click selects a word\n"
                 "# antialiasing = true  # font antialiasing in terminal\n"
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "# scrollback = 1000  # scrollback buffer size in lines\n"
@@ -392,6 +393,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readString(*term, "terminal", "exec_command", cfg.terminalExecCommand, issues);
             readBool(*term, "terminal", "right_click_paste", cfg.terminalRightClickPaste, issues);
             readBool(*term, "terminal", "copy_on_select", cfg.terminalCopyOnSelect, issues);
+            readString(*term, "terminal", "word_characters", cfg.terminalWordCharacters, issues);
             readBool(*term, "terminal", "antialiasing", cfg.terminalAntialiasing, issues);
             readHinting(*term, "terminal", "hinting", cfg.terminalHinting, issues);
             if (readInt(*term, "terminal", "scrollback", cfg.terminalScrollback, issues)) {

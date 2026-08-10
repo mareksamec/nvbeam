@@ -191,6 +191,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.execCommand = cfg.terminalExecCommand;
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
     termCfg.copyOnSelect = cfg.terminalCopyOnSelect;
+    termCfg.wordCharacters = cfg.terminalWordCharacters;
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
@@ -214,6 +215,11 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             break;
         }
     }
+    // Whether this launch has a side terminal command at all. Without one there
+    // is no CLI tool to come back to, so the panel starts collapsed even when
+    // the session says it was open - the case of opening a single file
+    // ("Open with Neobeam", a file picker) rather than a pinned project.
+    const bool haveSideCommand = !sideCfg.execCommand.isEmpty();
     sideCfg.sidePanel = true;
     // Independent font: fall back to the bottom terminal's font when unset.
     if (!cfg.sideTerminalFont.isEmpty())
@@ -269,6 +275,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(termCloseSplitShortcut, &QShortcut::activated, this,
             [focusedPanel]() { focusedPanel()->removeCurrentTerminal(); });
 
+    // Ctrl+Shift+L opens the link in the focused terminal's selection. This is
+    // the fallback for links qtermwidget's URL filter does not detect on its
+    // own (see TerminalPanel::openSelectedLink); it only acts on the panel that
+    // has focus, so it can never open a stale selection from the other one.
+    auto *termLinkShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), this);
+    connect(termLinkShortcut, &QShortcut::activated, this, [this]() {
+        if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget()))
+            panel->openSelectedLink();
+    });
+
     // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
     auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
     connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
@@ -284,7 +300,13 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // nvim grid (Ctrl+Tab from the log also returns to the grid).
     auto *msgFocusShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), this);
     connect(msgFocusShortcut, &QShortcut::activated, this, [this]() {
-        if (!m_messages->isVisible()) return; // ext_messages disabled
+        if (!m_cfg.extMessages) return; // feature disabled entirely
+        if (!m_messages->isVisible()) {
+            // Hidden via the panel's own "x" button: restore it first.
+            m_messages->showPanel();
+            m_messages->focusLog();
+            return;
+        }
         if (m_messages->logHasFocus()) {
             // Shortcut-out collapses; clicking away elsewhere leaves the
             // pane expanded (see the header toggle).
@@ -413,6 +435,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             });
     });
     connect(m_sideTerminal, &TerminalPanel::visibilityChanged, sideTermBtn, &QPushButton::setChecked);
+    // Once the panel has been open in this session its visibility is real user
+    // state again, so closeEvent may persist it (see m_sideTerminalSuppressed).
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this, [this](bool visible) {
+        if (visible)
+            m_sideTerminalSuppressed = false;
+    });
 
     setCentralWidget(central);
 
@@ -433,12 +461,19 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     if (startExpanded)
         termBtn->setChecked(true);
 
-    // Side terminal visibility. Shown directly rather than via the button:
-    // the button handler queries nvim's cwd, but m_nvim does not exist yet.
-    // At startup the shell's default cwd matches nvim's anyway. showEvent
-    // syncs the button and seeds the panel width.
-    if (restoreTerm && m_session->sideTerminalVisible())
+    // Side terminal visibility: restored only when this launch actually has a
+    // side command (see haveSideCommand above). Shown directly rather than via
+    // the button: the button handler queries nvim's cwd, but m_nvim does not
+    // exist yet. At startup the shell's default cwd matches nvim's anyway.
+    // showEvent syncs the button and seeds the panel width.
+    const bool restoreSide = restoreTerm && m_session->sideTerminalVisible();
+    m_sideTerminalSuppressed = restoreSide && !haveSideCommand;
+    if (restoreSide && haveSideCommand)
         m_sideTerminal->show();
+    qCDebug(nbSession) << "restore: terminal" << restoreTerm << "expanded" << startExpanded
+                       << "| side terminal saved visible" << m_session->sideTerminalVisible()
+                       << "side command" << haveSideCommand
+                       << "-> shown" << (restoreSide && haveSideCommand);
 
     // Editor/terminal split proportions. If no saved state, seed the terminal
     // with its configured startup height.
@@ -476,7 +511,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->start({});
     });
     connect(m_grid, &GridWidget::gridSizeReady, this, [this](int rows, int cols) {
-        m_nvim->request("nvim_ui_try_resize_grid", {1, cols, rows});
+        resizeNvimGrid(cols, rows);
     });
     connect(m_nvim, &NvimProcess::ready, this, [this]() {
         // Folder open (e.g. `neobeam .`): point both nvim's cwd and every
@@ -619,6 +654,20 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(m_grid, &GridWidget::msgClear, m_messages, &MessageWidget::clear);
     connect(m_grid, &GridWidget::msgShowmode, m_messages, &MessageWidget::showMode);
     connect(m_grid, &GridWidget::msgRuler, m_messages, &MessageWidget::showRuler);
+
+    // Pre-warm the grid's nvim-side resize the instant the messages panel is
+    // about to hide/show/expand/collapse, rather than waiting for Qt's
+    // deferred layout pass to fire GridWidget::resizeEvent on its own: that
+    // extra event-loop turn is what let a stale, mismatched frame flash
+    // through during the panel's own height changes.
+    connect(m_messages, &MessageWidget::aboutToResize, this, [this](int newMsgHeightPx) {
+        if (m_grid->cellWidth() <= 0 || m_grid->cellHeight() <= 0) return;
+        const int currentContribution = m_messages->isVisible() ? m_messages->height() : 0;
+        const int newGridHeight = m_grid->height() + (currentContribution - newMsgHeightPx);
+        const int cols = m_grid->width() / m_grid->cellWidth();
+        const int rows = qMax(1, newGridHeight) / m_grid->cellHeight();
+        resizeNvimGrid(cols, rows);
+    });
 
     // Bufferline: refresh buffer list on each flush (throttled)
     if (cfg.bufferline) {
@@ -841,7 +890,10 @@ void MainWindow::closeEvent(QCloseEvent *event)
             m_session->setTerminalSplitterState(m_terminal->splitterState());
             m_session->setTerminalExpanded(m_terminal->isExpanded());
         }
-        if (m_sideTerminal)
+        // A launch without a side command deliberately starts the panel
+        // collapsed; leaving it that way must not erase the remembered state
+        // for the next launch that does have a command.
+        if (m_sideTerminal && !(m_sideTerminalSuppressed && !m_sideTerminal->isVisible()))
             m_session->setSideTerminalVisible(m_sideTerminal->isVisible());
         m_session->sync();
     }
@@ -889,6 +941,21 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         }
     }
     return QMainWindow::eventFilter(watched, event);
+}
+
+bool MainWindow::focusNextPrevChild(bool next)
+{
+    // Shift+Tab (Qt::Key_Backtab) arrives here from the terminal:
+    // Konsole::TerminalDisplay swallows plain Tab itself but deliberately
+    // leaves the backwards direction to the window (TerminalDisplay::
+    // focusNextPrevChild). Accepting it would move keyboard focus out of the
+    // panel; refusing it makes Qt fall through to the terminal's key handler,
+    // which sends the expected ESC[Z to the shell - Shift+Tab is a real binding
+    // in TUI applications (Codex CLI, fzf, ...). Everything outside the
+    // terminals keeps normal Tab navigation.
+    if (terminalPanelFor(QApplication::focusWidget()))
+        return false;
+    return QMainWindow::focusNextPrevChild(next);
 }
 
 void MainWindow::openSwitcher()
@@ -1001,6 +1068,18 @@ void MainWindow::updateTitleCwd(const QString &cwd)
     applyWindowTitle();
 }
 
+void MainWindow::resizeNvimGrid(int cols, int rows)
+{
+    if (cols <= 0 || rows <= 0) return;
+    if (cols == m_lastGridCols && rows == m_lastGridRows) return;
+    m_lastGridCols = cols;
+    m_lastGridRows = rows;
+    // Fire-and-forget: nothing consumes the response, only the async redraw
+    // stream that follows it, so a notification (no reply expected) avoids
+    // making nvim format one we'd just discard.
+    m_nvim->notify("nvim_ui_try_resize_grid", {1, cols, rows});
+}
+
 void MainWindow::applyWindowTitle()
 {
     QString title;
@@ -1051,6 +1130,17 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     // are fixed up in place, a running plain shell just cds, and anything
     // else is respawned fresh (see TerminalPanel::adoptProject).
     m_sideTerminal->adoptProject(dir, command);
+
+    // A project that declares a side command wants its CLI tool in view, so the
+    // panel is opened here rather than waiting for the toolbar button. This is
+    // the switcher's path into a project (also taken after nvim exits with
+    // keep_running): no folder was on the command line, so startup could not
+    // resolve a side command and left the panel collapsed. Shown after
+    // adoptProject, whose pending shells start on the show. Projects without a
+    // command leave the panel as it is - hidden stays hidden, and a panel the
+    // user opened for a plain shell is kept.
+    if (!command.isEmpty() && !m_sideTerminal->isVisible())
+        m_sideTerminal->show();
 }
 
 TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const
