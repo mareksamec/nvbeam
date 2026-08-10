@@ -157,6 +157,7 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
     - Starting with no arguments (switcher, also the `keep_running` restart after `:q`) resolves no
       project at startup, so `applyProjectSideCommand()` now opens the side terminal when the picked
       project defines a `side_command` - that path never showed the panel at all before.
+- [ ] Add "maximized" mode - Ctrl + Shift + x would hide all terminals, side terminal and also messages. Pressing it again will restore it to the previous state.
 - [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
 
 ## Project rename

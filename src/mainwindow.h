@@ -75,6 +75,11 @@ private:
     /// still in its directory).
     void applyWindowTitle();
 
+    /// Request nvim resize grid 1 to the given cell size, deduped against the
+    /// last size actually sent so an unchanged request (e.g. a duplicate
+    /// fired by GridWidget's own resizeEvent right after a pre-warmed call)
+    /// is a no-op.
+    void resizeNvimGrid(int cols, int rows);
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -93,6 +98,8 @@ private:
     SwitcherWidget *m_switcher = nullptr;
     Session *m_session = nullptr;
     Config m_cfg;
+    int m_lastGridCols = -1;   // last size actually sent via resizeNvimGrid(), to dedupe
+    int m_lastGridRows = -1;
     int m_minimapLastTick = 0; // last changedtick seen from Neovim, used to skip highlight rebuilds on scroll
     QTimer *m_minimapViewTimer = nullptr; // cheap viewport poll, per flush
     QTimer *m_minimapScanTimer = nullptr; // debounced content rebuild (treesitter scan)

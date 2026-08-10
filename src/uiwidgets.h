@@ -90,16 +90,34 @@ public:
     /// Collapse back to the two-line view (Ctrl+Shift+M out; a plain click
     /// away leaves the pane expanded).
     void collapse();
+    /// Fully hide the panel (the "x" button), handing its space back to the
+    /// grid. Restored via Ctrl+Shift+M / showPanel().
+    void hidePanel();
+    /// Restore a panel hidden by hidePanel(), at its previous expand state.
+    void showPanel();
     void showMsg(const QString &kind, const QVariantList &content, bool replaceLast);
     void clear();
     void showMode(const QVariantList &content);
     void showRuler(const QVariantList &content);
 
+signals:
+    /// Emitted just before a height-affecting change (expand/collapse,
+    /// hide/show) is applied, carrying the panel's total height in pixels
+    /// once the change lands. Lets the grid's nvim-side resize be requested
+    /// immediately instead of waiting for Qt's deferred layout pass to fire
+    /// GridWidget::resizeEvent.
+    void aboutToResize(int newHeightPx);
+
 private:
     void applyHeight();
+    /// Predicts the panel's total height once applyHeight()/hide()/show()
+    /// takes effect, from the current geometry and m_expanded — used to
+    /// populate aboutToResize() before the change actually happens.
+    int targetHeight() const;
 
     QPlainTextEdit *m_log;
     QPushButton *m_toggle;
+    QPushButton *m_hideButton;
     QLabel *m_modeLabel;
     // Document position where the last message starts, so replace_last can
     // overwrite it in place (nvim uses it for progress-style updates).

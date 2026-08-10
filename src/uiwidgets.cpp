@@ -317,6 +317,18 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     m_modeLabel = new QLabel(header);
     m_modeLabel->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 10pt;").arg(accent));
     headerLayout->addWidget(m_modeLabel);
+
+    m_hideButton = new QPushButton(QStringLiteral("✕"), header);
+    m_hideButton->setFlat(true);
+    m_hideButton->setCursor(Qt::PointingHandCursor);
+    m_hideButton->setFocusPolicy(Qt::NoFocus);
+    m_hideButton->setToolTip(QStringLiteral("Hide messages panel (Ctrl+Shift+M to restore)"));
+    m_hideButton->setStyleSheet(
+        "QPushButton { color: #888; background: transparent; border: none; "
+        "font-family: monospace; font-size: 9pt; padding: 0 4px; }"
+        "QPushButton:hover { color: #f7768e; }");
+    connect(m_hideButton, &QPushButton::clicked, this, &MessageWidget::hidePanel);
+    headerLayout->addWidget(m_hideButton);
     layout->addWidget(header);
 
     m_log = new SelectableLogEdit(this);
@@ -334,6 +346,7 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     connect(m_toggle, &QPushButton::toggled, this, [this](bool on) {
         m_expanded = on;
         m_toggle->setText(on ? QStringLiteral("▾ Messages") : QStringLiteral("▸ Messages"));
+        emit aboutToResize(targetHeight());
         applyHeight();
     });
     applyHeight();
@@ -354,6 +367,31 @@ bool MessageWidget::logHasFocus() const
 void MessageWidget::collapse()
 {
     m_toggle->setChecked(false); // toggled() handler collapses the log
+}
+
+void MessageWidget::hidePanel()
+{
+    emit aboutToResize(0);
+    hide();
+}
+
+void MessageWidget::showPanel()
+{
+    emit aboutToResize(targetHeight());
+    show();
+}
+
+int MessageWidget::targetHeight() const
+{
+    const int lines = m_expanded ? 12 : 2;
+    const QFontMetrics fm(m_log->font());
+    const int chrome = int(m_log->document()->documentMargin()) * 2;
+    const int newLogHeight = fm.lineSpacing() * lines + chrome;
+    // Current total minus current log height plus the log height it's about
+    // to become: correct whether we're mid-toggle (m_expanded already
+    // updated, geometry not yet) or resuming from hidden (both stale, so the
+    // stale total passes through unchanged).
+    return height() - m_log->height() + newLogHeight;
 }
 
 void MessageWidget::applyHeight()
