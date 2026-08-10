@@ -317,6 +317,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         }
     });
 
+    // Ctrl+Shift+X: maximize the buffer area by hiding the bottom terminal,
+    // side terminal and messages panel; pressing it again restores exactly
+    // the ones that were actually visible before.
+    auto *maximizeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X), this);
+    connect(maximizeShortcut, &QShortcut::activated, this, &MainWindow::toggleMaximizedMode);
+
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
     // the panel whose button was clicked.
     auto connectCwdBroadcast = [this](TerminalPanel *panel) {
@@ -369,21 +375,21 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     minimapBtn->setStyleSheet(btnStyle);
     btnLayout->addWidget(minimapBtn);
 
-    auto *termBtn = new QPushButton("⌨", central);
-    termBtn->setToolTip("Toggle terminal");
-    termBtn->setCheckable(true);
-    termBtn->setChecked(false);
-    termBtn->setFixedSize(28, 20);
-    termBtn->setStyleSheet(btnStyle);
-    btnLayout->addWidget(termBtn);
+    m_termBtn = new QPushButton("⌨", central);
+    m_termBtn->setToolTip("Toggle terminal");
+    m_termBtn->setCheckable(true);
+    m_termBtn->setChecked(false);
+    m_termBtn->setFixedSize(28, 20);
+    m_termBtn->setStyleSheet(btnStyle);
+    btnLayout->addWidget(m_termBtn);
 
-    auto *sideTermBtn = new QPushButton("◨", central);
-    sideTermBtn->setToolTip("Toggle side terminal");
-    sideTermBtn->setCheckable(true);
-    sideTermBtn->setChecked(false);
-    sideTermBtn->setFixedSize(28, 20);
-    sideTermBtn->setStyleSheet(btnStyle);
-    btnLayout->addWidget(sideTermBtn);
+    m_sideTermBtn = new QPushButton("◨", central);
+    m_sideTermBtn->setToolTip("Toggle side terminal");
+    m_sideTermBtn->setCheckable(true);
+    m_sideTermBtn->setChecked(false);
+    m_sideTermBtn->setFixedSize(28, 20);
+    m_sideTermBtn->setStyleSheet(btnStyle);
+    btnLayout->addWidget(m_sideTermBtn);
 
     auto *selModeBtn = new QPushButton("⌶", central);
     selModeBtn->setToolTip("Toggle text selection mode (Ctrl+Shift+.)");
@@ -403,8 +409,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         if (on && m_minimapViewTimer)
             m_minimapViewTimer->start();
     });
-    connect(termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
-    connect(m_terminal, &TerminalPanel::visibilityChanged, termBtn, &QPushButton::setChecked);
+    connect(m_termBtn, &QPushButton::toggled, m_terminal, &QWidget::setVisible);
+    connect(m_terminal, &TerminalPanel::visibilityChanged, m_termBtn, &QPushButton::setChecked);
 
     // Selection-mode button and Ctrl+Shift+. stay in sync via the grid's
     // signal; setSelectionModeActive no-ops on repeat values, so the
@@ -415,7 +421,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Side terminal opens in nvim's current cwd: resolve it first, seed the
     // panel with it, and only then show (showing starts the pending shell, so
     // the directory must be set before that).
-    connect(sideTermBtn, &QPushButton::toggled, this, [this](bool on) {
+    connect(m_sideTermBtn, &QPushButton::toggled, this, [this](bool on) {
         if (!on) {
             m_sideTerminal->hide();
             return;
@@ -434,7 +440,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 m_sideTerminal->focusTerminal();
             });
     });
-    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, sideTermBtn, &QPushButton::setChecked);
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, m_sideTermBtn, &QPushButton::setChecked);
     // Once the panel has been open in this session its visibility is real user
     // state again, so closeEvent may persist it (see m_sideTerminalSuppressed).
     connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this, [this](bool visible) {
@@ -459,7 +465,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Toggling the button (after connections are wired) keeps panel and button
     // in sync and triggers TerminalPanel::showEvent, which starts the shell.
     if (startExpanded)
-        termBtn->setChecked(true);
+        m_termBtn->setChecked(true);
 
     // Side terminal visibility: restored only when this launch actually has a
     // side command (see haveSideCommand above). Shown directly rather than via
@@ -1078,6 +1084,36 @@ void MainWindow::resizeNvimGrid(int cols, int rows)
     // stream that follows it, so a notification (no reply expected) avoids
     // making nvim format one we'd just discard.
     m_nvim->notify("nvim_ui_try_resize_grid", {1, cols, rows});
+}
+
+void MainWindow::toggleMaximizedMode()
+{
+    m_maximized = !m_maximized;
+    if (m_maximized) {
+        // Capture what's actually open before touching anything, so a panel
+        // the user had already closed doesn't come back on restore.
+        m_maxTerminalWasVisible = m_terminal->isVisible();
+        m_maxSideTerminalWasVisible = m_sideTerminal->isVisible();
+        m_maxMessagesWasVisible = m_cfg.extMessages && m_messages->isVisible();
+
+        // Driven through the same toggle buttons/methods a user click would
+        // use, rather than calling hide() directly, so button check-state and
+        // session persistence stay exactly as consistent as normal use.
+        if (m_maxTerminalWasVisible) m_termBtn->setChecked(false);
+        if (m_maxSideTerminalWasVisible) m_sideTermBtn->setChecked(false);
+        if (m_maxMessagesWasVisible) m_messages->hidePanel();
+        m_grid->setFocus(); // land on the buffer now filling the freed space
+    } else {
+        if (m_maxTerminalWasVisible) m_termBtn->setChecked(true);
+        // Shown directly rather than via m_sideTermBtn: the button's handler
+        // re-fetches nvim's cwd and steals focus into the terminal (right for
+        // a user opening it fresh, wrong for just restoring what was already
+        // there before maximizing). showEvent's own visibilityChanged still
+        // syncs the button's checked state, same as session restore does.
+        if (m_maxSideTerminalWasVisible) m_sideTerminal->show();
+        if (m_maxMessagesWasVisible) m_messages->showPanel();
+        m_grid->setFocus();
+    }
 }
 
 void MainWindow::applyWindowTitle()

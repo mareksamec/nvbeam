@@ -19,6 +19,7 @@ class Session;
 class QSplitter;
 class QFrame;
 class QTimer;
+class QPushButton;
 
 /// Main application window hosting the Neovim grid
 class MainWindow : public QMainWindow
@@ -81,6 +82,12 @@ private:
     /// is a no-op.
     void resizeNvimGrid(int cols, int rows);
 
+    /// Ctrl+Shift+X: hide the bottom terminal, side terminal and messages
+    /// panel to maximize the nvim buffer area; pressing it again restores
+    /// exactly the ones that were actually visible before (a panel the user
+    /// had already closed stays closed).
+    void toggleMaximizedMode();
+
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
     PopupmenuWidget *m_popupmenu = nullptr;
@@ -90,6 +97,8 @@ private:
     StatuslineWidget *m_statusline = nullptr;
     TerminalPanel *m_terminal = nullptr;
     TerminalPanel *m_sideTerminal = nullptr;
+    QPushButton *m_termBtn = nullptr;     // bottom-right toggle, kept in sync with m_terminal
+    QPushButton *m_sideTermBtn = nullptr; // bottom-right toggle, kept in sync with m_sideTerminal
     MinimapWidget *m_minimap = nullptr;
     GitStatus *m_gitStatus = nullptr; // push-model git provider for the statusline
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
@@ -108,6 +117,10 @@ private:
     bool m_sideTerminalSuppressed = false; // side terminal kept collapsed at startup (no side
                                            // command); its saved state is not overwritten on close
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
+    bool m_maximized = false; // Ctrl+Shift+X: terminals/messages hidden to maximize the buffer area
+    bool m_maxTerminalWasVisible = false;     // panel state captured when m_maximized was entered,
+    bool m_maxSideTerminalWasVisible = false; // so leaving it restores only what was actually open
+    bool m_maxMessagesWasVisible = false;
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll
     QString m_lastMruCwd;
