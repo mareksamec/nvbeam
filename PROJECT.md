@@ -157,7 +157,18 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
     - Starting with no arguments (switcher, also the `keep_running` restart after `:q`) resolves no
       project at startup, so `applyProjectSideCommand()` now opens the side terminal when the picked
       project defines a `side_command` - that path never showed the panel at all before.
-- [ ] Add "maximized" mode - Ctrl + Shift + x would hide all terminals, side terminal and also messages. Pressing it again will restore it to the previous state.
+- [x] Add "maximized" mode - Ctrl + Shift + x would hide all terminals, side terminal and also messages. Pressing it again will restore it to the previous state.
+    - `MainWindow::toggleMaximizedMode()` captures which of the bottom terminal, side terminal and
+      messages panel are actually visible before hiding them, so a panel the user had already closed
+      stays closed on restore instead of popping back open.
+    - Driven through the existing toggle buttons/`MessageWidget::hidePanel()`/`showPanel()` rather than
+      raw `hide()`/`show()`, so button check-state and session persistence stay consistent with normal
+      manual toggling.
+    - Side terminal restore calls `show()` directly instead of going through its toggle button: that
+      button's handler re-fetches nvim's cwd and focuses the terminal, which is right when a user opens
+      it fresh but wrong when just restoring pre-maximize state. `showEvent`'s own `visibilityChanged`
+      still keeps the button's checked state in sync (same pattern session restore already relies on).
+      Keyboard focus is explicitly returned to the grid on both enter and exit either way.
 - [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
 
 ## Project rename
