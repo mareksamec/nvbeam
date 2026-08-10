@@ -50,6 +50,11 @@ struct Config {
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
+    // Keep each visited project's terminal(s) resident in memory (own shell +
+    // scrollback) instead of destroying them on project switch. Opt-in: extra
+    // shells/PTYs stay alive for every cached project.
+    bool terminalRememberScrollback = false;
+    int terminalMaxCachedProjects = 5;    // LRU cap on resident projects when the above is on (>= 1)
 
     // Side terminal (docked next to the minimap, for CLI tools like claude).
     // The command it runs comes from the matching [[projects]] entry's

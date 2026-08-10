@@ -170,6 +170,23 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       still keeps the button's checked state in sync (same pattern session restore already relies on).
       Keyboard focus is explicitly returned to the grid on both enter and exit either way.
 - [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
+- [x] Remember terminal scrollback per Project for both side terminals and main bottom terminals.
+    - QTermWidget (the terminal backend) only exposes `saveHistory()` to dump scrollback as text -
+      there is no public API to restore it back into a real buffer (colors/escape codes included).
+      Scope is in-session only: each visited project's shell(s) are kept resident in memory instead
+      of being destroyed on project switch, so scrollback (and a still-running interactive command)
+      survives switching away and back; it still resets on app quit, same as before this feature.
+    - Opt-in via `[terminal] remember_scrollback` (default off) plus `max_cached_projects` (LRU cap,
+      default 5) - the extra shells/PTYs kept alive for cached projects cost real memory/processes.
+    - Only the explicit Project Switcher action swaps sessions. Ambient nvim cwd-follow (`:cd`,
+      netrw, oil.nvim) keeps behaving exactly as before - a plain `cd` in the active session, never
+      spawning a new cached session from incidental directory hops.
+    - Both panels share one mechanism (`TerminalPanel::adoptProject`/`switchProject`): the bottom
+      terminal now calls `adoptProject(dir, "")` from the switcher instead of `broadcastCwd`, which
+      is a no-op behavior change when the feature is off (empty command on both sides already hit
+      the "just cd" branch) and gives it the same per-project cache as the side terminal when on.
+    - True LRU eviction, not FIFO: revisiting a project moves it to the front, so it is never killed
+      just for occupying an older slot.
 
 ## Project rename
 

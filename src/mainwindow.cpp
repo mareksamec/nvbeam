@@ -195,6 +195,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
+    termCfg.rememberScrollback = cfg.terminalRememberScrollback;
+    termCfg.maxCachedProjects = cfg.terminalMaxCachedProjects;
     termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
@@ -1024,7 +1026,12 @@ void MainWindow::applySwitcherSelection(const SwitcherItem &item)
     m_nvim->request("nvim_cmd", {cmd, QVariantMap{}});
 
     // Every terminal, side terminal included, moves to the project directory.
-    m_terminal->broadcastCwd(dir);
+    // adoptProject with an empty command is a no-op change from broadcastCwd
+    // when [terminal] remember_scrollback is off (both old/new commands are
+    // always empty for the bottom terminal, which broadcastCwd's on its own);
+    // with it on, this gives the bottom terminal the same per-project cached
+    // session as the side terminal.
+    m_terminal->adoptProject(dir, QString());
     applyProjectSideCommand(dir);
     // Pinned projects title the window with their name; folder/file picks
     // fall back to the plain cwd title.

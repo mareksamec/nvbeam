@@ -251,6 +251,14 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
         setMinimumHeight(kMinHeight);
     hide();
 
+#ifdef NEOBEAM_HAS_TERMINAL
+    // Never shown; parked project sessions (see switchProject()) are
+    // reparented here so their shells keep running off-screen instead of
+    // becoming stray top-level windows.
+    m_parkingLot = new QWidget(this);
+    m_parkingLot->hide();
+#endif
+
     // Create initial terminal
     addTerminal();
 }
@@ -398,6 +406,11 @@ void TerminalPanel::broadcastCwd(const QString &dir)
 void TerminalPanel::adoptProject(const QString &dir, const QString &command)
 {
 #ifdef NEOBEAM_HAS_TERMINAL
+    if (m_cfg.rememberScrollback) {
+        switchProject(dir, command);
+        return;
+    }
+
     const QString previous = m_runningCommand;
     m_cfg.execCommand = command;
 
@@ -439,6 +452,104 @@ void TerminalPanel::adoptProject(const QString &dir, const QString &command)
     Q_UNUSED(command);
 #endif
 }
+
+#ifdef NEOBEAM_HAS_TERMINAL
+void TerminalPanel::switchProject(const QString &dir, const QString &command)
+{
+    const QString key = QDir::cleanPath(dir);
+    m_cfg.execCommand = command;
+
+    // First call after construction: the constructor already built a
+    // session for whatever directory the terminals were pointed at (m_cwd);
+    // key it retroactively instead of building a second one for it.
+    if (m_activeKey.isEmpty())
+        m_activeKey = QDir::cleanPath(m_cwd);
+
+    if (key == m_activeKey) {
+        // Re-selecting the same project: keep the session, just refresh cwd.
+        broadcastCwd(dir);
+        return;
+    }
+
+    auto *layout = qobject_cast<QBoxLayout *>(this->layout());
+
+    // Park the active session. Its shell(s) keep running and producing
+    // output while parked - QTermWidget/Konsole process PTY output
+    // regardless of widget visibility - so scrollback keeps accumulating.
+    ProjectSession parked{m_splitter, m_terminals, m_wrapperFor, m_currentTerm, m_cwd, m_runningCommand};
+    layout->removeWidget(m_splitter);
+    m_splitter->hide();
+    m_splitter->setParent(m_parkingLot);
+    m_sessions.insert(m_activeKey, parked);
+    m_activeKey = key;
+
+    auto it = m_sessions.find(key);
+    if (it != m_sessions.end()) {
+        // Cache hit: reattach exactly as left - no cd, no respawn, so an
+        // interactive command running inside it is undisturbed.
+        ProjectSession restored = it.value();
+        m_sessions.erase(it);
+        m_splitter = restored.splitter;
+        m_terminals = restored.terminals;
+        m_wrapperFor = restored.wrapperFor;
+        m_currentTerm = restored.currentTerm;
+        m_cwd = restored.cwd;
+        m_runningCommand = restored.runningCommand;
+        m_splitter->setParent(this);
+        layout->insertWidget(1, m_splitter, 1);
+        m_splitter->show();
+        if (m_currentTerm)
+            m_currentTerm->setFocus();
+    } else {
+        // Cache miss: build a fresh session/shell for this project.
+        m_terminals.clear();
+        m_wrapperFor.clear();
+        m_currentTerm = nullptr;
+        m_cwd = dir;
+        m_runningCommand = command;
+        m_splitter = new QSplitter(m_cfg.sidePanel ? Qt::Vertical : Qt::Horizontal, this);
+        m_splitter->setStyleSheet(QStringLiteral(
+            "QSplitter { background: %1; }"
+            "QSplitter::handle { background: #333; width: 2px; height: 2px; }")
+                .arg(panelBackgroundColor().name()));
+        layout->insertWidget(1, m_splitter, 1);
+        addTerminal();
+    }
+
+    m_lru.removeAll(key);
+    m_lru.prepend(key);
+    evictExcessSessions();
+}
+
+void TerminalPanel::evictExcessSessions()
+{
+    const int maxParked = qMax(0, m_cfg.maxCachedProjects - 1);
+    while (m_sessions.size() > maxParked) {
+        // m_lru is most-recent-first; the tail holds the least-recently-used
+        // key still present in m_sessions (the active key never is).
+        QString victimKey;
+        for (int i = m_lru.size() - 1; i >= 0; --i) {
+            if (m_sessions.contains(m_lru[i])) {
+                victimKey = m_lru[i];
+                break;
+            }
+        }
+        if (victimKey.isEmpty())
+            break;
+
+        ProjectSession victim = m_sessions.take(victimKey);
+        m_lru.removeAll(victimKey);
+        for (auto *t : victim.terminals) {
+            disconnect(t, nullptr, this, nullptr);
+            if (QFrame *wrapper = victim.wrapperFor.value(t))
+                wrapper->deleteLater(); // also deletes the child terminal widget
+            else
+                t->deleteLater();
+        }
+        victim.splitter->deleteLater();
+    }
+}
+#endif
 
 bool TerminalPanel::openSelectedLink()
 {
@@ -703,7 +814,34 @@ QTermWidget *TerminalPanel::createTermWidget()
         // after this and re-highlight the right wrapper.
         updateFocusHighlight(nullptr);
     });
-    connect(term, &QTermWidget::finished, this, [this, term]() {
+    // Captured by value: identifies which project's session this shell
+    // belongs to, so finished (which can fire while parked, e.g. a
+    // background shell exiting on its own) cleans up the right session
+    // instead of assuming it's always the currently active one.
+    const QString ownerKey = m_activeKey;
+    connect(term, &QTermWidget::finished, this, [this, term, ownerKey]() {
+        if (ownerKey != m_activeKey) {
+            auto it = m_sessions.find(ownerKey);
+            if (it == m_sessions.end()) {
+                term->deleteLater();
+                return;
+            }
+            ProjectSession &session = it.value();
+            session.terminals.removeOne(term);
+            QFrame *wrapper = session.wrapperFor.take(term);
+            if (wrapper)
+                wrapper->deleteLater(); // also deletes the child terminal widget
+            else
+                term->deleteLater();
+            if (term == session.currentTerm)
+                session.currentTerm = session.terminals.isEmpty() ? nullptr : session.terminals.last();
+            if (session.terminals.isEmpty()) {
+                session.splitter->deleteLater();
+                m_sessions.erase(it);
+                m_lru.removeAll(ownerKey);
+            }
+            return;
+        }
         m_terminals.removeOne(term);
         QFrame *wrapper = m_wrapperFor.take(term);
         if (wrapper)

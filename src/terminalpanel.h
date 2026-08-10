@@ -37,6 +37,10 @@ struct TerminalConfig {
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
+    // Keep each visited project's terminal(s) resident (own shell + scrollback)
+    // instead of destroying them on project switch. See adoptProject().
+    bool rememberScrollback = false;
+    int maxCachedProjects = 5; // LRU cap on resident projects when the above is on (>= 1)
     QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
     // Side-panel mode (terminal docked next to the minimap): splits stack
     // vertically and the panel enforces a minimum width instead of height.
@@ -95,11 +99,16 @@ public:
 
     /// Point the panel at a project: dir becomes the working directory and
     /// command the exec command (side terminal: the per-project side_command).
-    /// Shells that haven't started yet just get their startup dir/command
-    /// fixed up. Running shells are kept and cd'd when neither the old nor
-    /// the new command is set; otherwise they are replaced with one fresh
-    /// shell in dir (typing "cd" into a running interactive tool would
-    /// corrupt its input).
+    ///
+    /// With [terminal] remember_scrollback off (default): shells that haven't
+    /// started yet just get their startup dir/command fixed up. Running shells
+    /// are kept and cd'd when neither the old nor the new command is set;
+    /// otherwise they are replaced with one fresh shell in dir (typing "cd"
+    /// into a running interactive tool would corrupt its input).
+    ///
+    /// With remember_scrollback on: dir's terminal(s) are kept resident in
+    /// memory (see switchProject()) instead of being destroyed, so revisiting
+    /// a project reattaches it exactly as left rather than respawning it.
     void adoptProject(const QString &dir, const QString &command);
 
     /// Open the first link found in the active split's selection. This is the
@@ -156,9 +165,37 @@ private:
     /// PuTTY-style paste.
     void showContextMenu(QTermWidget *term, const QPoint &pos);
 
+    /// One cached project's terminal state: its own split layout, terminals
+    /// and their wrapper frames. Parked sessions are kept alive off-screen
+    /// (reparented under m_parkingLot) rather than destroyed, so their
+    /// shells keep running and their scrollback survives switching away.
+    struct ProjectSession {
+        QSplitter *splitter = nullptr;
+        QList<QTermWidget *> terminals;
+        QHash<QTermWidget *, QFrame *> wrapperFor;
+        QTermWidget *currentTerm = nullptr;
+        QString cwd;
+        QString runningCommand;
+    };
+
+    /// Cache-aware counterpart to adoptProject()'s legacy body, used when
+    /// [terminal] remember_scrollback is on: parks the active session (LRU
+    /// order in m_lru) and reattaches or creates the target project's
+    /// session, then evicts the least-recently-used session(s) beyond
+    /// m_cfg.maxCachedProjects.
+    void switchProject(const QString &dir, const QString &command);
+    /// Destroys parked sessions beyond m_cfg.maxCachedProjects, oldest
+    /// (least-recently-used) first. Never touches the active session.
+    void evictExcessSessions();
+
     QTermWidget *m_currentTerm = nullptr;
     QList<QTermWidget *> m_terminals;
     QHash<QTermWidget *, QFrame *> m_wrapperFor;
+
+    QHash<QString, ProjectSession> m_sessions; // parked projects, keyed by QDir::cleanPath(dir)
+    QStringList m_lru;                         // most-recently-used key first, including the active one
+    QString m_activeKey;                       // key of the session currently attached to m_splitter
+    QWidget *m_parkingLot = nullptr;           // hidden holder keeping parked splitters' shells alive off-screen
 #endif
 
     QSplitter *m_splitter = nullptr;

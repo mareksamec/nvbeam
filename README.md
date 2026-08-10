@@ -159,6 +159,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
+# remember_scrollback = false  # keep each visited project's terminal(s) resident (per-project scrollback)
+# max_cached_projects = 5      # LRU cap on resident projects when remember_scrollback is on
 
 # [side_terminal]
 # width = 400  # startup width in pixels
@@ -234,6 +236,8 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `antialiasing` — Enable font antialiasing in the terminal (default: `true`)
 - `hinting` — Terminal font hinting: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
 - `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
+- `remember_scrollback` — Keep each visited project's terminal(s) (bottom and side) resident in memory instead of destroying them when you switch to another project via the switcher, so their shell and scrollback are exactly as left when you switch back — including a still-running interactive command in the side terminal. Ambient nvim cwd changes (`:cd`, netrw, oil.nvim) are unaffected and keep behaving as a plain `cd` in the current terminal. Off by default since it keeps extra shells/processes running in the background for every cached project (default: `false`)
+- `max_cached_projects` — When `remember_scrollback` is on, the maximum number of projects kept resident at once; the least-recently-used one is evicted (its shell killed) beyond this, but revisiting a project always refreshes its recency, so it is never evicted just for being older (default: `5`)
 
 **`[side_terminal]`**
 - `width` — Side terminal startup width in pixels (default: `400`)

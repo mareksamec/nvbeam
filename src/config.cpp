@@ -144,7 +144,8 @@ const KnownSection kKnownSections[] = {
     {"terminal", {"follow_cwd", "start_expanded", "height", "font", "font_size",
                   "color_scheme", "foreground", "background", "shell", "shell_args",
                   "exec_command", "right_click_paste", "copy_on_select",
-                  "word_characters", "antialiasing", "hinting", "scrollback"}},
+                  "word_characters", "antialiasing", "hinting", "scrollback",
+                  "remember_scrollback", "max_cached_projects"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "accent_color", "statusline_divider", "focus_border_color",
@@ -317,6 +318,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# antialiasing = true  # font antialiasing in terminal\n"
                 "# hinting = \"default\"  # font hinting: none, slight, medium, full, default\n"
                 "# scrollback = 1000  # scrollback buffer size in lines\n"
+                "# remember_scrollback = false  # keep each visited project's terminal(s) resident (per-project scrollback)\n"
+                "# max_cached_projects = 5  # LRU cap on resident projects when remember_scrollback is on\n"
                 "\n"
                 "# [side_terminal]\n"
                 "# width = 400  # startup width in pixels\n"
@@ -401,6 +404,9 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 // modes are intentionally not exposed yet.
                 cfg.terminalScrollback = qMax(1, cfg.terminalScrollback);
             }
+            readBool(*term, "terminal", "remember_scrollback", cfg.terminalRememberScrollback, issues);
+            if (readInt(*term, "terminal", "max_cached_projects", cfg.terminalMaxCachedProjects, issues))
+                cfg.terminalMaxCachedProjects = qMax(1, cfg.terminalMaxCachedProjects);
         }
 
         if (const auto *side = sectionTable(data, "side_terminal")) {
