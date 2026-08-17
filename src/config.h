@@ -50,6 +50,11 @@ struct Config {
     bool terminalAntialiasing = true;     // font antialiasing in terminal
     QFont::HintingPreference terminalHinting = QFont::PreferDefaultHinting;
     int terminalScrollback = 1000;        // scrollback buffer size in lines (>= 1)
+    // Send a bare Enter to any bottom-terminal split with nothing unsubmitted
+    // typed into it after a branch switch (checkout/switch made in nvim or in
+    // the terminal itself), so a branch-aware shell prompt picks up the new
+    // name. Off by default: it injects a keystroke into a live shell.
+    bool terminalRefreshPromptOnGitChange = false;
 
     // Side terminal (docked next to the minimap, for CLI tools like claude).
     // The command it runs comes from the matching [[projects]] entry's

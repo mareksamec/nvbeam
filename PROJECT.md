@@ -179,6 +179,10 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       bare `\r` to every split whose current line has nothing unsubmitted typed into it.
       Bottom terminal only, not the side terminal (usually an agent/REPL, not a shell -
       Enter there risks submitting an empty prompt to it).
+    - Config-gated, off by default: `[terminal] refresh_prompt_on_git_change` (`config.h`/
+      `config.cpp`, `TerminalConfig::refreshPromptOnGitChange`). It's still a keystroke
+      injected into a live shell, so `refreshPromptOnBranchChange()` itself no-ops unless
+      enabled - documented with a warning in README.md and neobeam.toml.example.
     - "Nothing typed" has no public API to check (QTermWidget exposes no way to read the
       shell's readline buffer or the current screen line), so it's tracked as a heuristic:
       an event filter on each split's internal `Konsole::TerminalDisplay` (same object

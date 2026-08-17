@@ -195,6 +195,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
+    termCfg.refreshPromptOnGitChange = cfg.terminalRefreshPromptOnGitChange;
     termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 

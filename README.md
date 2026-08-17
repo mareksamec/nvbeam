@@ -159,6 +159,10 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
+# refresh_prompt_on_git_change = false  # WARNING: sends Enter to the bottom terminal's
+#   command line after a branch switch, to refresh a branch-aware shell prompt. Only
+#   sent to splits with nothing typed into them; off by default since it injects a
+#   keystroke into a live shell.
 
 # [side_terminal]
 # width = 400  # startup width in pixels
@@ -234,6 +238,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `antialiasing` — Enable font antialiasing in the terminal (default: `true`)
 - `hinting` — Terminal font hinting: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
 - `scrollback` — Terminal scrollback buffer size in lines (default: `1000`)
+- `refresh_prompt_on_git_change` — **Warning: sends Enter to the bottom terminal's command line** after a branch switch (checkout/switch made in nvim or typed into the terminal itself), so a branch-aware shell prompt (e.g. zsh `vcs_info`) picks up the new branch name. Only sent to splits with nothing currently typed into them — a split mid-command is left alone — but it is still a keystroke injected into a live shell, so this is off by default. Not applied to the side terminal (default: `false`)
 
 **`[side_terminal]`**
 - `width` — Side terminal startup width in pixels (default: `400`)

@@ -39,6 +39,10 @@ struct TerminalConfig {
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
+    // See Config::terminalRefreshPromptOnGitChange: gates
+    // refreshPromptOnBranchChange() itself, so it's a no-op even if MainWindow
+    // connects the signal regardless.
+    bool refreshPromptOnGitChange = false;
     QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
     // Side-panel mode (terminal docked next to the minimap): splits stack
     // vertically and the panel enforces a minimum width instead of height.

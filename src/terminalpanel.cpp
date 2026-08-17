@@ -528,6 +528,8 @@ void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
 void TerminalPanel::refreshPromptOnBranchChange()
 {
 #ifdef NEOBEAM_HAS_TERMINAL
+    if (!m_cfg.refreshPromptOnGitChange)
+        return;
     for (QTermWidget *term : m_terminals) {
         if (!m_lineDirty.value(term, false))
             term->sendText(QStringLiteral("\r"));
