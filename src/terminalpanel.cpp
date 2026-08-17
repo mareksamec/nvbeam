@@ -511,9 +511,9 @@ void TerminalPanel::removeCurrentTerminal()
 #endif
 }
 
+#ifdef NEOBEAM_HAS_TERMINAL
 void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
     const bool ctrl = event->modifiers() & Qt::ControlModifier;
     const int key = event->key();
     if (key == Qt::Key_Return || key == Qt::Key_Enter
@@ -522,8 +522,8 @@ void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
         return;
     }
     m_lineDirty[term] = true;
-#endif
 }
+#endif
 
 void TerminalPanel::refreshPromptOnBranchChange()
 {
