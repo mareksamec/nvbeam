@@ -45,6 +45,12 @@ signals:
     /// statusline hides the segment then).
     void changed(const GitStatusInfo &info);
 
+    /// Emitted specifically when the branch name changed (checkout/switch,
+    /// including ones made outside nvim via the .git/HEAD watcher), as
+    /// opposed to a status-count-only update. Terminals whose shell prompt
+    /// shows the branch (zsh vcs_info, etc.) go stale after this.
+    void branchChanged(const QString &branch);
+
 private:
     void resolveGitDir();
     void runStatus();

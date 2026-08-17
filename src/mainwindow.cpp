@@ -730,6 +730,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             if (method == QLatin1String("neobeam_git_event"))
                 m_gitStatus->refresh();
         });
+
+        // Bottom terminal only: a branch switch (including one made by typing
+        // `git checkout`/`switch` straight into this terminal, caught by
+        // GitStatus's own .git/HEAD watcher) leaves a branch-aware shell
+        // prompt (zsh vcs_info, etc.) showing the old name until the next
+        // command. Not wired to the side terminal, which usually runs an
+        // agent/REPL rather than a shell - injecting Enter there risks
+        // submitting an empty prompt to it.
+        connect(m_gitStatus, &GitStatus::branchChanged,
+                m_terminal, &TerminalPanel::refreshPromptOnBranchChange);
     }
 
     // Minimap, two-tier: a cheap viewport-only poll per flush keeps the

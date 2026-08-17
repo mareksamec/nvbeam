@@ -115,9 +115,13 @@ void GitStatus::publish(const GitStatusInfo &info)
 {
     if (m_hasLast && info == m_last)
         return;
+    const bool branchSwitched = m_hasLast && m_last.valid && info.valid
+                                 && info.branch != m_last.branch;
     m_last = info;
     m_hasLast = true;
     emit changed(info);
+    if (branchSwitched)
+        emit branchChanged(info.branch);
 }
 
 GitStatusInfo GitStatus::parseStatus(const QString &output)
