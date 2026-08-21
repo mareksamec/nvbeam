@@ -150,6 +150,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_messages->hide(); // not in the layout; would otherwise paint at (0,0)
 
     m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
+    // Branch name source: the built-in GitStatus provider by default, gitsigns
+    // (vim.b.gitsigns_head) only when the user asks for it.
+    m_statusline->setGitsignsBranch(cfg.uiGitsignsBranch);
     if (cfg.extStatusline)
         editorLayout->addWidget(m_statusline);
 
@@ -720,8 +723,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Git segment of the statusline: push-model provider, refreshed only on
     // cwd changes (via updateTitleCwd), nvim write/DirChanged notifications
-    // (lua/gitstatus.lua, registered in the ready handler) and .git changes
-    // seen by GitStatus's own file watcher. No polling.
+    // (lua/gitstatus.lua, registered in the ready handler), .git changes seen
+    // by GitStatus's own watcher, and window activation (see eventFilter).
+    // No polling.
     if (cfg.extStatusline && cfg.uiGitStatus) {
         m_gitStatus = new GitStatus(this);
         connect(m_gitStatus, &GitStatus::changed,
@@ -919,6 +923,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    // Coming back to the window is the one non-push git trigger, and the only
+    // one that covers what a file watcher structurally cannot see: a git dir
+    // on a filesystem without change notification, a branch switched while an
+    // inotify watch was momentarily stale, or a repository created in the
+    // current cwd while the app was unfocused. Costs one debounced
+    // `git status` per activation, and never consumes the event.
+    // WindowActivate rather than ApplicationActivate: the latter is deprecated
+    // in Qt 6 and not delivered on every platform. It reaches every child
+    // widget of the window, hence the sender check.
+    if (event->type() == QEvent::WindowActivate && watched == this && m_gitStatus)
+        m_gitStatus->refresh();
+
     if (event->type() == QEvent::KeyPress) {
         auto *ke = static_cast<QKeyEvent *>(event);
         // Key_Backtab is what Ctrl+Shift+Tab produces; treat both directions

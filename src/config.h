@@ -70,6 +70,9 @@ struct Config {
     bool bufferline = true;           // show open buffers instead of tabpages
     bool extStatusline = true;        // native statusline widget
     bool uiGitStatus = true;          // git branch/status segment in the statusline (push-updated)
+    bool uiGitsignsBranch = false;    // take the branch name from gitsigns (vim.b.gitsigns_head)
+                                      // instead of the built-in git provider; gitsigns then
+                                      // becomes a required plugin for the branch to show at all
     QString uiWindowTitle;            // window title template: %p project, %d cwd (~), %D cwd,
                                       // %f file name, %F file path (~), %% literal; empty = default title
     QString accentColor = "#50fa7b";  // greenish accent for native elements

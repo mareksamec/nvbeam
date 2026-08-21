@@ -10,10 +10,14 @@ GitStatus::GitStatus(QObject *parent)
     m_debounce.setInterval(200);
     connect(&m_debounce, &QTimer::timeout, this, &GitStatus::runStatus);
 
-    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this]() {
-        watchGit(); // re-add paths git just replaced by rename
-        refresh();
-    });
+    // Both signals mean the same thing here: something under the git dir
+    // moved. directoryChanged is the reliable half (git renames files into
+    // place, which kills a file watch), fileChanged is kept because it fires
+    // for in-place rewrites too.
+    connect(&m_watcher, &QFileSystemWatcher::fileChanged,
+            this, &GitStatus::rewatchAndRefresh);
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged,
+            this, &GitStatus::rewatchAndRefresh);
 }
 
 void GitStatus::setWorkingDirectory(const QString &dir)
@@ -22,7 +26,7 @@ void GitStatus::setWorkingDirectory(const QString &dir)
         return;
     m_dir = dir;
     m_gitDir.clear();
-    const QStringList watched = m_watcher.files();
+    const QStringList watched = m_watcher.files() + m_watcher.directories();
     if (!watched.isEmpty())
         m_watcher.removePaths(watched);
     resolveGitDir();
@@ -30,21 +34,43 @@ void GitStatus::setWorkingDirectory(const QString &dir)
 
 void GitStatus::refresh()
 {
+    // A directory that was not a repository has no git dir and therefore no
+    // watch: runStatus() would return immediately, forever. Retry the resolve
+    // so a repository created after the cwd was first seen is picked up.
+    if (m_gitDir.isEmpty()) {
+        if (!m_dir.isEmpty())
+            resolveGitDir();
+        return;
+    }
     if (!m_debounce.isActive())
         m_debounce.start();
 }
 
+void GitStatus::rewatchAndRefresh()
+{
+    watchGit();
+    refresh();
+}
+
 void GitStatus::resolveGitDir()
 {
+    if (m_resolving) // refresh() retries on every activation while non-repo
+        return;
+    m_resolving = true;
     auto *proc = new QProcess(this);
     const QString dir = m_dir;
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [this, proc, dir](int code, QProcess::ExitStatus) {
         proc->deleteLater();
+        m_resolving = false;
         if (dir != m_dir) // cwd moved on while resolving
             return;
-        if (code == 0) {
-            m_gitDir = QString::fromUtf8(proc->readAllStandardOutput()).trimmed();
+        const QString gitDir = code == 0
+            ? QString::fromUtf8(proc->readAllStandardOutput()).trimmed() : QString();
+        // An empty path on a zero exit would leave refresh() retrying the
+        // resolve forever, one process per call.
+        if (!gitDir.isEmpty()) {
+            m_gitDir = gitDir;
             watchGit();
             refresh();
         } else {
@@ -57,6 +83,7 @@ void GitStatus::resolveGitDir()
         if (error != QProcess::FailedToStart)
             return;
         proc->deleteLater();
+        m_resolving = false;
         publish(GitStatusInfo{});
     });
     proc->start("git", {"-C", dir, "rev-parse", "--absolute-git-dir"});
@@ -96,18 +123,31 @@ void GitStatus::runStatus()
         m_running = false;
         publish(GitStatusInfo{});
     });
-    proc->start("git", {"-C", dir, "status", "--porcelain=v1", "-b", "--no-renames"});
+    // --no-optional-locks: plain `git status` may refresh the on-disk index,
+    // which the watcher would see as a change and answer with another status
+    // run. Same reason editors and shell prompts set GIT_OPTIONAL_LOCKS=0.
+    proc->start("git", {"-C", dir, "--no-optional-locks",
+                        "status", "--porcelain=v1", "-b", "--no-renames"});
 }
 
 void GitStatus::watchGit()
 {
     if (m_gitDir.isEmpty())
         return;
-    const QStringList watched = m_watcher.files();
-    for (const QString &name : {QStringLiteral("/HEAD"), QStringLiteral("/index")}) {
+    // Re-add unconditionally rather than skipping paths the watcher still
+    // lists. After git renames a new file over HEAD or index, the path
+    // resolves again while the watch behind it points at the unlinked old
+    // inode, so "already watched" is not the same as "still working". Qt
+    // ignores a duplicate addPath, and dropping a live watch for one event
+    // costs nothing.
+    m_watcher.removePaths(m_watcher.files() + m_watcher.directories());
+    for (const QString &name : {QStringLiteral(""),          // the git dir itself
+                                QStringLiteral("/refs/heads"),
+                                QStringLiteral("/HEAD"),
+                                QStringLiteral("/index")}) {
         const QString path = m_gitDir + name;
-        if (QFile::exists(path) && !watched.contains(path))
-            m_watcher.addPath(path);
+        if (QFile::exists(path))
+            m_watcher.addPath(path); // Qt picks file vs directory from the path
     }
 }
 

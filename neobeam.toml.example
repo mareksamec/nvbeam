@@ -42,6 +42,7 @@
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
+# gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # "powerline", "pipe", "none"
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane

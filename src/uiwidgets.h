@@ -136,6 +136,12 @@ public:
     /// Update all statusline segments from Neovim state
     void updateStatus(const QVariantMap &data);
 
+    /// Take the branch name from gitsigns (vim.b.gitsigns_head, pushed by
+    /// lua/statusline.lua) instead of the built-in GitStatus provider. Off by
+    /// default: the provider runs `git` itself, so no plugin is needed and the
+    /// name cannot lag behind gitsigns' own detection.
+    void setGitsignsBranch(bool enabled);
+
     /// Update the current mode display
     void setMode(const QString &mode);
 
@@ -159,7 +165,8 @@ private:
     QString m_accent;
     QString m_mode = "NORMAL";
     QString m_file;
-    QString m_branch;   // from statusline.lua (gitsigns, includes the branch glyph)
+    QString m_branch;   // from statusline.lua (gitsigns); used only when m_gitsignsBranch
+    bool m_gitsignsBranch = false;
     GitStatusInfo m_git; // from the Qt-side GitStatus provider
     QString m_diag;
     QString m_pos;

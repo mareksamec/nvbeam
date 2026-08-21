@@ -195,6 +195,26 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       redraw the already-buffered prompt text, so a branch segment (zsh `vcs_info`, etc.)
       would stay stale. Enter is what actually forces a fresh prompt expansion.
 
+### Git segment 2026-08-21
+- [x] Statusline git segment sometimes kept the old branch after a checkout made outside the app
+    - Root cause: `GitStatus` watched `.git/HEAD` and `.git/index` as files. git publishes both by
+      renaming a lockfile over the target, so the watch was left on the unlinked old inode, and the
+      re-arm skipped any path the watcher still listed - which is every path, since the name resolves
+      again after the rename. The watch stayed dead for the rest of the session. nvim sees nothing for
+      an external checkout, so the watcher was the only trigger left.
+    - `GitStatus::watchGit()` now also watches the git dir and `refs/heads` as directories (a
+      directory inode is never replaced) and re-adds every path unconditionally on each event.
+    - `git status` runs with `--no-optional-locks`: watching the git dir made a self-retrigger loop
+      possible, since plain `git status` may rewrite `.git/index` to refresh its stat cache.
+    - `MainWindow::eventFilter` refreshes on `QEvent::WindowActivate`, the one non-push trigger. It
+      covers what no watcher can see: filesystems without change notification, and a repository
+      created in the cwd while the app was unfocused (`refresh()` retries the git-dir resolve then).
+- [x] Branch name no longer requires gitsigns
+    - `StatuslineWidget::refresh()` preferred `vim.b.gitsigns_head` over the built-in provider, so the
+      displayed name followed gitsigns' detection even though `GitStatus` had just run `git`.
+    - The provider is now the default source. `[ui] gitsigns_branch = true` restores the old
+      precedence; the counts come from the provider either way.
+
 ## Project rename
 
 Planned rename neobeam → neoqute ("neobeam" is already used by multiple projects on GitHub).

@@ -176,6 +176,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
+# gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # powerline, pipe, none
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
@@ -252,6 +253,10 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `bufferline` — Show open buffers in tabline instead of tabpages (default: `true`)
 - `statusline` — Native statusline widget (default: `true`)
 - `git_status` — Git branch + status counts in the statusline, push-updated with no polling (default: `true`)
+- `gitsigns_branch` — Take the branch name from gitsigns (`vim.b.gitsigns_head`) instead of the
+  built-in provider, which runs `git` itself and needs no plugin. Only affects the name; the
+  counts always come from the built-in provider. Enable this if you want the branch to follow
+  gitsigns' own detection, and accept that it goes stale on gitsigns' schedule (default: `false`)
 - `accent_color` — Accent color for UI elements (default: `"#50fa7b"`)
 - `statusline_divider` — Statusline segment divider style: `powerline`, `pipe`, `none` (default: `powerline`)
 - `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: `"#61afef"`)
