@@ -200,7 +200,23 @@
 
 
 ### Improvement segment 2026-08-31
-- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
+- [x] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
+    - No new git process: `GitStatusInfo` gained `changedFiles` (`gitstatus.h`), populated in
+      `parseStatus()`'s existing per-entry loop (`gitstatus.cpp`), which already read every status
+      line and previously discarded the path after counting it. "Number of commits" reads as
+      ahead/behind vs upstream (already parsed from `git status -b`), not a new `git rev-list` call.
+    - Tooltip built in `StatuslineWidget::refresh()` alongside the existing branch/counts text and
+      set via `QLabel::setToolTip()` on `m_branchLabel` (rich HTML) - reuses Qt's native tooltip
+      instead of a custom hover widget. Rebuilt on every `refresh()` (string formatting only, no
+      I/O), not gated behind a "did git status change" check.
+    - Capped at 20 files (`kMaxTooltipFiles`), then `...and {overflow} more files`. Changed-file
+      paths colored `#98c379` (OneDark green) regardless of the statusline's own Tokyo Night palette
+      - a deliberate literal-color choice, not themed.
+    - Known limitation: git quotes paths with spaces/unicode/special characters in porcelain v1
+      output (`"..."` with C escapes); left unescaped in the tooltip rather than switching the
+      line-based parser to `-z`/NUL-delimited output. Verified by hand against a scratch repo with
+      30 changed/untracked entries including a spaced filename - not by running the GUI myself, per
+      AGENTS.md - awaiting visual confirmation.
 - [ ] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
 - [ ] Allow maximization also for bottom term and side term.
 
