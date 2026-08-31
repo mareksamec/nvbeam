@@ -101,22 +101,6 @@
     - [x] Fix: multi-line selection copied empty lines. gridAt() iterated m_grids (QHash, randomized order) and grid 1 - the full-window backdrop that holds no buffer text under ext_multigrid - could match before the window grid, so the overlay drew at the right pixels but extraction read blank cells. Grid 1 is now excluded from the hit loop and only used as fallback. -> awaiting visual confirmation
     - [x] Shift + double click (or double click while the mode is on) selects the word under the pointer and copies it (xterm-style char classes: word = alnum + underscore). Previously there was no double-click handler at all: the deferred Shift+press leaked to nvim as two quick <S-LeftMouse> clicks, nvim drew its own visual word selection, and nothing was copied. A dragless Shift+click is now held for the double-click interval before being forwarded (flushed early on any other press/keypress), so plain Shift+click still reaches nvim as <S-LeftMouse>. -> awaiting visual confirmation
 
-## Phase 9: Performance
-
-Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (quick wins first):
-
-- [x] Minimap: debounce the content rebuild (treesitter scan) to ~300ms after the last changedtick change; keep only the cheap viewport-only query on the short per-flush interval. -> split into neobeam.minimap_view() (per flush) + neobeam.minimap_scan() (300ms debounce, restarted while ticks keep changing)
-- [x] Minimap: skip the scan entirely when the minimap is hidden. -> both timers no-op while hidden; re-show kicks one view poll which schedules a scan if the tick moved
-- [x] Minimap: persist the lua fg_cache across calls in a global table, invalidate on ColorScheme autocmd.
-- [x] Lua plumbing: stop re-reading .lua files from disk and re-compiling full chunks per timer fire. -> both: loadLua() caches sources, and statusline/bufferline/minimap register functions in a `neobeam` table on attach; timers call one-line `return neobeam.*()` chunks
-- [x] Replace idle polling with push: cwd poll (500ms) and MRU poll (2s) become `DirChanged`/`BufEnter` autocmds + rpcnotify (lua/events.lua), same pattern as gitstatus.lua. Initial cwd/file pushed once at registration.
-- [ ] Paint path, step 1: cache font descent + four QFont variants (normal/bold/italic/bold-italic) as members; batch consecutive cells with the same hlId into runs (one fillRect + one drawText per run). Currently one drawText per cell, ~15k cells per full repaint.
-- [ ] Paint path, step 2: per-grid QPixmap backing store updated incrementally. grid_line paints only changed rows, grid_scroll becomes a blit, paintEvent composites pixmaps + cursor + selection overlay. Cursor-only moves repaint two small rects via update(rect) instead of the whole window.
-- [x] Decoder quick win: use `QString::fromUtf8(data.constData() + offset, len)` in decodeMsgpack to avoid the intermediate mid() copy per string.
-- [x] Fix uncovered along the way: infinite RPC feedback loop at idle. nvim re-emits a win_viewport_margins + tabline_update + flush batch after every RPC request it serves, and each flush re-armed the statusline/bufferline/minimap pollers whose next request triggered the same batch again. flushed() now fires only for batches carrying real content events. This loop was likely a large share of the 20-25% baseline; it also starved the debounced minimap scan (dark minimap).
-- [x] Debug/verify infra: QLoggingCategory trace points (neobeam.minimap, neobeam.redraw; silent by default, QT_LOGGING_RULES to enable) + project verify skill (.claude/skills/verify) covering offscreen runs and RPC-level Lua testing.
-- [ ] Decoder, longer term (only if still needed): decode redraw events directly into grid cells without building QVariant trees. Do not start here.
-
 
 ## Pipeline adjustments
  - [ ] Allow to publish release build from branch
@@ -169,7 +153,6 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       it fresh but wrong when just restoring pre-maximize state. `showEvent`'s own `visibilityChanged`
       still keeps the button's checked state in sync (same pattern session restore already relies on).
       Keyboard focus is explicitly returned to the grid on both enter and exit either way.
-- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
 - [x] Terminal prompt injection / refresh on git status. I'd like the bottom terminal to listen for git changes and when there is a new branch to either refresh / inject the terminal prompt (zsh or bash, depending what's enable in the config). Simple fallback solution would be to just send "Enter" into the terminal (if no letters are typed there to avoid executing some random command).
     - Went with the fallback: `GitStatus` (already push-updated via nvim autocmds + a
       `.git/HEAD`/`.git/index` file watcher, so it already sees branch switches typed
@@ -214,6 +197,13 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       displayed name followed gitsigns' detection even though `GitStatus` had just run `git`.
     - The provider is now the default source. `[ui] gitsigns_branch = true` restores the old
       precedence; the counts come from the provider either way.
+
+
+### Improvement segment 2026-08-31
+- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
+- [ ] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
+- [ ] Allow maximization also for bottom term and side term.
+
 
 ## Project rename
 
