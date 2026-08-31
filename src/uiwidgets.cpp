@@ -671,7 +671,9 @@ void StatuslineWidget::refresh()
     // change" check the way the git subprocess itself is.
     if (!branchName.isEmpty() && m_git.valid) {
         static constexpr int kMaxTooltipFiles = 20;
-        static const QString kChangedFileColor = QStringLiteral("#98c379"); // OneDark green
+        static const QString kChangedFileColor   = QStringLiteral("#98c379"); // OneDark green
+        static const QString kUntrackedFileColor = QStringLiteral("#61afef"); // OneDark blue,
+            // same blue already used elsewhere in neobeam (e.g. the focus-border color)
 
         QString tip = QStringLiteral("<b>%1</b>").arg(branchName.toHtmlEscaped());
         if (m_git.ahead || m_git.behind) {
@@ -683,14 +685,25 @@ void StatuslineWidget::refresh()
             tip += QStringLiteral("<br>up to date with upstream");
         }
 
-        if (!m_git.changedFiles.isEmpty()) {
-            tip += QStringLiteral("<br><br>Changed files (%1):").arg(m_git.changedFiles.size());
-            const int shown = qMin(m_git.changedFiles.size(), kMaxTooltipFiles);
-            for (int i = 0; i < shown; ++i) {
+        const int totalFiles = m_git.changedFiles.size() + m_git.untrackedFiles.size();
+        if (totalFiles > 0) {
+            tip += QStringLiteral("<br><br>Changed files (%1):").arg(totalFiles);
+            int shown = 0;
+            // Tracked (staged/modified) first in green, then untracked in blue,
+            // each capped so the combined list never exceeds kMaxTooltipFiles.
+            for (const QString &file : m_git.changedFiles) {
+                if (shown >= kMaxTooltipFiles) break;
                 tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
-                           .arg(kChangedFileColor, m_git.changedFiles[i].toHtmlEscaped());
+                           .arg(kChangedFileColor, file.toHtmlEscaped());
+                ++shown;
             }
-            const int overflow = m_git.changedFiles.size() - shown;
+            for (const QString &file : m_git.untrackedFiles) {
+                if (shown >= kMaxTooltipFiles) break;
+                tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
+                           .arg(kUntrackedFileColor, file.toHtmlEscaped());
+                ++shown;
+            }
+            const int overflow = totalFiles - shown;
             if (overflow > 0)
                 tip += QStringLiteral("<br>...and %1 more files").arg(overflow);
         }

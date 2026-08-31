@@ -209,9 +209,12 @@
       set via `QLabel::setToolTip()` on `m_branchLabel` (rich HTML) - reuses Qt's native tooltip
       instead of a custom hover widget. Rebuilt on every `refresh()` (string formatting only, no
       I/O), not gated behind a "did git status change" check.
-    - Capped at 20 files (`kMaxTooltipFiles`), then `...and {overflow} more files`. Changed-file
-      paths colored `#98c379` (OneDark green) regardless of the statusline's own Tokyo Night palette
-      - a deliberate literal-color choice, not themed.
+    - Capped at 20 files total (`kMaxTooltipFiles`), then `...and {overflow} more files`. Tracked
+      (staged/modified) paths colored `#98c379` (OneDark green), untracked paths `#61afef` (OneDark
+      blue, the same blue already used elsewhere in neobeam for the focus-border color) - tracked
+      shown first, then untracked, both literal colors regardless of the statusline's own Tokyo
+      Night palette. `GitStatusInfo` splits `changedFiles`/`untrackedFiles` into separate lists so
+      the two can be colored differently without re-deriving status per path in the UI layer.
     - Known limitation: git quotes paths with spaces/unicode/special characters in porcelain v1
       output (`"..."` with C escapes); left unescaped in the tooltip rather than switching the
       line-based parser to `-z`/NUL-delimited output. Verified by hand against a scratch repo with

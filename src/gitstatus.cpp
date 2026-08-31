@@ -201,11 +201,12 @@ GitStatusInfo GitStatus::parseStatus(const QString &output)
         // left as-is here rather than unescaped, see parseStatus() callers).
         const QChar x = line.at(0);
         const QChar y = line.at(1);
-        info.changedFiles << line.mid(3);
         if (x == QLatin1Char('?')) {
             info.untracked++;
+            info.untrackedFiles << line.mid(3);
             continue;
         }
+        info.changedFiles << line.mid(3);
         if (x != QLatin1Char(' '))
             info.staged++;
         if (y != QLatin1Char(' '))
