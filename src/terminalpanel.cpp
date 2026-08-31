@@ -4,6 +4,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QMouseEvent>
+#include <QKeyEvent>
 #include <QApplication>
 #include <QClipboard>
 #include <QCoreApplication>
@@ -331,11 +332,22 @@ void TerminalPanel::showEvent(QShowEvent *event)
 bool TerminalPanel::eventFilter(QObject *watched, QEvent *event)
 {
 #ifdef NEOBEAM_HAS_TERMINAL
+    // Unsubmitted-input tracking for refreshPromptOnBranchChange(): every key
+    // reaching the display widget updates the per-split dirty heuristic.
+    if (event->type() == QEvent::KeyPress) {
+        QTermWidget *term = nullptr;
+        for (QObject *o = watched; o && !term; o = o->parent())
+            term = qobject_cast<QTermWidget *>(o);
+        if (term && m_terminals.contains(term))
+            markLineDirty(term, static_cast<QKeyEvent *>(event));
+    }
+
     // Copy-on-select, CLIPBOARD half: installed on each terminal's internal
     // Konsole::TerminalDisplay widget (createTermWidget). A left-button
     // release ends every selection gesture (drag, double-click word,
     // triple-click line, shift-extend).
-    if (event->type() == QEvent::MouseButtonRelease
+    if (m_cfg.copyOnSelect
+        && event->type() == QEvent::MouseButtonRelease
         && static_cast<QMouseEvent *>(event)->button() == Qt::LeftButton) {
         QTermWidget *term = nullptr;
         for (QObject *o = watched; o && !term; o = o->parent())
@@ -488,6 +500,7 @@ void TerminalPanel::removeCurrentTerminal()
 
     m_terminals.removeOne(m_currentTerm);
     QFrame *wrapper = m_wrapperFor.take(m_currentTerm);
+    m_lineDirty.remove(m_currentTerm);
     if (wrapper)
         wrapper->deleteLater(); // also deletes the child terminal widget
     else
@@ -495,6 +508,32 @@ void TerminalPanel::removeCurrentTerminal()
     m_currentTerm = m_terminals.isEmpty() ? nullptr : m_terminals.last();
     if (m_currentTerm)
         m_currentTerm->setFocus();
+#endif
+}
+
+#ifdef NEOBEAM_HAS_TERMINAL
+void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
+{
+    const bool ctrl = event->modifiers() & Qt::ControlModifier;
+    const int key = event->key();
+    if (key == Qt::Key_Return || key == Qt::Key_Enter
+        || (ctrl && (key == Qt::Key_C || key == Qt::Key_U))) {
+        m_lineDirty[term] = false;
+        return;
+    }
+    m_lineDirty[term] = true;
+}
+#endif
+
+void TerminalPanel::refreshPromptOnBranchChange()
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    if (!m_cfg.refreshPromptOnGitChange)
+        return;
+    for (QTermWidget *term : m_terminals) {
+        if (!m_lineDirty.value(term, false))
+            term->sendText(QStringLiteral("\r"));
+    }
 #endif
 }
 
@@ -642,17 +681,16 @@ QTermWidget *TerminalPanel::createTermWidget()
     // Tracking: https://github.com/lxqt/qtermwidget — no sixel code exists.
     // When/if upstream adds sixel support, enable it here.
 
-    // Copy-on-select: qtermwidget only mirrors the selection to PRIMARY on
-    // its own (TerminalDisplay::setSelection); its copyAvailable signal is
-    // never emitted (the ScreenWindow::selectionChanged connection is missing
-    // upstream, as of 2.4.0). The CLIPBOARD half therefore hooks mouse
-    // release on the internal display widget instead (see eventFilter()).
-    if (m_cfg.copyOnSelect) {
-        const auto children = term->findChildren<QWidget *>();
-        for (QWidget *child : children) {
-            if (child->inherits("Konsole::TerminalDisplay"))
-                child->installEventFilter(this);
-        }
+    // Installed unconditionally: copy-on-select (gated by m_cfg.copyOnSelect
+    // inside eventFilter() itself - qtermwidget only mirrors the selection to
+    // PRIMARY on its own, its copyAvailable signal is never emitted upstream
+    // as of 2.4.0) and the "unsubmitted input" keystroke tracking used by
+    // refreshPromptOnBranchChange() both watch this same internal display
+    // widget.
+    const auto children = term->findChildren<QWidget *>();
+    for (QWidget *child : children) {
+        if (child->inherits("Konsole::TerminalDisplay"))
+            child->installEventFilter(this);
     }
 
     // Double-click selects a whole URL rather than stopping at the query

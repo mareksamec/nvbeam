@@ -169,7 +169,51 @@ Baseline: stable 20-25% CPU while editing on i7-1185G7. Suggested fix order (qui
       it fresh but wrong when just restoring pre-maximize state. `showEvent`'s own `visibilityChanged`
       still keeps the button's checked state in sync (same pattern session restore already relies on).
       Keyboard focus is explicitly returned to the grid on both enter and exit either way.
-- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc.
+- [ ] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
+- [x] Terminal prompt injection / refresh on git status. I'd like the bottom terminal to listen for git changes and when there is a new branch to either refresh / inject the terminal prompt (zsh or bash, depending what's enable in the config). Simple fallback solution would be to just send "Enter" into the terminal (if no letters are typed there to avoid executing some random command).
+    - Went with the fallback: `GitStatus` (already push-updated via nvim autocmds + a
+      `.git/HEAD`/`.git/index` file watcher, so it already sees branch switches typed
+      straight into the terminal) gained a `branchChanged(QString)` signal, emitted only
+      when the branch itself differs from the previous status, not on every status-count
+      tick. `TerminalPanel` connects it to `refreshPromptOnBranchChange()`, which sends a
+      bare `\r` to every split whose current line has nothing unsubmitted typed into it.
+      Bottom terminal only, not the side terminal (usually an agent/REPL, not a shell -
+      Enter there risks submitting an empty prompt to it).
+    - Config-gated, off by default: `[terminal] refresh_prompt_on_git_change` (`config.h`/
+      `config.cpp`, `TerminalConfig::refreshPromptOnGitChange`). It's still a keystroke
+      injected into a live shell, so `refreshPromptOnBranchChange()` itself no-ops unless
+      enabled - documented with a warning in README.md and neobeam.toml.example.
+    - "Nothing typed" has no public API to check (QTermWidget exposes no way to read the
+      shell's readline buffer or the current screen line), so it's tracked as a heuristic:
+      an event filter on each split's internal `Konsole::TerminalDisplay` (same object
+      already filtered for copy-on-select) watches `QKeyEvent`s and flips a per-split dirty
+      bit - Enter/Ctrl+C/Ctrl+U clear it, everything else sets it. Conservative in one
+      direction only: e.g. Backspacing back to an empty line still reads as dirty, so the
+      failure mode is a skipped refresh, never a stray Enter into a line being typed.
+    - Considered sending Ctrl+L (redraw) instead of Enter: rejected because neither bash's
+      readline `clear-screen` nor zsh's ZLE `clear-screen` re-expand `PS1`/`RPS1` - both just
+      redraw the already-buffered prompt text, so a branch segment (zsh `vcs_info`, etc.)
+      would stay stale. Enter is what actually forces a fresh prompt expansion.
+
+### Git segment 2026-08-21
+- [x] Statusline git segment sometimes kept the old branch after a checkout made outside the app
+    - Root cause: `GitStatus` watched `.git/HEAD` and `.git/index` as files. git publishes both by
+      renaming a lockfile over the target, so the watch was left on the unlinked old inode, and the
+      re-arm skipped any path the watcher still listed - which is every path, since the name resolves
+      again after the rename. The watch stayed dead for the rest of the session. nvim sees nothing for
+      an external checkout, so the watcher was the only trigger left.
+    - `GitStatus::watchGit()` now also watches the git dir and `refs/heads` as directories (a
+      directory inode is never replaced) and re-adds every path unconditionally on each event.
+    - `git status` runs with `--no-optional-locks`: watching the git dir made a self-retrigger loop
+      possible, since plain `git status` may rewrite `.git/index` to refresh its stat cache.
+    - `MainWindow::eventFilter` refreshes on `QEvent::WindowActivate`, the one non-push trigger. It
+      covers what no watcher can see: filesystems without change notification, and a repository
+      created in the cwd while the app was unfocused (`refresh()` retries the git-dir resolve then).
+- [x] Branch name no longer requires gitsigns
+    - `StatuslineWidget::refresh()` preferred `vim.b.gitsigns_head` over the built-in provider, so the
+      displayed name followed gitsigns' detection even though `GitStatus` had just run `git`.
+    - The provider is now the default source. `[ui] gitsigns_branch = true` restores the old
+      precedence; the counts come from the provider either way.
 
 ## Project rename
 

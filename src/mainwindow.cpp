@@ -150,6 +150,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_messages->hide(); // not in the layout; would otherwise paint at (0,0)
 
     m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
+    // Branch name source: the built-in GitStatus provider by default, gitsigns
+    // (vim.b.gitsigns_head) only when the user asks for it.
+    m_statusline->setGitsignsBranch(cfg.uiGitsignsBranch);
     if (cfg.extStatusline)
         editorLayout->addWidget(m_statusline);
 
@@ -195,6 +198,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.antialiasing = cfg.terminalAntialiasing;
     termCfg.hinting = cfg.terminalHinting;
     termCfg.scrollback = cfg.terminalScrollback;
+    termCfg.refreshPromptOnGitChange = cfg.terminalRefreshPromptOnGitChange;
     termCfg.focusBorderColor = QColor(cfg.focusBorderColor);
     m_terminal = new TerminalPanel(termCfg, m_vsplitter);
 
@@ -719,8 +723,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Git segment of the statusline: push-model provider, refreshed only on
     // cwd changes (via updateTitleCwd), nvim write/DirChanged notifications
-    // (lua/gitstatus.lua, registered in the ready handler) and .git changes
-    // seen by GitStatus's own file watcher. No polling.
+    // (lua/gitstatus.lua, registered in the ready handler), .git changes seen
+    // by GitStatus's own watcher, and window activation (see eventFilter).
+    // No polling.
     if (cfg.extStatusline && cfg.uiGitStatus) {
         m_gitStatus = new GitStatus(this);
         connect(m_gitStatus, &GitStatus::changed,
@@ -730,6 +735,16 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             if (method == QLatin1String("neobeam_git_event"))
                 m_gitStatus->refresh();
         });
+
+        // Bottom terminal only: a branch switch (including one made by typing
+        // `git checkout`/`switch` straight into this terminal, caught by
+        // GitStatus's own .git/HEAD watcher) leaves a branch-aware shell
+        // prompt (zsh vcs_info, etc.) showing the old name until the next
+        // command. Not wired to the side terminal, which usually runs an
+        // agent/REPL rather than a shell - injecting Enter there risks
+        // submitting an empty prompt to it.
+        connect(m_gitStatus, &GitStatus::branchChanged,
+                m_terminal, &TerminalPanel::refreshPromptOnBranchChange);
     }
 
     // Minimap, two-tier: a cheap viewport-only poll per flush keeps the
@@ -908,6 +923,18 @@ void MainWindow::closeEvent(QCloseEvent *event)
 
 bool MainWindow::eventFilter(QObject *watched, QEvent *event)
 {
+    // Coming back to the window is the one non-push git trigger, and the only
+    // one that covers what a file watcher structurally cannot see: a git dir
+    // on a filesystem without change notification, a branch switched while an
+    // inotify watch was momentarily stale, or a repository created in the
+    // current cwd while the app was unfocused. Costs one debounced
+    // `git status` per activation, and never consumes the event.
+    // WindowActivate rather than ApplicationActivate: the latter is deprecated
+    // in Qt 6 and not delivered on every platform. It reaches every child
+    // widget of the window, hence the sender check.
+    if (event->type() == QEvent::WindowActivate && watched == this && m_gitStatus)
+        m_gitStatus->refresh();
+
     if (event->type() == QEvent::KeyPress) {
         auto *ke = static_cast<QKeyEvent *>(event);
         // Key_Backtab is what Ctrl+Shift+Tab produces; treat both directions

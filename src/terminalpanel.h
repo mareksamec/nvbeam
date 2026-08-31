@@ -16,6 +16,8 @@
 #include <qtermwidget.h>
 #endif
 
+class QKeyEvent;
+
 struct TerminalConfig {
     QString fontFamily = "Monospace";
     int fontSize = 10;
@@ -37,6 +39,10 @@ struct TerminalConfig {
     bool antialiasing = true;
     QFont::HintingPreference hinting = QFont::PreferDefaultHinting;
     int scrollback = 1000;    // scrollback buffer size in lines (>= 1)
+    // See Config::terminalRefreshPromptOnGitChange: gates
+    // refreshPromptOnBranchChange() itself, so it's a no-op even if MainWindow
+    // connects the signal regardless.
+    bool refreshPromptOnGitChange = false;
     QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
     // Side-panel mode (terminal docked next to the minimap): splits stack
     // vertically and the panel enforces a minimum width instead of height.
@@ -126,6 +132,13 @@ public slots:
     void addTerminal();
     void removeCurrentTerminal();
 
+    /// Refresh every split's shell prompt after a branch switch made outside
+    /// nvim (GitStatus::branchChanged). Sends a bare Enter to whichever
+    /// splits have no unsubmitted input typed, so a branch-aware prompt
+    /// (zsh vcs_info, etc.) picks up the new branch; splits with something
+    /// typed are left alone rather than risk submitting it.
+    void refreshPromptOnBranchChange();
+
 private:
     /// Background color for the panel chrome (toolbar, splitter, panel
     /// widget): the configured background override, else the scheme's
@@ -155,10 +168,20 @@ private:
     /// under the cursor, and otherwise falls back to the configured
     /// PuTTY-style paste.
     void showContextMenu(QTermWidget *term, const QPoint &pos);
+    /// Update the "unsubmitted input" heuristic for `term` from a key event
+    /// on its internal display widget. There is no public API to read the
+    /// shell's actual input buffer, so this tracks keystrokes instead:
+    /// Enter/Ctrl+C/Ctrl+U (line submitted/aborted/cleared) reset it to
+    /// clean, anything else marks it dirty. Conservative by design - e.g. a
+    /// Backspace back to an empty line still reads as dirty - since the cost
+    /// of skipping a prompt refresh is far lower than injecting Enter into a
+    /// line the user is mid-typing.
+    void markLineDirty(QTermWidget *term, QKeyEvent *event);
 
     QTermWidget *m_currentTerm = nullptr;
     QList<QTermWidget *> m_terminals;
     QHash<QTermWidget *, QFrame *> m_wrapperFor;
+    QHash<QTermWidget *, bool> m_lineDirty;
 #endif
 
     QSplitter *m_splitter = nullptr;

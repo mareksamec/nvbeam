@@ -25,6 +25,10 @@
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
+# refresh_prompt_on_git_change = false  # WARNING: sends Enter to the bottom terminal's
+#   command line after a branch switch, to refresh a branch-aware shell prompt. Only
+#   sent to splits with nothing typed into them; off by default since it injects a
+#   keystroke into a live shell.
 
 [side_terminal]
 # width = 400  # startup width in pixels
@@ -38,6 +42,7 @@
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
+# gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # "powerline", "pipe", "none"
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane

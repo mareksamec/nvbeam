@@ -638,9 +638,10 @@ void StatuslineWidget::refresh()
     const QColor dim("#565f89");
     const QColor fg("#c0caf5");
 
-    // Git segment: the gitsigns branch (from statusline.lua, includes the
-    // branch glyph) wins when present; the Qt-side provider fills in the
-    // branch when gitsigns is absent and always contributes the counts.
+    // Git segment: the branch name comes from the Qt-side GitStatus provider,
+    // which runs `git` itself, so no nvim plugin is required. With
+    // [ui] gitsigns_branch the gitsigns name (from statusline.lua) wins
+    // instead when it is set. The counts always come from the provider.
     // Rendered as rich text so the counts can use the accent colour while
     // the branch name keeps the palette foreground; &nbsp; because rich
     // text trims plain leading/trailing spaces.
@@ -718,11 +719,21 @@ void StatuslineWidget::setMode(const QString &mode)
     refresh();
 }
 
+void StatuslineWidget::setGitsignsBranch(bool enabled)
+{
+    if (m_gitsignsBranch == enabled)
+        return;
+    m_gitsignsBranch = enabled;
+    if (!enabled)
+        m_branch.clear(); // stop a stale gitsigns name from masking the provider
+    refresh();
+}
+
 void StatuslineWidget::updateStatus(const QVariantMap &data)
 {
     if (data.contains("mode")) m_mode = data["mode"].toString().toUpper();
     if (data.contains("file")) m_file = data["file"].toString();
-    if (data.contains("branch")) m_branch = data["branch"].toString();
+    if (m_gitsignsBranch && data.contains("branch")) m_branch = data["branch"].toString();
     if (data.contains("pos")) m_pos = data["pos"].toString();
     if (data.contains("encoding")) m_encoding = data["encoding"].toString();
     if (data.contains("diagnostics")) m_diag = data["diagnostics"].toString();

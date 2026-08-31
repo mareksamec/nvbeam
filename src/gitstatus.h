@@ -19,10 +19,13 @@ struct GitStatusInfo {
 };
 
 /// Push-model git status provider for the native statusline. Refreshes only
-/// on explicit triggers — cwd changes, nvim buffer writes (rpcnotify from
-/// lua/gitstatus.lua), and .git HEAD/index changes seen by a file watcher
-/// (commits/branch switches made in the embedded terminal) — never on a
-/// poll. All git invocations run asynchronously.
+/// on explicit triggers - cwd changes, nvim buffer writes (rpcnotify from
+/// lua/gitstatus.lua), .git changes seen by a file watcher (commits/branch
+/// switches made in the embedded terminal or in any other process), and
+/// window activation (see MainWindow::eventFilter, which covers the cases a
+/// watcher structurally cannot see: no inotify, network mounts, a repo created
+/// while the app was unfocused) - never on a poll. All git invocations run
+/// asynchronously.
 class GitStatus : public QObject
 {
     Q_OBJECT
@@ -36,7 +39,10 @@ public:
 
 public slots:
     /// Request a refresh. Bursts (a save firing BufWritePost plus the index
-    /// change seen by the watcher) are debounced into a single git run.
+    /// change seen by the watcher) are debounced into a single git run. When
+    /// the directory was not a repository the last time it was resolved, the
+    /// resolve is retried instead, so a `git init`/`git clone` into the
+    /// current cwd is picked up without waiting for the cwd to change.
     void refresh();
 
 signals:
@@ -45,13 +51,25 @@ signals:
     /// statusline hides the segment then).
     void changed(const GitStatusInfo &info);
 
+    /// Emitted specifically when the branch name changed (checkout/switch,
+    /// including ones made outside nvim via the .git/HEAD watcher), as
+    /// opposed to a status-count-only update. Terminals whose shell prompt
+    /// shows the branch (zsh vcs_info, etc.) go stale after this.
+    void branchChanged(const QString &branch);
+
 private:
     void resolveGitDir();
     void runStatus();
-    /// (Re-)watch HEAD and index under the resolved git dir. Also called on
-    /// every watcher event: git replaces both files atomically (rename over
-    /// the old file), which silently drops them from the watcher.
+    /// (Re-)watch the resolved git dir, its refs/heads subdirectory, and the
+    /// HEAD and index files inside it. The two directories are what makes the
+    /// watch survive: git publishes HEAD, index and every ref by writing a
+    /// lockfile and renaming it over the target, so a watch on the file itself
+    /// is left pointing at the unlinked old inode, while a directory inode is
+    /// never replaced.
     void watchGit();
+    /// Handler for both watcher signals: re-arms the watch (see watchGit) and
+    /// requests a refresh.
+    void rewatchAndRefresh();
     void publish(const GitStatusInfo &info);
     static GitStatusInfo parseStatus(const QString &output);
 
@@ -59,6 +77,7 @@ private:
     QString m_gitDir;   // resolved absolute .git dir; empty = not a repo
     QTimer m_debounce;
     QFileSystemWatcher m_watcher;
+    bool m_resolving = false;   // a rev-parse is in flight
     bool m_running = false;
     bool m_rerun = false;   // refresh arrived while a run was in flight
     GitStatusInfo m_last;
