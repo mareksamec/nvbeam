@@ -664,6 +664,54 @@ void StatuslineWidget::refresh()
         branchText += QStringLiteral("&nbsp;");
     }
 
+    // Hover detail for the git segment: full ahead/behind wording plus the
+    // changed-file list, which has no room in the inline counts. Built here
+    // from data GitStatus already fetched (no new git invocation) - cheap
+    // string formatting, so no need to gate it behind a "did git status
+    // change" check the way the git subprocess itself is.
+    if (!branchName.isEmpty() && m_git.valid) {
+        static constexpr int kMaxTooltipFiles = 20;
+        static const QString kChangedFileColor   = QStringLiteral("#98c379"); // OneDark green
+        static const QString kUntrackedFileColor = QStringLiteral("#61afef"); // OneDark blue,
+            // same blue already used elsewhere in neobeam (e.g. the focus-border color)
+
+        QString tip = QStringLiteral("<b>%1</b>").arg(branchName.toHtmlEscaped());
+        if (m_git.ahead || m_git.behind) {
+            QStringList parts;
+            if (m_git.ahead)  parts << QStringLiteral("%1 ahead").arg(m_git.ahead);
+            if (m_git.behind) parts << QStringLiteral("%1 behind").arg(m_git.behind);
+            tip += QStringLiteral("<br>%1").arg(parts.join(QStringLiteral(", ")));
+        } else {
+            tip += QStringLiteral("<br>up to date with upstream");
+        }
+
+        const int totalFiles = m_git.changedFiles.size() + m_git.untrackedFiles.size();
+        if (totalFiles > 0) {
+            tip += QStringLiteral("<br><br>Changed files (%1):").arg(totalFiles);
+            int shown = 0;
+            // Tracked (staged/modified) first in green, then untracked in blue,
+            // each capped so the combined list never exceeds kMaxTooltipFiles.
+            for (const QString &file : m_git.changedFiles) {
+                if (shown >= kMaxTooltipFiles) break;
+                tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
+                           .arg(kChangedFileColor, file.toHtmlEscaped());
+                ++shown;
+            }
+            for (const QString &file : m_git.untrackedFiles) {
+                if (shown >= kMaxTooltipFiles) break;
+                tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
+                           .arg(kUntrackedFileColor, file.toHtmlEscaped());
+                ++shown;
+            }
+            const int overflow = totalFiles - shown;
+            if (overflow > 0)
+                tip += QStringLiteral("<br>...and %1 more files").arg(overflow);
+        }
+        m_branchLabel->setToolTip(tip);
+    } else {
+        m_branchLabel->setToolTip(QString());
+    }
+
     // Configure each slot: text, colours, visibility. Order must match the
     // layout slot order built in the constructor.
     struct Slot { QLabel *label; QString text; QColor fg; QColor bg; bool bold; bool visible; };

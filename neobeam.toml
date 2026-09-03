@@ -2,7 +2,6 @@
 # Copy this file to ~/.config/neobeam/neobeam.toml
 
 [font]
-#family = "Monospace"
 family = "Hack Nerd Font Mono"
 # size = 10
 # hinting = "default"  # none, slight, medium, full, default
@@ -14,26 +13,65 @@ start_expanded = true  # open with the terminal panel visible
 # height = 300  # startup height in pixels
 font = "Hack Nerd Font Mono"  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Linux"  # QTermWidget color scheme
+# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+# foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
+# background = ""  # override scheme background color (empty = scheme default)
 shell = "/usr/bin/zsh"  # shell program (empty = system default)
 # shell_args = []  # arguments passed to shell
 # exec_command = ""  # command to run after shell starts (e.g. "tmux")
 right_click_paste = true  # PuTTY-style right-click paste
 copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made
+# word_characters = ":@-./_~?&=%#+"  # non-alphanumerics kept when a double-click selects a word
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
+refresh_prompt_on_git_change = false  # WARNING: sends Enter to the bottom terminal's
+#   command line after a branch switch, to refresh a branch-aware shell prompt. Only
+#   sent to splits with nothing typed into them; off by default since it injects a
+#   keystroke into a live shell.
+
+[side_terminal]
+# width = 400  # startup width in pixels
+# font = ""  # side terminal font (empty = use terminal font)
+# font_size = 0  # side terminal font size (0 = use terminal font size)
 
 [ui]
-# ext_cmdline = true
 # ext_popupmenu = true
 # ext_tabline = true
 # ext_messages = true
 # bufferline = true  # show open buffers instead of tabpages
 # statusline = true  # native statusline (mode, file, position, diagnostics)
+git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
+# gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
 # accent_color = "#50fa7b"
+# statusline_divider = "powerline"  # "powerline", "pipe", "none"
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
+# window_title = ""  # custom title template (empty = default "Neobeam - ~/path",
+#                    # or "<project> - ~/path" after a switcher project pick).
+#                    # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,
+#                    # %f file name, %F file path (~-shortened), %% literal %
+
+[mouse]
+# terminal_selection = true   # terminal-style select/copy when vim mouse= is empty
+# auto_copy = true            # auto-copy selection to clipboard on release
+# selection_color = "#44475a" # selection highlight color
 
 [session]
 restore_window = true    # best-effort window size/state (WM/Wayland may override)
 restore_terminal = true  # terminal split count, proportions, height, expanded state
+
+[switcher]
+# keep_running = true  # show the project switcher instead of quitting when nvim exits
+# max_recent = 20      # recent files/folders kept in the switcher list (each)
+
+# Pinned projects, shown on top of the project switcher list.
+# Repeat the [[projects]] block once per project.
+# [[projects]]
+# path = "~/work/myproject"
+# name = "myproject"      # optional display name (default: folder name)
+# side_command = "claude" # optional command for the side terminal in this project
+#
+# [[projects]]
+# path = "~/work/otherproject"
+# name = "otherproject"
+# side_command = "nanocoder"

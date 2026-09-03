@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 #include <QFileSystemWatcher>
 
@@ -14,6 +15,12 @@ struct GitStatusInfo {
     int untracked = 0;
     int ahead = 0;        // commits ahead/behind upstream
     int behind = 0;
+    // Paths of tracked (staged/modified) and untracked entries, each in the
+    // order `git status` reports them, kept separate so the hover tooltip
+    // can color them differently. Kept here rather than re-parsed on hover
+    // since the parse already has them.
+    QStringList changedFiles;
+    QStringList untrackedFiles;
 
     bool operator==(const GitStatusInfo &other) const = default;
 };

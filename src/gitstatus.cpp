@@ -194,15 +194,19 @@ GitStatusInfo GitStatus::parseStatus(const QString &output)
                 info.behind = behind.captured(1).toInt();
             continue;
         }
-        if (line.size() < 2)
+        if (line.size() < 4)
             continue;
-        // Two status letters per entry: X = index, Y = worktree.
+        // Two status letters per entry: X = index, Y = worktree, then a
+        // space, then the path (quoted by git itself if it needs escaping -
+        // left as-is here rather than unescaped, see parseStatus() callers).
         const QChar x = line.at(0);
         const QChar y = line.at(1);
         if (x == QLatin1Char('?')) {
             info.untracked++;
+            info.untrackedFiles << line.mid(3);
             continue;
         }
+        info.changedFiles << line.mid(3);
         if (x != QLatin1Char(' '))
             info.staged++;
         if (y != QLatin1Char(' '))
