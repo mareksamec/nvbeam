@@ -220,6 +220,9 @@
       line-based parser to `-z`/NUL-delimited output. Verified by hand against a scratch repo with
       30 changed/untracked entries including a spaced filename - not by running the GUI myself, per
       AGENTS.md - awaiting visual confirmation.
+- [ ] Git switcher - add interface for git branch switcher (similar to vscode) - probabbly somewhere under the status line
+    - [ ] Switch between branches with dropdown
+    - [ ] Or create new branch and switch to it (`git checkout -b some-branch`)
 - [ ] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
 - [ ] Allow maximization also for bottom term and side term.
 
