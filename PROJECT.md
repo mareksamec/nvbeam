@@ -223,8 +223,28 @@
 - [ ] Git switcher - add interface for git branch switcher (similar to vscode) - probabbly somewhere under the status line
     - [ ] Switch between branches with dropdown
     - [ ] Or create new branch and switch to it (`git checkout -b some-branch`)
-- [ ] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
-- [ ] Allow maximization also for bottom term and side term.
+- [x] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
+    - `GridWidget::changeFontSize()` steps `m_font`'s point size (clamped 4..72, the same bounds the
+      terminal panel uses) and recomputes the cell metrics through the new `applyFontMetrics()`,
+      which the constructor now shares. `recalculateGrid()` then emits `gridSizeReady`, so nvim is
+      told the new column/row count before the repaint.
+    - Driven from the `MainWindow::eventFilter` branches that already served the terminal: the key
+      branch falls through to the grid when no terminal panel has focus, the wheel branch when the
+      pointer is over the grid. Neither `<C-=>` nor `<C-->` is a default nvim mapping.
+    - In-memory only, like the terminal's own font size: a restart starts from `[font] size` again.
+    - Not done: honoring `:set guifont`. `GridWidget::handleOptionSet()` already receives the
+      `option_set` events and reads only `mouse`, so it is the hook if this is wanted later. It would
+      also bring font *family* changes, at the cost of a guifont string parser and a rule for which
+      source wins after a manual zoom.
+- [x] Allow maximization also for bottom term and side term.
+    - `m_maximized` became `MaximizedPane { None, Editor, Terminal, SideTerminal }`; Ctrl+Shift+X
+      picks the target from `terminalPanelFor(QApplication::focusWidget())`, editor as fallback.
+    - Bottom terminal maximizes by hiding `m_hsplitter` (the editor area and side terminal are its
+      two halves); the side terminal by hiding `m_editorArea` and closing the bottom panel through
+      `m_termBtn`, so button state and session persistence stay consistent with normal use.
+    - Both splitter states are captured on the way in and restored on the way out: a hidden child's
+      space is handed to its siblings and is not given back on show. `closeEvent` un-maximizes
+      before saving, so quitting while maximized does not persist the collapsed layout.
 
 
 ## Project rename

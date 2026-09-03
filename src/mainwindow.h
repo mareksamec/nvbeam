@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QMainWindow>
+#include <QByteArray>
 #include "config.h"
 #include "switcher.h"
 
@@ -82,11 +83,17 @@ private:
     /// is a no-op.
     void resizeNvimGrid(int cols, int rows);
 
-    /// Ctrl+Shift+X: hide the bottom terminal, side terminal and messages
-    /// panel to maximize the nvim buffer area; pressing it again restores
-    /// exactly the ones that were actually visible before (a panel the user
-    /// had already closed stays closed).
+    /// Which pane Ctrl+Shift+X is currently giving the whole window to.
+    enum class MaximizedPane { None, Editor, Terminal, SideTerminal };
+
+    /// Ctrl+Shift+X: give the whole window to the pane that holds focus - the
+    /// nvim buffer area, the bottom terminal or the side terminal - by hiding
+    /// the others; pressing it again restores exactly the ones that were
+    /// actually visible before (a panel the user had already closed stays
+    /// closed) along with the splitter proportions they had.
     void toggleMaximizedMode();
+    void enterMaximized(MaximizedPane pane);
+    void leaveMaximized();
 
     NvimProcess *m_nvim = nullptr;
     GridWidget *m_grid = nullptr;
@@ -103,7 +110,8 @@ private:
     GitStatus *m_gitStatus = nullptr; // push-model git provider for the statusline
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
-    QSplitter *m_vsplitter = nullptr; // vertical splitter: editor area vs terminal
+    QSplitter *m_vsplitter = nullptr; // vertical splitter: editor row vs bottom terminal
+    QSplitter *m_hsplitter = nullptr; // horizontal splitter: editor area vs side terminal
     SwitcherWidget *m_switcher = nullptr;
     Session *m_session = nullptr;
     Config m_cfg;
@@ -117,10 +125,13 @@ private:
     bool m_sideTerminalSuppressed = false; // side terminal kept collapsed at startup (no side
                                            // command); its saved state is not overwritten on close
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
-    bool m_maximized = false; // Ctrl+Shift+X: terminals/messages hidden to maximize the buffer area
-    bool m_maxTerminalWasVisible = false;     // panel state captured when m_maximized was entered,
-    bool m_maxSideTerminalWasVisible = false; // so leaving it restores only what was actually open
+    MaximizedPane m_maximized = MaximizedPane::None; // Ctrl+Shift+X: pane filling the window
+    bool m_maxEditorWasVisible = false;       // pane state captured when m_maximized was entered,
+    bool m_maxTerminalWasVisible = false;     // so leaving it restores only what was actually open
+    bool m_maxSideTerminalWasVisible = false;
     bool m_maxMessagesWasVisible = false;
+    QByteArray m_maxVSplitterState;  // splitter proportions captured alongside, since hiding a
+    QByteArray m_maxHSplitterState;  // child hands its space to its siblings for good
     QString m_pendingFolder;          // folder from argv, applied on first nvim ready
     QString m_lastMruFile;            // change gates for the recent-files poll
     QString m_lastMruCwd;

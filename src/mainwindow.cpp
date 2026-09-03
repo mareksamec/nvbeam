@@ -233,6 +233,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Horizontal splitter: editor area (left) and side terminal (right).
     auto *hsplitter = new QSplitter(Qt::Horizontal, m_vsplitter);
+    m_hsplitter = hsplitter;
     hsplitter->setStyleSheet("QSplitter::handle { background: #333; width: 2px; }");
     hsplitter->setChildrenCollapsible(false);
     m_sideTerminal = new TerminalPanel(sideCfg, hsplitter);
@@ -321,9 +322,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         }
     });
 
-    // Ctrl+Shift+X: maximize the buffer area by hiding the bottom terminal,
-    // side terminal and messages panel; pressing it again restores exactly
-    // the ones that were actually visible before.
+    // Ctrl+Shift+X: give the whole window to the focused pane (buffer area,
+    // bottom terminal or side terminal) by hiding the others; pressing it
+    // again restores exactly the ones that were actually visible before.
     auto *maximizeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X), this);
     connect(maximizeShortcut, &QShortcut::activated, this, &MainWindow::toggleMaximizedMode);
 
@@ -899,6 +900,12 @@ MainWindow::~MainWindow()
 void MainWindow::closeEvent(QCloseEvent *event)
 {
     m_quitting = true;
+    // Quitting while a pane is maximized would persist the maximized layout:
+    // panels the user still considers open read as hidden, and the splitter
+    // states are the collapsed ones. Restore first, then save what the user
+    // actually had.
+    if (m_maximized != MaximizedPane::None)
+        leaveMaximized();
     // Persist session state. We always write it; the restore side is gated by
     // config, so saving unconditionally keeps the file ready if the user later
     // enables restore.
@@ -955,8 +962,15 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
         // plain Ctrl+key presses before shortcuts fire.
         if (ke->modifiers() == Qt::ControlModifier
             && (ke->key() == Qt::Key_Minus || ke->key() == Qt::Key_Equal)) {
+            const int delta = ke->key() == Qt::Key_Equal ? 1 : -1;
             if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget())) {
-                panel->changeFontSize(ke->key() == Qt::Key_Equal ? 1 : -1);
+                panel->changeFontSize(delta);
+                return true;
+            }
+            // Same keys resize the buffer font when the grid has focus.
+            // Neither is a default nvim mapping, so nothing is shadowed.
+            if (m_grid->hasFocus()) {
+                m_grid->changeFontSize(delta);
                 return true;
             }
         }
@@ -965,10 +979,18 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     if (event->type() == QEvent::Wheel) {
         auto *we = static_cast<QWheelEvent *>(event);
         if (we->modifiers() & Qt::ControlModifier) {
+            const int dy = we->angleDelta().y();
             if (TerminalPanel *panel = terminalPanelFor(qobject_cast<QWidget *>(watched))) {
-                const int dy = we->angleDelta().y();
                 if (dy != 0)
                     panel->changeFontSize(dy > 0 ? 1 : -1);
+                return true;
+            }
+            // Ctrl+wheel over the buffer area, matching the terminal. Keyed on
+            // the widget under the pointer, not the focused one, so the pane
+            // being pointed at is the one that zooms.
+            if (watched == m_grid) {
+                if (dy != 0)
+                    m_grid->changeFontSize(dy > 0 ? 1 : -1);
                 return true;
             }
         }
@@ -1115,14 +1137,38 @@ void MainWindow::resizeNvimGrid(int cols, int rows)
 
 void MainWindow::toggleMaximizedMode()
 {
-    m_maximized = !m_maximized;
-    if (m_maximized) {
-        // Capture what's actually open before touching anything, so a panel
-        // the user had already closed doesn't come back on restore.
-        m_maxTerminalWasVisible = m_terminal->isVisible();
-        m_maxSideTerminalWasVisible = m_sideTerminal->isVisible();
-        m_maxMessagesWasVisible = m_cfg.extMessages && m_messages->isVisible();
+    if (m_maximized != MaximizedPane::None) {
+        leaveMaximized();
+        return;
+    }
+    // The pane that holds focus is the one to maximize; the buffer area is
+    // the fallback, which is also what an unfocused window or a click on the
+    // toolbar lands on.
+    TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget());
+    if (panel == m_terminal)
+        enterMaximized(MaximizedPane::Terminal);
+    else if (panel == m_sideTerminal)
+        enterMaximized(MaximizedPane::SideTerminal);
+    else
+        enterMaximized(MaximizedPane::Editor);
+}
 
+void MainWindow::enterMaximized(MaximizedPane pane)
+{
+    // Capture what's actually open before touching anything, so a panel the
+    // user had already closed doesn't come back on restore. The splitter
+    // states go with it: a hidden child's space is handed to its siblings and
+    // is not given back on show.
+    m_maxEditorWasVisible = m_editorArea->isVisible();
+    m_maxTerminalWasVisible = m_terminal->isVisible();
+    m_maxSideTerminalWasVisible = m_sideTerminal->isVisible();
+    m_maxMessagesWasVisible = m_cfg.extMessages && m_messages->isVisible();
+    m_maxVSplitterState = m_vsplitter->saveState();
+    m_maxHSplitterState = m_hsplitter->saveState();
+    m_maximized = pane;
+
+    switch (pane) {
+    case MaximizedPane::Editor:
         // Driven through the same toggle buttons/methods a user click would
         // use, rather than calling hide() directly, so button check-state and
         // session persistence stay exactly as consistent as normal use.
@@ -1130,16 +1176,50 @@ void MainWindow::toggleMaximizedMode()
         if (m_maxSideTerminalWasVisible) m_sideTermBtn->setChecked(false);
         if (m_maxMessagesWasVisible) m_messages->hidePanel();
         m_grid->setFocus(); // land on the buffer now filling the freed space
-    } else {
-        if (m_maxTerminalWasVisible) m_termBtn->setChecked(true);
-        // Shown directly rather than via m_sideTermBtn: the button's handler
-        // re-fetches nvim's cwd and steals focus into the terminal (right for
-        // a user opening it fresh, wrong for just restoring what was already
-        // there before maximizing). showEvent's own visibilityChanged still
-        // syncs the button's checked state, same as session restore does.
-        if (m_maxSideTerminalWasVisible) m_sideTerminal->show();
-        if (m_maxMessagesWasVisible) m_messages->showPanel();
-        m_grid->setFocus();
+        break;
+    case MaximizedPane::Terminal:
+        // The editor area and the side terminal are the two halves of the
+        // horizontal splitter, so hiding it covers both in one step and
+        // leaves the whole window to the bottom panel.
+        m_hsplitter->hide();
+        m_terminal->focusTerminal();
+        break;
+    case MaximizedPane::SideTerminal:
+        m_editorArea->hide();
+        if (m_maxTerminalWasVisible) m_termBtn->setChecked(false);
+        m_sideTerminal->focusTerminal();
+        break;
+    case MaximizedPane::None:
+        break;
+    }
+}
+
+void MainWindow::leaveMaximized()
+{
+    const MaximizedPane pane = m_maximized;
+    m_maximized = MaximizedPane::None;
+
+    // Show the containers first: a panel restored inside a hidden parent
+    // would report itself visible while nothing is on screen.
+    m_hsplitter->show();
+    if (m_maxEditorWasVisible) m_editorArea->show();
+    if (m_maxTerminalWasVisible) m_termBtn->setChecked(true);
+    // Shown directly rather than via m_sideTermBtn: the button's handler
+    // re-fetches nvim's cwd and steals focus into the terminal (right for a
+    // user opening it fresh, wrong for just restoring what was already there
+    // before maximizing). showEvent's own visibilityChanged still syncs the
+    // button's checked state, same as session restore does.
+    if (m_maxSideTerminalWasVisible) m_sideTerminal->show();
+    if (m_maxMessagesWasVisible) m_messages->showPanel();
+    if (!m_maxVSplitterState.isEmpty()) m_vsplitter->restoreState(m_maxVSplitterState);
+    if (!m_maxHSplitterState.isEmpty()) m_hsplitter->restoreState(m_maxHSplitterState);
+
+    // Focus goes back to the pane that was maximized, so the key toggles the
+    // view without also moving the cursor somewhere else.
+    switch (pane) {
+    case MaximizedPane::Terminal:      m_terminal->focusTerminal(); break;
+    case MaximizedPane::SideTerminal:  m_sideTerminal->focusTerminal(); break;
+    default:                           m_grid->setFocus(); break;
     }
 }
 
