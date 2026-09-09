@@ -245,6 +245,28 @@
     - Both splitter states are captured on the way in and restored on the way out: a hidden child's
       space is handed to its siblings and is not given back on show. `closeEvent` un-maximizes
       before saving, so quitting while maximized does not persist the collapsed layout.
+- [x] Project switcher path mode - type a full path with autocomplete and open the folder or file.
+    - Ctrl+D toggles the single input line between `Mode::Projects` (the existing fuzzy query over
+      pinned projects and recents) and `Mode::Path`. Path mode starts prefilled with nvim's cwd plus
+      a separator, so its contents are listed immediately; the text does not carry across a mode
+      switch, since a fuzzy query and a path do not share a syntax. Tab is left to completion, which
+      is the key a path field is expected to answer; Ctrl+D shadows only QLineEdit's X11
+      delete-forward binding, which Del already covers.
+    - `refilterPath()` splits the text at the last `/`: the left half names the directory to list
+      (`~` expanded, relative paths anchored at nvim's cwd via `MainWindow::openSwitcher`), the
+      right half is matched with the same `fuzzyScore()` the project mode uses. Dotfiles appear only
+      once the fragment itself starts with `.`; rows are capped at `kMaxPathEntries` (200).
+    - Tab writes the highlighted candidate into the input and each Tab after that steps to the next
+      one, wrapping. `fillFromRow()` blocks `textChanged` while doing it, so the candidate set being
+      cycled cannot be rebuilt from the text just written. Enter then confirms the pending
+      completion (refilter only, no open), which is what descends into a folder; the Enter after
+      that opens. Right fills and confirms in one keystroke, at the end of the line only.
+    - With no completion pending, Enter prefers an exactly typed existing path over the highlighted
+      row until the selection is moved, so `~/Projects/` opens that folder while `~/Proj` opens the
+      completion.
+    - Selected entries reuse `applySwitcherSelection()` unchanged: the item carries `Folder` or
+      `File` per what is on disk, so a folder sets the cwd and opens the file browser and a file
+      opens with its parent as cwd. No new config keys.
 
 
 ## Project rename
