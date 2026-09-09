@@ -1015,7 +1015,10 @@ bool MainWindow::focusNextPrevChild(bool next)
 
 void MainWindow::openSwitcher()
 {
-    m_switcher->open(switcherItems());
+    // m_titleCwd is nvim's cwd as of the last neobeam_cwd notification: it
+    // anchors the switcher's path mode, so relative paths and the prefilled
+    // starting directory match where the editor actually is.
+    m_switcher->open(switcherItems(), m_titleCwd);
 }
 
 QList<SwitcherItem> MainWindow::switcherItems() const

@@ -245,6 +245,22 @@
     - Both splitter states are captured on the way in and restored on the way out: a hidden child's
       space is handed to its siblings and is not given back on show. `closeEvent` un-maximizes
       before saving, so quitting while maximized does not persist the collapsed layout.
+- [x] Project switcher path mode - type a full path with autocomplete and open the folder or file.
+    - Tab toggles the single input line between `Mode::Projects` (the existing fuzzy query over
+      pinned projects and recents) and `Mode::Path`. Path mode starts prefilled with nvim's cwd plus
+      a separator, so its contents are listed immediately; the text does not carry across a mode
+      switch, since a fuzzy query and a path do not share a syntax.
+    - `refilterPath()` splits the text at the last `/`: the left half names the directory to list
+      (`~` expanded, relative paths anchored at nvim's cwd via `MainWindow::openSwitcher`), the
+      right half is matched with the same `fuzzyScore()` the project mode uses. Dotfiles appear only
+      once the fragment itself starts with `.`; rows are capped at `kMaxPathEntries` (200).
+    - Right at the end of the line completes the highlighted entry into the input, with a trailing
+      separator for directories, which is what makes repeated Right descend the tree. Enter prefers
+      an exactly typed existing path over the highlighted row until the selection is moved, so
+      `~/Projects/` opens that folder while `~/Proj` opens the completion.
+    - Selected entries reuse `applySwitcherSelection()` unchanged: the item carries `Folder` or
+      `File` per what is on disk, so a folder sets the cwd and opens the file browser and a file
+      opens with its parent as cwd. No new config keys.
 
 
 ## Project rename
