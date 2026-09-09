@@ -97,14 +97,14 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+- | Decrease the font size of the focused pane (terminal or nvim buffer) |
 | Ctrl+Mouse wheel | Increase/decrease the font size of the pane under the pointer |
 | Ctrl+Shift+X | Maximize the focused pane (nvim buffer, bottom terminal or side terminal); press again to restore |
-| Ctrl+Shift+P | Toggle the project switcher (Tab inside it switches between project search and path mode) |
+| Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 
 ### Project switcher
 
 Starting neobeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), neobeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
 
-Tab switches the same input line to path mode, for opening anything that is neither pinned nor recent. It starts at nvim's cwd and completes what you type against the real directory tree: `~/Proj` offers `~/Projects/`, `Right` (at the end of the line) fills the highlighted entry in, and a trailing `/` lists a directory's contents, so repeated `Right` walks down the tree. Relative paths resolve against nvim's cwd and dotfiles show up once the typed name starts with `.`. Enter opens the highlighted entry, or the typed path itself when it exists exactly. Tab again returns to project mode.
+Ctrl+D switches the same input line to path mode, for opening anything that is neither pinned nor recent. It starts at nvim's cwd and completes what you type against the real directory tree: type `~/Proj`, press Tab and the input becomes `~/Projects/`; each further Tab cycles to the next matching entry. Enter confirms the completion (a folder's contents are then listed, so Tab/Enter walks down the tree) and the next Enter opens what the path names. Right completes and confirms in one keystroke, at the end of the line only. Relative paths resolve against nvim's cwd, and dotfiles appear once the typed name starts with `.`. Ctrl+D returns to project mode.
 
 ### Drag & drop
 

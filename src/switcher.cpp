@@ -181,8 +181,8 @@ void SwitcherWidget::setMode(Mode mode)
     m_mode = mode;
     const bool path = mode == Mode::Path;
     m_input->setPlaceholderText(path
-        ? QStringLiteral("Path to open - Right completes, Tab returns to projects")
-        : QStringLiteral("Search projects and recent files… (Tab: open a path)"));
+        ? QStringLiteral("Path to open - Tab completes, Ctrl+D returns to projects")
+        : QStringLiteral("Search projects and recent files… (Ctrl+D: open a path)"));
     // Path mode starts at the base directory with a trailing separator, so
     // its contents are listed right away. Blocked because refilter() is
     // called once below either way (setText is silent when nothing changes).
@@ -280,18 +280,47 @@ void SwitcherWidget::refilterPath(const QString &raw)
     showRows(indices);
 }
 
-void SwitcherWidget::completePath()
+void SwitcherWidget::fillFromRow(int row)
 {
-    const int row = m_list->currentRow();
     if (m_mode != Mode::Path || row < 0 || row >= m_visible.size())
         return;
     const SwitcherItem &item = m_pathItems.at(m_visible.at(row));
     // A directory gets the trailing separator that makes refilterPath list its
-    // contents, which is what turns repeated Right into descending the tree.
+    // contents once the completion is confirmed, which is what turns Enter on
+    // a folder into descending the tree.
     QString text = collapseHome(item.path);
     if (item.kind == SwitcherItem::Folder)
         text += QLatin1Char('/');
-    m_input->setText(text);   // textChanged refilters
+    // Blocked: refiltering here would rebuild the candidate list from the text
+    // just written, so the next Tab would cycle a different set (for a folder,
+    // its children) instead of the alternatives to this one.
+    {
+        QSignalBlocker blocker(m_input);
+        m_input->setText(text);
+    }
+    m_list->setCurrentRow(row);
+    m_completionPending = true;
+}
+
+void SwitcherWidget::cycleCompletion()
+{
+    if (m_mode != Mode::Path || m_list->count() == 0)
+        return;
+    // First Tab takes the highlighted candidate as it is; each Tab after that
+    // steps to the next one, wrapping, so Tab alone walks the whole list.
+    const int row = m_completionPending
+        ? (m_list->currentRow() + 1) % m_list->count()
+        : qMax(0, m_list->currentRow());
+    fillFromRow(row);
+}
+
+void SwitcherWidget::completePath()
+{
+    fillFromRow(m_list->currentRow());
+    if (m_completionPending) {
+        m_completionPending = false;
+        refilter(m_input->text());   // confirm in the same keystroke
+    }
 }
 
 void SwitcherWidget::showRows(const QList<int> &indices)
@@ -299,6 +328,7 @@ void SwitcherWidget::showRows(const QList<int> &indices)
     const QList<SwitcherItem> &src = source();
     m_visible = indices;
     m_selectionMoved = false;
+    m_completionPending = false;   // the candidate set is being replaced
     m_list->clear();
     for (int index : indices) {
         const SwitcherItem &item = src.at(index);
@@ -335,6 +365,14 @@ void SwitcherWidget::moveSelection(int delta)
 void SwitcherWidget::selectCurrent()
 {
     const int row = m_list->currentRow();
+    // Enter after Tab confirms the completion rather than opening it: the
+    // filter runs on the completed text, so a folder's contents come up and
+    // the next Enter opens whatever the confirmed path names.
+    if (m_completionPending) {
+        m_completionPending = false;
+        refilter(m_input->text());
+        return;
+    }
     // Path mode, selection still on the row the filter picked: an exactly
     // typed path wins over the highlighted entry, so "~/Projects/" + Enter
     // opens that folder instead of its first child. Once the user has moved
@@ -387,13 +425,22 @@ bool SwitcherWidget::eventFilter(QObject *watched, QEvent *event)
             return true;
         case Qt::Key_Tab:
         case Qt::Key_Backtab:
-            // One key both ways: the switcher has exactly two modes, so Tab
-            // toggles rather than cycling forward.
-            setMode(m_mode == Mode::Path ? Mode::Projects : Mode::Path);
+            // Path mode: the completion key. Project mode: nothing to
+            // complete, and swallowed anyway so Tab never moves focus out of
+            // the input (focus loss dismisses the switcher).
+            cycleCompletion();
             return true;
+        case Qt::Key_D:
+            // Ctrl+D toggles the two modes. It shadows QLineEdit's X11
+            // delete-forward binding, which Del already covers.
+            if (ke->modifiers().testFlag(Qt::ControlModifier)) {
+                setMode(m_mode == Mode::Path ? Mode::Projects : Mode::Path);
+                return true;
+            }
+            break;
         case Qt::Key_Right:
-            // Complete only at the end of the line, so Right keeps working as
-            // cursor movement while editing a path mid-string.
+            // Fill and confirm at once, and only at the end of the line, so
+            // Right keeps working as cursor movement while editing mid-string.
             if (m_mode == Mode::Path
                 && m_input->cursorPosition() == m_input->text().size()
                 && !m_input->hasSelectedText()) {

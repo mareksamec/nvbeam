@@ -21,10 +21,10 @@ struct SwitcherItem {
 /// window; shown when neobeam starts without arguments, when nvim exits (with
 /// switcher.keep_running), or on Ctrl+Shift+P.
 ///
-/// Tab switches the same field between two modes: the project/recent search
-/// and a filesystem path mode that completes what is typed against the real
-/// directory tree, so any folder or file can be opened without being pinned or
-/// recently used.
+/// Ctrl+D switches the same field between two modes: the project/recent search
+/// and a filesystem path mode where Tab completes what is typed against the
+/// real directory tree, so any folder or file can be opened without being
+/// pinned or recently used.
 class SwitcherWidget : public QFrame
 {
     Q_OBJECT
@@ -56,8 +56,8 @@ private:
         Path        // filesystem path, completed against real directories
     };
 
-    /// Switch modes (Tab). The text does not carry over - a fuzzy query and a
-    /// path do not share a syntax - so path mode starts prefilled with the
+    /// Switch modes (Ctrl+D). The text does not carry over - a fuzzy query and
+    /// a path do not share a syntax - so path mode starts prefilled with the
     /// base directory and project mode starts empty.
     void setMode(Mode mode);
     /// textChanged handler: dispatches to the active mode's filter.
@@ -66,9 +66,16 @@ private:
     /// Rebuild the candidate list from the directory the typed path names,
     /// matching the part after the last separator (see kMaxPathEntries).
     void refilterPath(const QString &text);
-    /// Replace the input with the highlighted entry's path (Right at the end
-    /// of the line, path mode only); directories get a trailing separator, so
-    /// the list moves on to their contents.
+    /// Tab in path mode: put the highlighted candidate in the input, and on
+    /// every Tab after that move one row down and put that one in instead.
+    /// The candidate list is deliberately not refiltered while cycling, so
+    /// the set being cycled cannot change under the user.
+    void cycleCompletion();
+    /// Write candidate `row` into the input without refiltering (directories
+    /// get a trailing separator). Leaves the completion pending: Enter
+    /// confirms it, which refilters and so descends into a directory.
+    void fillFromRow(int row);
+    /// Right at the end of the line: fill and confirm in one step.
     void completePath();
     /// Fill the list from the active source list; `indices` index into it.
     void showRows(const QList<int> &indices);
@@ -87,4 +94,6 @@ private:
     QString m_baseDir;                // path mode's starting/anchor directory
     bool m_selectionMoved = false;    // user moved off the top row since the
                                       // last filter (path mode Enter rule)
+    bool m_completionPending = false; // Tab filled a candidate in that Enter
+                                      // has not confirmed yet
 };
