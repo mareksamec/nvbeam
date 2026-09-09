@@ -93,9 +93,10 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Tab | Switch between terminal and nvim buffer |
 | Shift+Insert | Paste clipboard (into terminal when focused, into Neovim otherwise) |
 | Ctrl+Shift+V | Paste clipboard (into terminal when focused, into Neovim otherwise) |
-| Ctrl+= | Increase terminal font size (when a terminal is focused) |
-| Ctrl+- | Decrease terminal font size (when a terminal is focused) |
-| Ctrl+Mouse wheel | Increase/decrease terminal font size (over a terminal) |
+| Ctrl+= | Increase the font size of the focused pane (terminal or nvim buffer) |
+| Ctrl+- | Decrease the font size of the focused pane (terminal or nvim buffer) |
+| Ctrl+Mouse wheel | Increase/decrease the font size of the pane under the pointer |
+| Ctrl+Shift+X | Maximize the focused pane (nvim buffer, bottom terminal or side terminal); press again to restore |
 | Ctrl+Shift+P | Toggle the project switcher |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 
@@ -217,7 +218,8 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 
 **`[font]`**
 - `family` — Font family name (default: `"Monospace"`)
-- `size` — Font size in points (default: `10`)
+- `size` — Font size in points (default: `10`). Ctrl+=/Ctrl+- and Ctrl+wheel adjust the buffer
+  font for the running session only; the next launch starts from this value again
 - `hinting` — Hinting preference: `none`, `slight`, `medium`, `full`, `default` (default: `default`)
 - `antialiasing` — Enable font antialiasing (default: `true`)
 

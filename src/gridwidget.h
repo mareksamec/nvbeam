@@ -62,6 +62,12 @@ public:
     int cellWidth() const { return m_cellWidth; }
     int cellHeight() const { return m_cellHeight; }
 
+    /// Grow or shrink the buffer font by `delta` points (Ctrl+=/Ctrl+- and
+    /// Ctrl+wheel over the grid), clamped to kMin/kMaxFontSize. The cell
+    /// metrics follow, so nvim is told the new column/row count. In-memory
+    /// only: the next launch starts from the [font] config value again.
+    void changeFontSize(int delta);
+
     /// Configure terminal-style mouse selection behavior
     void setMouseConfig(bool terminalSelection, bool autoCopy, const QColor &selColor);
 
@@ -178,6 +184,13 @@ private:
     GridHit gridAt(const QPoint &pos);
     GridHit hitInGrid(const QPoint &pos, int gridId) const;
     void selectWordAt(const GridHit &hit);
+
+    /// Recompute the cell size from m_font. A monospace 'M' advance is the
+    /// cell width, the font's full line height the cell height.
+    void applyFontMetrics();
+
+    static constexpr int kMinFontSize = 4;  // same clamp as the terminal panel
+    static constexpr int kMaxFontSize = 72;
 
     QFont m_font;
     int m_cellWidth = 0;

@@ -22,10 +22,7 @@ GridWidget::GridWidget(const QFont &font, QWidget *parent)
     : QWidget(parent)
 {
     m_font = font;
-
-    QFontMetrics fm(m_font);
-    m_cellWidth = fm.horizontalAdvance('M');
-    m_cellHeight = fm.height();
+    applyFontMetrics();
 
     setFocusPolicy(Qt::StrongFocus);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -562,6 +559,29 @@ void GridWidget::paintEvent(QPaintEvent *event)
             }
         }
     }
+}
+
+void GridWidget::applyFontMetrics()
+{
+    QFontMetrics fm(m_font);
+    m_cellWidth = fm.horizontalAdvance('M');
+    m_cellHeight = fm.height();
+}
+
+void GridWidget::changeFontSize(int delta)
+{
+    const int current = m_font.pointSize();
+    if (current <= 0) // font defined in pixels; nothing sane to step
+        return;
+    const int size = qBound(kMinFontSize, current + delta, kMaxFontSize);
+    if (size == current)
+        return;
+    m_font.setPointSize(size);
+    applyFontMetrics();
+    // Fewer/more cells now fit the same widget: tell nvim before repainting,
+    // so the redraw that follows already carries the new grid size.
+    recalculateGrid();
+    update();
 }
 
 void GridWidget::resizeEvent(QResizeEvent *event)
