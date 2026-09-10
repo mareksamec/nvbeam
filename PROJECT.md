@@ -283,9 +283,21 @@
       so the widget width ceils it; rounding down clipped the right edge at zero right padding.
     - Styled apart from the project switcher on request: highlighted with `[ui] focus_border_color`,
       the OneDark blue neobeam already uses for the focused pane, instead of the green
-      `accent_color`. The font stays the default one, as the project switcher has. The border and the selected
-      row are that same colour at fixed alphas via a small `rgbaOf()` helper, so configuring the
-      one colour recolours the popup coherently and no new config key was needed.
+      `accent_color`. The border and the selected row are that same colour at fixed alphas via a
+      small `rgbaOf()` helper, so configuring the one colour recolours the popup coherently and no
+      new config key was needed.
+    - Monospaced rows with the commit dates in an aligned column. `showRows()` measures in pixels
+      rather than counting characters, because the row glyphs are geometric shapes a monospace
+      font usually lacks - they come from a fallback whose advance is not one cell - then pads
+      each name out to the widest with spaces. The fonts are set on the widgets instead of in the
+      style sheet: a style sheet font wins at paint time, which would leave the alignment measured
+      with metrics that are not the ones drawn. `kInputPointSize`/`kListPointSize` are the size
+      knobs.
+    - The name column takes what is left of the popup once the widest date and the gap are
+      reserved (`popupWidth()`, shared with `reposition()`), so a date is never pushed past the
+      right edge at any window size; a name too long for the column is middle-elided and stays in
+      full in the row's tooltip. Checked by rendering the real widget offscreen at 1920 and 900px
+      window widths, not by running the GUI.
     - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
       is neither a click target nor a shortcut. Built and compiles clean; not run by me per
       AGENTS.md - awaiting visual confirmation.

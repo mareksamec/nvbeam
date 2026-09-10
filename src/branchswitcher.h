@@ -78,6 +78,9 @@ private:
     /// Whether the typed text is offerable as a new branch: a non-empty name
     /// without whitespace that no listed branch already has.
     bool canCreate(const QString &name) const;
+    /// Width the popup takes at the parent's current size. Shared by
+    /// reposition() and showRows(), which sizes the name column from it.
+    int popupWidth() const;
     void moveSelection(int delta);
     /// Check out the highlighted row (or create the branch named in the input
     /// when the "create branch" row is highlighted).

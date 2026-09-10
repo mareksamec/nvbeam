@@ -4,6 +4,7 @@
 #include <QEvent>
 #include <QKeyEvent>
 #include <QColor>
+#include <QFontMetrics>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -22,9 +23,27 @@ QChar branchGlyph(const GitBranch &branch)
     return branch.remote ? QChar(u'·') : QChar(u'▸');
 }
 
+/// Monospace, so the relative dates can be padded into a column that lines
+/// up (see showRows). The two sizes are the knob if the rows come out too
+/// wide for long branch names.
+const QString kFontFamily = QStringLiteral("monospace");
+constexpr int kInputPointSize = 11;
+constexpr int kListPointSize = 10;
+/// Minimum separation between a name and its date, in character cells, and
+/// the narrowest the name column is allowed to get before dates start being
+/// pushed off the edge instead.
+constexpr int kNameGapCells = 2;
+constexpr int kMinNameCells = 12;
+/// Horizontal space a row's text loses to the popup margins, the item
+/// padding and the list's scrollbar. An allowance, not an exact sum: it only
+/// has to keep the widest date clear of the right edge.
+constexpr int kRowInset = 54;
+
 constexpr int kMaxVisibleRows = 12;
 constexpr int kMinWidth = 320;
 constexpr int kMaxWidth = 560;
+/// Share of the window width the popup takes, between those two bounds.
+constexpr int kWidthPercent = 40;
 /// Gap between the popup and the segment it hangs under.
 constexpr int kAnchorGap = 4;
 /// A click on the git segment closes an open popup by taking focus away from
@@ -66,12 +85,16 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidge
     // alphas below, so configuring it recolours the whole popup coherently.
     const QString border = rgbaOf(highlightColor, kBorderAlpha);
     const QString selection = rgbaOf(highlightColor, kSelectionAlpha);
+    // Fonts are set on the widgets rather than in the style sheet below: a
+    // style sheet font wins over the widget's own at paint time, which would
+    // leave showRows() aligning the date column with metrics that are not the
+    // ones being drawn.
     setStyleSheet(QStringLiteral(
         "QFrame#nbBranchSwitcher { background: #1a1b26; border: 1px solid %2; border-radius: 6px; }"
         "QLineEdit { background: #24283b; color: #cdd6f4; border: 1px solid #333; "
-        "border-radius: 4px; padding: 5px 8px; font-size: 11pt; }"
+        "border-radius: 4px; padding: 5px 8px; }"
         "QLineEdit:focus { border-color: %1; }"
-        "QListWidget { background: transparent; color: #a9b1d6; border: none; font-size: 10pt; }"
+        "QListWidget { background: transparent; color: #a9b1d6; border: none; }"
         "QListWidget::item { padding: 4px 8px; border-radius: 4px; }"
         "QListWidget::item:selected { background: %3; color: %1; }")
             .arg(highlightColor, border, selection));
@@ -81,11 +104,13 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidge
     layout->setSpacing(6);
 
     m_input = new QLineEdit(this);
+    m_input->setFont(QFont(kFontFamily, kInputPointSize));
     m_input->setPlaceholderText(QStringLiteral("Switch branch or type a new name"));
     m_input->installEventFilter(this);
     layout->addWidget(m_input);
 
     m_list = new QListWidget(this);
+    m_list->setFont(QFont(kFontFamily, kListPointSize));
     // Focus stays in the line edit; clicks on rows still activate them, and
     // they must not steal focus (focus loss dismisses the popup).
     m_list->setFocusPolicy(Qt::NoFocus);
@@ -236,20 +261,58 @@ void BranchSwitcherWidget::showRows(const QList<int> &indices)
 {
     m_visible = indices;
     m_list->clear();
+
+    // Two passes, so every date starts at the same x. The first builds and
+    // measures "<glyph> <name>", the second pads each one out to the widest
+    // of them. Measured in pixels rather than counted in characters because
+    // the row glyphs are geometric shapes a monospace font often lacks: they
+    // come from a fallback whose advance need not be one cell wide.
+    const QFontMetrics fm(m_list->font());
+    const int cell = qMax(1, fm.horizontalAdvance(QLatin1Char(' ')));
+
+    // The name column gets whatever the popup has left once the widest date
+    // and the gap are reserved, so a date is never pushed past the right
+    // edge. A name too long for that is middle-elided - it keeps its head and
+    // tail, and the row's tooltip still carries the name in full.
+    int dateWidth = 0;
     for (int index : indices) {
+        if (index != kCreateRow)
+            dateWidth = qMax(dateWidth, fm.horizontalAdvance(m_branches.at(index).detail));
+    }
+    const int nameCap = qMax(kMinNameCells * cell,
+                             popupWidth() - kRowInset - dateWidth - kNameGapCells * cell);
+
+    QStringList prefixes;
+    prefixes.reserve(indices.size());
+    int column = 0;
+    for (int index : indices) {
+        if (index == kCreateRow) {
+            prefixes.append(QString());   // create row has no date to align
+            continue;
+        }
+        const GitBranch &branch = m_branches.at(index);
+        QString prefix = QStringLiteral("%1 %2").arg(branchGlyph(branch)).arg(branch.name);
+        if (fm.horizontalAdvance(prefix) > nameCap)
+            prefix = fm.elidedText(prefix, Qt::ElideMiddle, nameCap);
+        column = qMax(column, fm.horizontalAdvance(prefix));
+        prefixes.append(prefix);
+    }
+
+    for (int row = 0; row < indices.size(); ++row) {
+        const int index = indices.at(row);
         if (index == kCreateRow) {
             m_list->addItem(QStringLiteral("+ Create branch \"%1\"").arg(m_input->text().trimmed()));
             continue;
         }
         const GitBranch &branch = m_branches.at(index);
-        auto *row = new QListWidgetItem(QStringLiteral("%1 %2   %3")
-                                            .arg(branchGlyph(branch))
-                                            .arg(branch.name, branch.detail));
-        row->setToolTip(branch.remote
+        const int shortfall = qMax(0, column - fm.horizontalAdvance(prefixes.at(row)));
+        const QString gap(kNameGapCells + qRound(qreal(shortfall) / cell), QLatin1Char(' '));
+        auto *item = new QListWidgetItem(prefixes.at(row) + gap + branch.detail);
+        item->setToolTip(branch.remote
             ? QStringLiteral("%1 - checks out %2, tracking the remote branch")
                   .arg(branch.name, branch.target)
             : branch.name);
-        m_list->addItem(row);
+        m_list->addItem(item);
     }
 
     if (m_list->count() > 0) {
@@ -308,12 +371,19 @@ void BranchSwitcherWidget::activateCurrent()
     emit checkoutRequested(target, create);
 }
 
+int BranchSwitcherWidget::popupWidth() const
+{
+    QWidget *p = parentWidget();
+    const int share = p ? p->width() * kWidthPercent / 100 : kMinWidth;
+    return qBound(kMinWidth, share, kMaxWidth);
+}
+
 void BranchSwitcherWidget::reposition()
 {
     QWidget *p = parentWidget();
     if (!p)
         return;
-    setFixedWidth(qBound(kMinWidth, p->width() * 40 / 100, kMaxWidth));
+    setFixedWidth(popupWidth());
     adjustSize();
 
     QPoint topLeft;
