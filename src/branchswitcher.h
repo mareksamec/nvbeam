@@ -4,6 +4,7 @@
 #include <QFrame>
 #include <QList>
 #include <QPointer>
+#include <QTimer>
 #include <QString>
 
 #include "gitstatus.h"   // GitBranch
@@ -39,9 +40,10 @@ public:
     explicit BranchSwitcherWidget(const QString &highlightColor, const QString &fontFamily,
                                   int fontPointSize, QWidget *parent);
 
-    /// Show the popup under `anchor` (the statusline's git segment; the
-    /// bottom-left of the window when it is hidden or null) and ask for a
-    /// fresh branch list.
+    /// Ask for a fresh branch list and show the popup under `anchor` (the
+    /// statusline's git segment; the bottom-left of the window when it is
+    /// hidden or null) once that list is in - see reveal() for why it is not
+    /// shown right away.
     void open(QWidget *anchor);
 
     /// Open the popup, or close it when it is already up. Clicking the git
@@ -87,6 +89,16 @@ private:
     /// Width the popup takes at the parent's current size. Shared by
     /// reposition() and showRows(), which sizes the name column from it.
     int popupWidth() const;
+    /// Show the popup, at whatever geometry it has been laid out to. Called
+    /// when the branch list lands, so the first frame drawn is already the
+    /// final size and position: revealing an empty list instead made the
+    /// popup appear under the statusline (small enough to fit there) and
+    /// then jump above it a few milliseconds later, once the rows arrived
+    /// and it no longer fit. The timer is the fallback for a git slow enough
+    /// that showing nothing would read as the click having missed.
+    void reveal();
+    /// Drop an open that has been asked for but not yet revealed.
+    void cancelPendingOpen();
     void moveSelection(int delta);
     /// Check out the highlighted row (or create the branch named in the input
     /// when the "create branch" row is highlighted).
@@ -104,4 +116,13 @@ private:
     QPointer<QWidget> m_anchor;       // git segment the popup hangs under
     bool m_busy = false;              // a checkout is in flight; input is frozen
     QElapsedTimer m_dismissed;        // since the last close, for toggle()
+    QTimer m_revealTimer;             // fallback reveal when the branch list is slow
+    bool m_pendingOpen = false;       // opened, waiting on the list before showing
+    // Which side of the anchor the popup sits on. Re-decided on every layout
+    // until the branch list has landed - the empty loading-state layout is
+    // too short to choose from - then frozen for the rest of the open, so
+    // typing a filter shrinks the popup without sending it hopping across
+    // the statusline.
+    bool m_placeAbove = false;
+    bool m_sideFrozen = false;
 };

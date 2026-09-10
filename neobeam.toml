@@ -25,7 +25,7 @@ copy_on_select = true  # copy selection to PRIMARY + CLIPBOARD as it is made
 # antialiasing = true  # font antialiasing in terminal
 # hinting = "default"  # font hinting: none, slight, medium, full, default
 # scrollback = 1000  # scrollback buffer size in lines
-refresh_prompt_on_git_change = false  # WARNING: sends Enter to the bottom terminal's
+refresh_prompt_on_git_change = true  # WARNING: sends Enter to the bottom terminal's
 #   command line after a branch switch, to refresh a branch-aware shell prompt. Only
 #   sent to splits with nothing typed into them; off by default since it injects a
 #   keystroke into a live shell.

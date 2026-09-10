@@ -99,7 +99,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Mouse wheel | Increase/decrease the font size of the pane under the pointer |
 | Ctrl+Shift+X | Maximize the focused pane (nvim buffer, bottom terminal or side terminal); press again to restore |
 | Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode) |
-| Ctrl+Shift+B | Toggle the git branch switcher (also opens by clicking the statusline's git segment) |
+| Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 
 ### Project switcher
@@ -112,7 +112,7 @@ Ctrl+D switches the same input line to path mode, for opening anything that is n
 
 The git segment is led by a branch glyph, painted with the segment's own foreground colour rather than loaded from an icon file, so it follows the statusline palette instead of needing a recoloured asset per theme.
 
-Clicking the git segment of the statusline, or pressing **Ctrl+Shift+B**, opens a branch picker anchored to that segment, the way VSCode's branch indicator does. It lists the repository's local branches, most recently committed to first, followed by the remote-only ones; the checked-out branch is marked with `◆`. Typing fuzzy-filters the list, Up/Down move, Enter checks the highlighted branch out, Esc or clicking elsewhere closes it.
+Clicking the git segment of the statusline, or pressing **Ctrl+Shift+B** (which works wherever focus happens to be, the embedded terminals included, and closes the popup again), opens a branch picker anchored to that segment, the way VSCode's branch indicator does. It lists the repository's local branches, most recently committed to first, followed by the remote-only ones; the checked-out branch is marked with `◆`. Typing fuzzy-filters the list, Up/Down move, Enter checks the highlighted branch out, Esc or clicking elsewhere closes it.
 
 Checking out a remote-only entry (`origin/some-branch`) checks out the plain name, so git creates a local branch tracking the remote one instead of detaching HEAD.
 

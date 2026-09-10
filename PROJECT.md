@@ -228,7 +228,15 @@
       below (the usual case, the statusline sitting at the bottom of the editor column). Same input
       + list + palette as `SwitcherWidget`, so the two pickers read as one UI; the fuzzy scorer they
       share moved out of `switcher.cpp` into `fuzzy.h`.
-    - Opened by clicking the git segment or with Ctrl+Shift+B. The click needed `SelectableLabel`
+    - Opened by clicking the git segment or with Ctrl+Shift+B, the latter handled in
+      `MainWindow::eventFilter` rather than as a `QShortcut`: QTermWidget takes Ctrl+key presses
+      before a shortcut fires, so a `QShortcut` reached everywhere except inside the terminal -
+      the same reason the Ctrl+-/Ctrl+= font keys already live there. The modifier match is exact,
+      so plain Ctrl+B (nvim's page-up, tmux's prefix) is untouched and only the Shift variant is
+      claimed. No other neobeam binding uses it; the one wrinkle is that a terminal cannot
+      normally tell Ctrl+Shift+B from Ctrl+B, so a tmux user who holds Shift over the prefix key
+      gets the switcher - Ctrl+Shift+G (VSCode's Source Control binding) is the alternative if
+      that ever bites. The click needed `SelectableLabel`
       to gain an optional click handler, which fires only on a release that selected no text, so
       selecting the statusline text still works. `StatuslineWidget::setGitSegmentClickable()` gates
       both the handler and the pointer cursor, and adds the "click to switch branches" line to the
@@ -301,6 +309,19 @@
       right edge at any window size; a name too long for the column is middle-elided and stays in
       full in the row's tooltip. Checked by rendering the real widget offscreen at 1920 and 900px
       window widths, not by running the GUI.
+    - The popup is laid out while still hidden and only shown once the branch list lands (or after
+      150ms, if git is slow enough that showing nothing would read as the click having missed).
+      Revealing it empty first made it appear under the statusline - short enough to fit there -
+      and jump above it a few milliseconds later once the rows arrived, which is what the flash
+      reported after the first build was. A pending open counts as open for `toggle()` and is
+      cancelled by `dismiss()`, having never taken focus.
+    - Which side of the anchor the popup sits on follows its height until the list has landed,
+      then freezes for the rest of the open: deciding it from the empty loading-state layout
+      picked "below" and left the grown popup clamped over the statusline, and re-deciding on
+      every relayout sent it hopping across the statusline as a filter shrank the list. The bottom
+      edge stays pinned just above the anchor, so shrinking grows the gap upward instead of
+      moving the popup. Checked offscreen with the anchor at the window bottom and mid-window (a
+      terminal panel open below the statusline), before and after typing a filter.
     - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
       is neither a click target nor a shortcut. Built and compiles clean; not run by me per
       AGENTS.md - awaiting visual confirmation.
