@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "branchswitcher.h"
 #include "gridwidget.h"
 #include "nvimprocess.h"
 #include "uiwidgets.h"
@@ -746,6 +747,33 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         // submitting an empty prompt to it.
         connect(m_gitStatus, &GitStatus::branchChanged,
                 m_terminal, &TerminalPanel::refreshPromptOnBranchChange);
+
+        // VSCode-style branch switcher: a popup hanging off the statusline's
+        // git segment, opened by clicking the segment or with Ctrl+Shift+B.
+        // Created only alongside the git provider, which is what runs every
+        // git command for it.
+        m_branchSwitcher = new BranchSwitcherWidget(cfg.accentColor, this);
+        m_statusline->setGitSegmentClickable(true);
+        connect(m_statusline, &StatuslineWidget::gitSegmentClicked,
+                this, &MainWindow::toggleBranchSwitcher);
+        connect(m_branchSwitcher, &BranchSwitcherWidget::branchesRequested,
+                m_gitStatus, &GitStatus::requestBranches);
+        connect(m_gitStatus, &GitStatus::branchesReady,
+                m_branchSwitcher, &BranchSwitcherWidget::setBranches);
+        connect(m_branchSwitcher, &BranchSwitcherWidget::checkoutRequested,
+                m_gitStatus, &GitStatus::checkoutBranch);
+        connect(m_gitStatus, &GitStatus::checkoutFinished,
+                m_branchSwitcher, &BranchSwitcherWidget::checkoutFinished);
+        connect(m_branchSwitcher, &BranchSwitcherWidget::dismissed,
+                this, [this]() { m_grid->setFocus(); });
+        // A checkout rewrites the working tree under nvim's open buffers.
+        // nvim only rereads them on a checktime, the same call the focus
+        // handler makes for externally changed files.
+        connect(m_gitStatus, &GitStatus::checkoutFinished, this,
+                [this](bool ok, const QString &, const QString &) {
+            if (ok)
+                m_nvim->request("nvim_command", {QStringLiteral("checktime")});
+        });
     }
 
     // Minimap, two-tier: a cheap viewport-only poll per flush keeps the
@@ -871,6 +899,14 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         else
             openSwitcher();
     });
+
+    // Ctrl+Shift+B toggles the branch switcher. Only bound when there is a git
+    // segment to hang it under (see [ui] git_status).
+    if (m_branchSwitcher) {
+        auto *branchShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B), this);
+        connect(branchShortcut, &QShortcut::activated,
+                this, &MainWindow::toggleBranchSwitcher);
+    }
 
     m_nvim->start(nvimArgs);
 
@@ -1011,6 +1047,15 @@ bool MainWindow::focusNextPrevChild(bool next)
     if (terminalPanelFor(QApplication::focusWidget()))
         return false;
     return QMainWindow::focusNextPrevChild(next);
+}
+
+void MainWindow::toggleBranchSwitcher()
+{
+    if (!m_branchSwitcher)
+        return;
+    // Anchored to the git segment, which is hidden outside a repository - the
+    // popup then falls back to the bottom-left corner and says so.
+    m_branchSwitcher->toggle(m_statusline->gitSegment());
 }
 
 void MainWindow::openSwitcher()

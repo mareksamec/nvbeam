@@ -1,4 +1,5 @@
 #include "uiwidgets.h"
+#include <functional>
 #include "logging.h"
 #include <QHBoxLayout>
 #include <QFontMetrics>
@@ -499,6 +500,16 @@ public:
         setContentsMargins(6, 0, 6, 0);
     }
 
+    /// Make the segment clickable: a left release that selected no text runs
+    /// the handler (the git segment opens the branch switcher with it).
+    /// Selecting the text still works and takes precedence, so the two
+    /// gestures do not collide. Passing an empty handler turns it back off.
+    void setClickHandler(std::function<void()> handler)
+    {
+        m_click = std::move(handler);
+        setCursor(m_click ? Qt::PointingHandCursor : Qt::IBeamCursor);
+    }
+
     /// Apply foreground/background colours and boldness without a stylesheet
     /// re-parse (cheaper on the ~100ms refresh cadence).
     void setColors(const QColor &fg, const QColor &bg, bool bold)
@@ -517,9 +528,16 @@ protected:
     {
         QLabel::mouseReleaseEvent(event);
         const QString sel = selectedText();
-        if (!sel.isEmpty())
+        if (!sel.isEmpty()) {
             QGuiApplication::clipboard()->setText(sel);
+            return;
+        }
+        if (m_click && event->button() == Qt::LeftButton)
+            m_click();
     }
+
+private:
+    std::function<void()> m_click;
 };
 
 /// Custom-painted powerline divider: a right-pointing triangle in the previous
@@ -707,6 +725,8 @@ void StatuslineWidget::refresh()
             if (overflow > 0)
                 tip += QStringLiteral("<br>...and %1 more files").arg(overflow);
         }
+        if (m_gitClickable)
+            tip += QStringLiteral("<br><br><i>Click to switch branches</i>");
         m_branchLabel->setToolTip(tip);
     } else {
         m_branchLabel->setToolTip(QString());
@@ -765,6 +785,19 @@ void StatuslineWidget::setMode(const QString &mode)
 {
     m_mode = mode.toUpper();
     refresh();
+}
+
+void StatuslineWidget::setGitSegmentClickable(bool clickable)
+{
+    if (m_gitClickable == clickable)
+        return;
+    m_gitClickable = clickable;
+    auto *label = static_cast<SelectableLabel *>(m_branchLabel);
+    if (clickable)
+        label->setClickHandler([this]() { emit gitSegmentClicked(); });
+    else
+        label->setClickHandler({});
+    refresh();   // the tooltip gains/loses its "click to switch branches" hint
 }
 
 void StatuslineWidget::setGitsignsBranch(bool enabled)

@@ -37,6 +37,7 @@ add_executable(neobeam
     src/config.cpp
     src/session.cpp
     src/switcher.cpp
+    src/branchswitcher.cpp
     src/uiwidgets.cpp
     src/gitstatus.cpp
     src/terminalpanel.cpp

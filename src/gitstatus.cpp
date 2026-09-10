@@ -1,6 +1,8 @@
 #include "gitstatus.h"
+#include <utility>
 #include <QFile>
 #include <QProcess>
+#include <QSet>
 #include <QRegularExpression>
 
 GitStatus::GitStatus(QObject *parent)
@@ -213,4 +215,134 @@ GitStatusInfo GitStatus::parseStatus(const QString &output)
             info.modified++;
     }
     return info;
+}
+
+/// Fields requested per ref, tab-separated: the "*" marker for the checked-out
+/// branch, the full refname (which is what tells local and remote apart), the
+/// short name shown in the list, and the tip commit's relative date. Tabs
+/// cannot appear in a refname, so splitting on them is unambiguous.
+static const QString kBranchFormat =
+    QStringLiteral("%(HEAD)%09%(refname)%09%(refname:short)%09%(committerdate:relative)");
+
+void GitStatus::requestBranches()
+{
+    if (m_dir.isEmpty() || m_gitDir.isEmpty()) {
+        emit branchesReady({}, QStringLiteral("Not a git repository"));
+        return;
+    }
+    auto *proc = new QProcess(this);
+    const QString dir = m_dir;
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc, dir](int code, QProcess::ExitStatus) {
+        proc->deleteLater();
+        if (dir != m_dir) // cwd moved on while listing
+            return;
+        if (code == 0) {
+            emit branchesReady(parseBranches(QString::fromUtf8(proc->readAllStandardOutput())),
+                               QString());
+        } else {
+            emit branchesReady({}, QString::fromUtf8(proc->readAllStandardError()).trimmed());
+        }
+    });
+    connect(proc, &QProcess::errorOccurred, this,
+            [this, proc](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart)
+            return;
+        proc->deleteLater();
+        emit branchesReady({}, QStringLiteral("git is not available"));
+    });
+    // for-each-ref reads refs only - no index refresh, so unlike `git status`
+    // it needs no --no-optional-locks and cannot wake the .git watcher.
+    proc->start("git", {"-C", dir, "for-each-ref", "--sort=-committerdate",
+                        "--format=" + kBranchFormat, "refs/heads", "refs/remotes"});
+}
+
+void GitStatus::checkoutBranch(const QString &branch, bool create)
+{
+    if (branch.isEmpty() || m_checkingOut)
+        return;
+    if (m_dir.isEmpty() || m_gitDir.isEmpty()) {
+        emit checkoutFinished(false, branch, QStringLiteral("Not a git repository"));
+        return;
+    }
+    m_checkingOut = true;
+    auto *proc = new QProcess(this);
+    const QString dir = m_dir;
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc, branch](int code, QProcess::ExitStatus) {
+        proc->deleteLater();
+        m_checkingOut = false;
+        const bool ok = code == 0;
+        // git reports both refusals and the "Switched to branch" note on
+        // stderr, so it is only read when the run actually failed.
+        const QString error = ok
+            ? QString() : QString::fromUtf8(proc->readAllStandardError()).trimmed();
+        if (ok)
+            refresh();   // don't wait for the .git watcher to notice HEAD moved
+        emit checkoutFinished(ok, branch, error);
+    });
+    connect(proc, &QProcess::errorOccurred, this,
+            [this, proc, branch](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart)
+            return;
+        proc->deleteLater();
+        m_checkingOut = false;
+        emit checkoutFinished(false, branch, QStringLiteral("git is not available"));
+    });
+    // `checkout` rather than the newer `switch`: it is what every supported
+    // git has, and checking out a remote-only name (see GitBranch::target)
+    // creates the local tracking branch through the same DWIM rule.
+    QStringList args{"-C", dir, "checkout"};
+    if (create)
+        args << QStringLiteral("-b");
+    args << branch;
+    proc->start("git", args);
+}
+
+QList<GitBranch> GitStatus::parseBranches(const QString &output)
+{
+    QList<GitBranch> locals;
+    QList<GitBranch> remotes;
+    QSet<QString> localNames;
+
+    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        const QStringList fields = line.split(QLatin1Char('\t'));
+        if (fields.size() < 4)
+            continue;
+        GitBranch branch;
+        branch.current = fields.at(0).trimmed() == QLatin1String("*");
+        const QString refName = fields.at(1);
+        branch.remote = refName.startsWith(QLatin1String("refs/remotes/"));
+        branch.name = fields.at(2);
+        branch.detail = fields.at(3);
+        if (branch.remote) {
+            // "refs/remotes/origin/HEAD" is a symref standing for the remote's
+            // default branch, which is listed under its own name anyway.
+            // Matched on the full refname: git shortens that particular ref to
+            // the bare remote name ("origin"), not to "origin/HEAD".
+            if (refName.endsWith(QLatin1String("/HEAD")))
+                continue;
+            // "origin/feature/x" -> "feature/x": the name to hand checkout,
+            // which git resolves to the remote branch and tracks.
+            const int slash = branch.name.indexOf(QLatin1Char('/'));
+            if (slash < 0)
+                continue;
+            branch.target = branch.name.mid(slash + 1);
+            remotes.append(branch);
+        } else {
+            branch.target = branch.name;
+            localNames.insert(branch.name);
+            locals.append(branch);
+        }
+    }
+
+    // A remote branch that already has a local counterpart would check out the
+    // very same local branch, so only the local row is offered.
+    QList<GitBranch> result = locals;
+    for (const GitBranch &branch : std::as_const(remotes)) {
+        if (!localNames.contains(branch.target))
+            result.append(branch);
+    }
+    return result;
 }
