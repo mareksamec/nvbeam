@@ -281,6 +281,11 @@
       version centred the glyph in its own width, which silently averaged the two padding
       constants, so the right-hand one never took effect. The glyph's painted width is fractional,
       so the widget width ceils it; rounding down clipped the right edge at zero right padding.
+    - Styled apart from the project switcher on request: highlighted with `[ui] focus_border_color`,
+      the OneDark blue neobeam already uses for the focused pane, instead of the green
+      `accent_color`. The font stays the default one, as the project switcher has. The border and the selected
+      row are that same colour at fixed alphas via a small `rgbaOf()` helper, so configuring the
+      one colour recolours the popup coherently and no new config key was needed.
     - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
       is neither a click target nor a shortcut. Built and compiles clean; not run by me per
       AGENTS.md - awaiting visual confirmation.

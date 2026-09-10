@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QColor>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -35,29 +36,52 @@ constexpr int kReopenGuardMs = 250;
 /// file would otherwise grow the popup past the window.
 constexpr int kMaxStatusChars = 400;
 
+/// Opacity of the popup's border and of the selected row's background, both
+/// derived from the highlight colour: enough to read as tinted, not enough to
+/// compete with the row text.
+constexpr int kBorderAlpha = 110;
+constexpr int kSelectionAlpha = 56;
+
+/// `color` as a Qt style sheet rgba() literal at the given alpha. Named
+/// colours and #rrggbb both work, and an unparseable one falls through as
+/// written rather than turning the rule into a syntax error.
+QString rgbaOf(const QString &color, int alpha)
+{
+    const QColor parsed(color);
+    if (!parsed.isValid())
+        return color;
+    return QStringLiteral("rgba(%1, %2, %3, %4)")
+        .arg(parsed.red()).arg(parsed.green()).arg(parsed.blue()).arg(alpha);
+}
+
 } // namespace
 
-BranchSwitcherWidget::BranchSwitcherWidget(const QString &accentColor, QWidget *parent)
+BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidget *parent)
     : QFrame(parent)
 {
     setObjectName("nbBranchSwitcher");
-    // Same palette as the project switcher, so the two pickers read as one UI.
+    // Same shape as the project switcher, tinted with the highlight colour
+    // instead of the green accent so the two are not mistaken for each other.
+    // The border and the selected row derive from that one colour, at the
+    // alphas below, so configuring it recolours the whole popup coherently.
+    const QString border = rgbaOf(highlightColor, kBorderAlpha);
+    const QString selection = rgbaOf(highlightColor, kSelectionAlpha);
     setStyleSheet(QStringLiteral(
-        "QFrame#nbBranchSwitcher { background: #1a1b26; border: 1px solid #444; border-radius: 6px; }"
+        "QFrame#nbBranchSwitcher { background: #1a1b26; border: 1px solid %2; border-radius: 6px; }"
         "QLineEdit { background: #24283b; color: #cdd6f4; border: 1px solid #333; "
         "border-radius: 4px; padding: 5px 8px; font-size: 11pt; }"
         "QLineEdit:focus { border-color: %1; }"
         "QListWidget { background: transparent; color: #a9b1d6; border: none; font-size: 10pt; }"
         "QListWidget::item { padding: 4px 8px; border-radius: 4px; }"
-        "QListWidget::item:selected { background: #313244; color: %1; }")
-            .arg(accentColor));
+        "QListWidget::item:selected { background: %3; color: %1; }")
+            .arg(highlightColor, border, selection));
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
     layout->setSpacing(6);
 
     m_input = new QLineEdit(this);
-    m_input->setPlaceholderText(QStringLiteral("Switch branch, or type a new name to create one"));
+    m_input->setPlaceholderText(QStringLiteral("Switch branch or type a new name"));
     m_input->installEventFilter(this);
     layout->addWidget(m_input);
 

@@ -120,6 +120,8 @@ Typing a name no branch has adds a **Create branch "…"** row at the end of the
 
 When git refuses (uncommitted changes that the checkout would overwrite, a branch already checked out in another worktree, a name git rejects), the popup stays open and shows git's own message. On success it closes, the statusline's git segment updates, open buffers are rechecked against the new working tree (`checktime`), and the bottom terminal's shell prompt is refreshed so a branch-aware prompt does not go stale.
 
+The popup is highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance.
+
 The switcher needs the statusline's git segment, so it follows `[ui] git_status`; with that off, neither the click target nor the shortcut exists.
 
 ### Drag & drop

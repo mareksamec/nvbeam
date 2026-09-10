@@ -27,7 +27,11 @@ class BranchSwitcherWidget : public QFrame
     Q_OBJECT
 
 public:
-    explicit BranchSwitcherWidget(const QString &accentColor, QWidget *parent);
+    /// `highlightColor` tints the focus border, the selected row and its
+    /// text. MainWindow passes [ui] focus_border_color (OneDark blue by
+    /// default) rather than the green accent the project switcher uses, so
+    /// the two pickers are told apart at a glance.
+    explicit BranchSwitcherWidget(const QString &highlightColor, QWidget *parent);
 
     /// Show the popup under `anchor` (the statusline's git segment; the
     /// bottom-left of the window when it is hidden or null) and ask for a

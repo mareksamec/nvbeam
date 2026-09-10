@@ -752,7 +752,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         // git segment, opened by clicking the segment or with Ctrl+Shift+B.
         // Created only alongside the git provider, which is what runs every
         // git command for it.
-        m_branchSwitcher = new BranchSwitcherWidget(cfg.accentColor, this);
+        // Highlighted with the focus-border blue, not the green accent: it
+        // keeps the branch picker visually distinct from the project switcher.
+        m_branchSwitcher = new BranchSwitcherWidget(cfg.focusBorderColor, this);
         m_statusline->setGitSegmentClickable(true);
         connect(m_statusline, &StatuslineWidget::gitSegmentClicked,
                 this, &MainWindow::toggleBranchSwitcher);
