@@ -49,6 +49,11 @@ constexpr int kAnchorGap = 4;
 /// window a close counts as the whole toggle, so the click does not reopen
 /// what it just closed.
 constexpr int kReopenGuardMs = 250;
+/// How long open() waits for the branch list before showing the popup with
+/// its "Loading branches…" line anyway. Short enough that a slow repository
+/// still feels answered, long enough that the usual few-millisecond
+/// for-each-ref never paints the loading state at all.
+constexpr int kRevealFallbackMs = 150;
 /// Longest git message shown verbatim; a refusal listing every conflicting
 /// file would otherwise grow the popup past the window.
 constexpr int kMaxStatusChars = 400;
@@ -130,6 +135,10 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor,
 
     connect(m_input, &QLineEdit::textChanged, this, &BranchSwitcherWidget::refilter);
 
+    m_revealTimer.setSingleShot(true);
+    m_revealTimer.setInterval(kRevealFallbackMs);
+    connect(&m_revealTimer, &QTimer::timeout, this, &BranchSwitcherWidget::reveal);
+
     parent->installEventFilter(this); // reposition on parent resizes
     hide();
 }
@@ -146,19 +155,39 @@ void BranchSwitcherWidget::open(QWidget *anchor)
         QSignalBlocker blocker(m_input);
         m_input->clear();
     }
+    m_sideFrozen = false;   // re-pick above/below for this open
     showRows({});
     setStatus(QStringLiteral("Loading branches…"));
-    show();
-    raise();
-    m_input->setFocus();
+    // Deliberately not shown yet - see reveal(). The layout above still runs,
+    // so the branch list only has to fill rows into a popup that is already
+    // sized and placed.
+    m_pendingOpen = true;
+    m_revealTimer.start();
     // Asked for on every open rather than cached: branches come and go through
     // the embedded terminal, and a fetch changes the remote ones.
     emit branchesRequested();
 }
 
+void BranchSwitcherWidget::reveal()
+{
+    m_revealTimer.stop();
+    m_pendingOpen = false;
+    if (isVisible())
+        return;
+    show();
+    raise();
+    m_input->setFocus();
+}
+
+void BranchSwitcherWidget::cancelPendingOpen()
+{
+    m_revealTimer.stop();
+    m_pendingOpen = false;
+}
+
 void BranchSwitcherWidget::toggle(QWidget *anchor)
 {
-    if (isVisible()) {
+    if (isVisible() || m_pendingOpen) {
         dismiss();
         return;
     }
@@ -169,6 +198,9 @@ void BranchSwitcherWidget::toggle(QWidget *anchor)
 
 void BranchSwitcherWidget::dismiss()
 {
+    // A pending open never took focus and never painted, so cancelling it is
+    // the whole job - there is nothing to hide and no focus to hand back.
+    cancelPendingOpen();
     if (!isVisible())
         return;
     hide();
@@ -178,8 +210,8 @@ void BranchSwitcherWidget::dismiss()
 
 void BranchSwitcherWidget::setBranches(const QList<GitBranch> &branches, const QString &error)
 {
-    if (!isVisible())
-        return;
+    if (!isVisible() && !m_pendingOpen)
+        return;   // answer to an open that was dismissed in the meantime
     m_branches = branches;
     refilter(m_input->text());
     if (!error.isEmpty())
@@ -191,6 +223,11 @@ void BranchSwitcherWidget::setBranches(const QList<GitBranch> &branches, const Q
         setStatus(QStringLiteral("No branches yet - type a name to create one"));
     else
         setStatus(QString());
+    // Sized and placed for the real list now, so this is the first and only
+    // geometry the popup is ever seen at - and the side it landed on is the
+    // one it keeps while the user filters.
+    reveal();
+    m_sideFrozen = true;
 }
 
 void BranchSwitcherWidget::checkoutFinished(bool ok, const QString &branch, const QString &error)
@@ -389,13 +426,19 @@ void BranchSwitcherWidget::reposition()
 
     QPoint topLeft;
     if (m_anchor && m_anchor->isVisible()) {
-        // Hangs under the statusline's git segment, VSCode-style, and flips
+        // Hangs under the statusline's git segment, VSCode-style, and goes
         // above it when the window has no room below - which is the usual
         // case, the statusline sitting at the bottom of the editor column.
+        // The choice follows the height until the branch list has landed and
+        // freezes there, at the popup's tallest: filtering only ever shrinks
+        // it, and re-deciding each time would send the popup hopping across
+        // the statusline as the user types.
         const QPoint anchorTopLeft = m_anchor->mapTo(p, QPoint(0, 0));
-        topLeft = QPoint(anchorTopLeft.x(), anchorTopLeft.y() + m_anchor->height() + kAnchorGap);
-        if (topLeft.y() + height() > p->height())
-            topLeft.setY(anchorTopLeft.y() - height() - kAnchorGap);
+        const int below = anchorTopLeft.y() + m_anchor->height() + kAnchorGap;
+        if (!m_sideFrozen)
+            m_placeAbove = below + height() > p->height();
+        topLeft = QPoint(anchorTopLeft.x(),
+                         m_placeAbove ? anchorTopLeft.y() - height() - kAnchorGap : below);
     } else {
         // No git segment on screen (not a repository): bottom-left corner,
         // where the segment would have been.
