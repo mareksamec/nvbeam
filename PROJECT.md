@@ -103,7 +103,7 @@
 
 
 ## Pipeline adjustments
- - [ ] Allow to publish release build from branch
+ - [x] Allow to publish release build from branch
  - [ ] Do not run build pipelines in PR/branch when only .md files are updated.
  - [x] Add BSD build pipeline -> separate manual-only workflow (.github/workflows/openbsd.yml, vmactions/openbsd-vm, workflow_dispatch with release input); OpenBSD port skeleton in packaging/openbsd/
  - [ ] Create comprehensive project documentation with examples on GitHub - suggest best approach.
