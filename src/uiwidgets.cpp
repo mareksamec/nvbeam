@@ -1,4 +1,5 @@
 #include "uiwidgets.h"
+#include <cmath>
 #include <functional>
 #include "logging.h"
 #include <QHBoxLayout>
@@ -497,7 +498,7 @@ public:
         // Show a text I-beam cursor to signal the text is selectable.
         setCursor(Qt::IBeamCursor);
         // Reproduce the old " text " padding around each segment.
-        setContentsMargins(6, 0, 6, 0);
+        setContentsMargins(1, 0, 1, 0);
     }
 
     /// Make the segment clickable: a left release that selected no text runs
@@ -555,14 +556,17 @@ public:
     /// painter maps this rectangle onto the widget, so both scale together.
     static constexpr QRectF kSrcRect{96, 32, 320, 448};
     static constexpr qreal kSrcStroke = 32;
-    static constexpr int kHeight = 16;   // rendered glyph height, px
-    static constexpr int kPadLeft = 6;   // matches SelectableLabel's segment padding
-    static constexpr int kPadRight = 2;  // small gap before the branch name
+    static constexpr int kHeight = 10;   // rendered glyph height, px
+    static constexpr int kPadLeft = 10;  // space between the divider and the glyph
+    static constexpr int kPadRight = 3;  // gap to the branch name, on top of the
+                                         // label's own left contents margin
 
     explicit BranchIcon(QWidget *parent = nullptr)
         : QWidget(parent)
     {
-        const int glyphWidth = qRound(kHeight * kSrcRect.width() / kSrcRect.height());
+        // Ceil, not round: the glyph's painted width is fractional, and
+        // rounding it down would clip the right edge whenever kPadRight is 0.
+        const int glyphWidth = int(std::ceil(kHeight * kSrcRect.width() / kSrcRect.height()));
         setFixedWidth(kPadLeft + glyphWidth + kPadRight);
     }
 
@@ -588,12 +592,13 @@ protected:
         p.fillRect(rect(), m_bg);
         p.setRenderHint(QPainter::Antialiasing, true);
 
-        // Draw in source coordinates: scale to the target height, then centre
-        // the artwork's bounding box in the widget. The pen width is given in
+        // Draw in source coordinates: scale to the target height, put the
+        // artwork's bounding box at kPadLeft and centre it vertically. The
+        // padding is applied as given rather than split evenly across the
+        // widget, so the two sides tune independently. The pen width is in
         // source units too, so it scales with the shape.
         const qreal scale = qreal(kHeight) / kSrcRect.height();
-        p.translate((width() - kSrcRect.width() * scale) / 2.0,
-                    (height() - kHeight) / 2.0);
+        p.translate(kPadLeft, (height() - kHeight) / 2.0);
         p.scale(scale, scale);
         p.translate(-kSrcRect.x(), -kSrcRect.y());
 
@@ -766,7 +771,7 @@ void StatuslineWidget::refresh()
     }
     QString branchText;
     if (!branchName.isEmpty()) {
-        branchText = QStringLiteral("&nbsp;") + branchName.toHtmlEscaped();
+        branchText = branchName.toHtmlEscaped();
         if (!counts.isEmpty())
             branchText += QStringLiteral("<span style=\"color:%1;\">%2</span>")
                               .arg(m_accent, counts.toHtmlEscaped());
