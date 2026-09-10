@@ -79,6 +79,13 @@ struct Config {
     QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
     QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane
 
+    // Git branch switcher popup (the picker under the statusline's git segment).
+    // A monospace family is what lets its commit-date column line up; a
+    // proportional one still works, the dates just stop aligning exactly.
+    QString branchSwitcherFont = "monospace";
+    int branchSwitcherFontSize = 10;      // list rows, in points; the input line above them
+                                          // renders one point larger
+
     // Mouse settings
     bool mouseTerminalSelection = true;  // terminal-style selection when vim mouse= empty
     bool mouseAutoCopy = true;           // auto-copy selection to clipboard on release

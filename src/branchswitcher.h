@@ -31,7 +31,13 @@ public:
     /// text. MainWindow passes [ui] focus_border_color (OneDark blue by
     /// default) rather than the green accent the project switcher uses, so
     /// the two pickers are told apart at a glance.
-    explicit BranchSwitcherWidget(const QString &highlightColor, QWidget *parent);
+    ///
+    /// `fontFamily` and `fontPointSize` come from [ui] branch_switcher_font
+    /// and branch_switcher_font_size: the size applies to the list rows, and
+    /// the input line above them renders one point larger. A monospace family
+    /// is what lets showRows() line the date column up.
+    explicit BranchSwitcherWidget(const QString &highlightColor, const QString &fontFamily,
+                                  int fontPointSize, QWidget *parent);
 
     /// Show the popup under `anchor` (the statusline's git segment; the
     /// bottom-left of the window when it is hidden or null) and ask for a

@@ -23,12 +23,10 @@ QChar branchGlyph(const GitBranch &branch)
     return branch.remote ? QChar(u'·') : QChar(u'▸');
 }
 
-/// Monospace, so the relative dates can be padded into a column that lines
-/// up (see showRows). The two sizes are the knob if the rows come out too
-/// wide for long branch names.
-const QString kFontFamily = QStringLiteral("monospace");
-constexpr int kInputPointSize = 11;
-constexpr int kListPointSize = 10;
+/// How much larger the input line is than the list rows, in points. The rows
+/// are the configured size ([ui] branch_switcher_font_size); the field above
+/// them reads as the popup's heading at one point more.
+constexpr int kInputSizeBump = 1;
 /// Minimum separation between a name and its date, in character cells, and
 /// the narrowest the name column is allowed to get before dates start being
 /// pushed off the edge instead.
@@ -75,7 +73,9 @@ QString rgbaOf(const QString &color, int alpha)
 
 } // namespace
 
-BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidget *parent)
+BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor,
+                                           const QString &fontFamily, int fontPointSize,
+                                           QWidget *parent)
     : QFrame(parent)
 {
     setObjectName("nbBranchSwitcher");
@@ -88,7 +88,8 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidge
     // Fonts are set on the widgets rather than in the style sheet below: a
     // style sheet font wins over the widget's own at paint time, which would
     // leave showRows() aligning the date column with metrics that are not the
-    // ones being drawn.
+    // ones being drawn. They are also configurable, which a hardcoded style
+    // sheet rule would not be.
     setStyleSheet(QStringLiteral(
         "QFrame#nbBranchSwitcher { background: #1a1b26; border: 1px solid %2; border-radius: 6px; }"
         "QLineEdit { background: #24283b; color: #cdd6f4; border: 1px solid #333; "
@@ -104,13 +105,13 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor, QWidge
     layout->setSpacing(6);
 
     m_input = new QLineEdit(this);
-    m_input->setFont(QFont(kFontFamily, kInputPointSize));
+    m_input->setFont(QFont(fontFamily, fontPointSize + kInputSizeBump));
     m_input->setPlaceholderText(QStringLiteral("Switch branch or type a new name"));
     m_input->installEventFilter(this);
     layout->addWidget(m_input);
 
     m_list = new QListWidget(this);
-    m_list->setFont(QFont(kFontFamily, kListPointSize));
+    m_list->setFont(QFont(fontFamily, fontPointSize));
     // Focus stays in the line edit; clicks on rows still activate them, and
     // they must not steal focus (focus loss dismisses the popup).
     m_list->setFocusPolicy(Qt::NoFocus);

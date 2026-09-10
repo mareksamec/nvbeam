@@ -120,7 +120,7 @@ Typing a name no branch has adds a **Create branch "…"** row at the end of the
 
 When git refuses (uncommitted changes that the checkout would overwrite, a branch already checked out in another worktree, a name git rejects), the popup stays open and shows git's own message. On success it closes, the statusline's git segment updates, open buffers are rechecked against the new working tree (`checktime`), and the bottom terminal's shell prompt is refreshed so a branch-aware prompt does not go stale.
 
-The popup is monospaced, with the commit dates padded into a column that lines up, and highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance. The name column takes whatever width is left once the widest date is reserved, so a date is never pushed off the edge; a branch name too long for it is elided in the middle and shown in full in the row's tooltip.
+The popup is monospaced (`[ui] branch_switcher_font` and `branch_switcher_font_size`), with the commit dates padded into a column that lines up, and highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance. The name column takes whatever width is left once the widest date is reserved, so a date is never pushed off the edge; a branch name too long for it is elided in the middle and shown in full in the row's tooltip.
 
 The switcher needs the statusline's git segment, so it follows `[ui] git_status`; with that off, neither the click target nor the shortcut exists.
 
@@ -201,6 +201,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # accent_color = "#50fa7b"
 # statusline_divider = "powerline"  # powerline, pipe, none
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
+# branch_switcher_font = "monospace"  # git branch switcher popup font family
+# branch_switcher_font_size = 10  # its list rows; the input line is one point larger
 # window_title = ""  # custom title template (empty = default "Neobeam - ~/path",
 #                    # or "<project> - ~/path" after a switcher project pick).
 #                    # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,
@@ -282,6 +284,8 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `accent_color` — Accent color for UI elements (default: `"#50fa7b"`)
 - `statusline_divider` — Statusline segment divider style: `powerline`, `pipe`, `none` (default: `powerline`)
 - `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: `"#61afef"`)
+- `branch_switcher_font` — Font family of the git branch switcher popup. A monospace family is what lets its commit-date column line up; a proportional one works too, the dates just stop aligning exactly (default: `"monospace"`)
+- `branch_switcher_font_size` — Point size of the branch switcher's list rows; the input line above them renders one point larger. Accepted range 4-72, clamped with a warning outside it (default: `10`)
 - `window_title` — Custom window title template. Empty uses the default title: `Neobeam - ~/path`, plain `Neobeam` for the home directory, or `<project name> - ~/path` after picking a pinned project in the switcher. Placeholders: `%p` project name (empty when no project is active), `%d` cwd (`~`-shortened), `%D` cwd (absolute), `%f` current file name, `%F` current file path (`~`-shortened), `%%` literal `%` (default: `""`)
 
 **`[mouse]`**

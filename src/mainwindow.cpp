@@ -754,7 +754,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         // git command for it.
         // Highlighted with the focus-border blue, not the green accent: it
         // keeps the branch picker visually distinct from the project switcher.
-        m_branchSwitcher = new BranchSwitcherWidget(cfg.focusBorderColor, this);
+        m_branchSwitcher = new BranchSwitcherWidget(cfg.focusBorderColor, cfg.branchSwitcherFont,
+                                                    cfg.branchSwitcherFontSize, this);
         m_statusline->setGitSegmentClickable(true);
         connect(m_statusline, &StatuslineWidget::gitSegmentClicked,
                 this, &MainWindow::toggleBranchSwitcher);

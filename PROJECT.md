@@ -291,8 +291,11 @@
       font usually lacks - they come from a fallback whose advance is not one cell - then pads
       each name out to the widest with spaces. The fonts are set on the widgets instead of in the
       style sheet: a style sheet font wins at paint time, which would leave the alignment measured
-      with metrics that are not the ones drawn. `kInputPointSize`/`kListPointSize` are the size
-      knobs.
+      with metrics that are not the ones drawn. Family and size come from `[ui]
+      branch_switcher_font` / `branch_switcher_font_size` (defaults "monospace" and 10, the values
+      they were hardcoded to); the size applies to the list rows and the input line adds
+      `kInputSizeBump`. Out-of-range sizes are clamped to 4-72 with a warning, the bounds the
+      editor and terminal font zoom already uses.
     - The name column takes what is left of the popup once the widest date and the gap are
       reserved (`popupWidth()`, shared with `reposition()`), so a date is never pushed past the
       right edge at any window size; a name too long for the column is middle-elided and stays in
