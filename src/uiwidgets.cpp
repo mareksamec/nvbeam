@@ -3,7 +3,7 @@
 #include <functional>
 #include "logging.h"
 #include <QHBoxLayout>
-#include <QFontMetrics>
+#include <QFontMetricsF>
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QGuiApplication>
@@ -482,6 +482,14 @@ void MessageWidget::showRuler(const QVariantList &content)
 
 namespace {
 
+/// The font every statusline segment renders with. Shared so the git glyph
+/// can size itself from the same metrics as the text beside it. Point-sized,
+/// so it follows the screen's logical DPI.
+QFont segmentFont()
+{
+    return QFont(QStringLiteral("monospace"), 10);
+}
+
 /// A QLabel whose text can be selected with the mouse; on release the current
 /// selection is auto-copied to the clipboard (mirrors the grid's behaviour).
 class SelectableLabel : public QLabel
@@ -490,8 +498,7 @@ public:
     explicit SelectableLabel(QWidget *parent = nullptr)
         : QLabel(parent)
     {
-        QFont f("monospace", 10);
-        setFont(f);
+        setFont(segmentFont());
         setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         setTextInteractionFlags(Qt::TextSelectableByMouse);
         setAutoFillBackground(true);
@@ -556,18 +563,25 @@ public:
     /// painter maps this rectangle onto the widget, so both scale together.
     static constexpr QRectF kSrcRect{96, 32, 320, 448};
     static constexpr qreal kSrcStroke = 32;
-    static constexpr int kHeight = 10;   // rendered glyph height, px
-    static constexpr int kPadLeft = 10;  // space between the divider and the glyph
-    static constexpr int kPadRight = 3;  // gap to the branch name, on top of the
-                                         // label's own left contents margin
+    /// Glyph height, and the padding either side, as multiples of the segment
+    /// font's cap height. Derived from the font rather than fixed in pixels
+    /// because the font is point-sized: on a high-DPI screen the text grows
+    /// with the logical DPI while a pixel count does not, which left the glyph
+    /// half the height of the branch name and crammed against it. At 96 DPI
+    /// (cap height 9.3px) these give the hand-tuned 10px glyph, 10px in front
+    /// of it and 3px after.
+    static constexpr qreal kHeightPerCap = 1.08;
+    static constexpr qreal kPadLeftPerCap = 1.08;
+    static constexpr qreal kPadRightPerCap = 0.32;
+    /// Floor for the glyph height, for a font reporting no usable cap height;
+    /// below this the three rings blur into each other anyway.
+    static constexpr int kMinHeight = 6;
 
     explicit BranchIcon(QWidget *parent = nullptr)
         : QWidget(parent)
     {
-        // Ceil, not round: the glyph's painted width is fractional, and
-        // rounding it down would clip the right edge whenever kPadRight is 0.
-        const int glyphWidth = int(std::ceil(kHeight * kSrcRect.width() / kSrcRect.height()));
-        setFixedWidth(kPadLeft + glyphWidth + kPadRight);
+        setFont(segmentFont());
+        applyFontMetrics();
     }
 
     void setColors(const QColor &fg, const QColor &bg)
@@ -586,19 +600,42 @@ public:
     }
 
 protected:
+    /// Recompute the glyph size, the padding and with them the widget width
+    /// from the current font. Runs again on every font change, which is also
+    /// how a move to a screen with a different DPI reaches the widget.
+    void applyFontMetrics()
+    {
+        const qreal cap = QFontMetricsF(font()).capHeight();
+        m_height = qMax(kMinHeight, int(std::round(cap * kHeightPerCap)));
+        m_padLeft = int(std::round(cap * kPadLeftPerCap));
+        m_padRight = int(std::round(cap * kPadRightPerCap));
+        // Ceil, not round: the glyph's painted width is fractional, and
+        // rounding it down would clip the right edge when m_padRight is 0.
+        const int glyphWidth = int(std::ceil(m_height * kSrcRect.width() / kSrcRect.height()));
+        setFixedWidth(m_padLeft + glyphWidth + m_padRight);
+        update();
+    }
+
+    void changeEvent(QEvent *event) override
+    {
+        QWidget::changeEvent(event);
+        if (event->type() == QEvent::FontChange)
+            applyFontMetrics();
+    }
+
     void paintEvent(QPaintEvent * /*event*/) override
     {
         QPainter p(this);
         p.fillRect(rect(), m_bg);
         p.setRenderHint(QPainter::Antialiasing, true);
 
-        // Draw in source coordinates: scale to the target height, put the
-        // artwork's bounding box at kPadLeft and centre it vertically. The
+        // Draw in source coordinates: scale to the glyph height, put the
+        // artwork's bounding box at m_padLeft and centre it vertically. The
         // padding is applied as given rather than split evenly across the
         // widget, so the two sides tune independently. The pen width is in
         // source units too, so it scales with the shape.
-        const qreal scale = qreal(kHeight) / kSrcRect.height();
-        p.translate(kPadLeft, (height() - kHeight) / 2.0);
+        const qreal scale = qreal(m_height) / kSrcRect.height();
+        p.translate(m_padLeft, (height() - m_height) / 2.0);
         p.scale(scale, scale);
         p.translate(-kSrcRect.x(), -kSrcRect.y());
 
@@ -629,6 +666,9 @@ private:
     QColor m_fg{"#c0caf5"};
     QColor m_bg{"#24283b"};
     std::function<void()> m_click;
+    int m_height = kMinHeight;   // glyph geometry in device-independent px,
+    int m_padLeft = 0;           // all three derived from the font metrics
+    int m_padRight = 0;
 };
 
 /// Custom-painted powerline divider: a right-pointing triangle in the previous

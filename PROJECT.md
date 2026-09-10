@@ -266,9 +266,21 @@
       from the SVG. Painting it means the pen takes the segment's own foreground colour, so it
       follows the statusline palette with no per-theme recolouring and no runtime Qt6::Svg, which
       the rest of neobeam avoids too. The artwork's bounding box inside the 512 viewBox (the rings
-      sit off-centre in it) is mapped onto a 16px-tall glyph, pen width included, and the icon
-      shares the branch slot's colours, visibility, tooltip and click handler. Geometry checked by
-      rendering the same paint code to a PNG offscreen, not by running the GUI.
+      sit off-centre in it) is mapped onto the glyph, pen width included, and the icon shares the
+      branch slot's colours, visibility, tooltip and click handler. Geometry checked by rendering
+      the same paint code to a PNG offscreen, not by running the GUI.
+    - Glyph height and the padding either side are multiples of the segment font's cap height, not
+      pixel counts: the statusline font is point-sized, so on a high-DPI screen the text grows with
+      the logical DPI while a fixed pixel glyph does not - it showed up on a 4K display as a glyph
+      half the height of the branch name and crammed against it. `applyFontMetrics()` recomputes
+      them on every `QEvent::FontChange`, which is also how a move to a differently scaled screen
+      arrives. `segmentFont()` now hands the same font to `SelectableLabel` and the glyph so the
+      two cannot drift apart. Still fixed in pixels, same family of bug, not touched here:
+      `StatuslineWidget`'s `setFixedHeight(28)` and `PowerlineDivider`'s `setFixedWidth(12)`.
+    - The padding is applied as given rather than split evenly across the widget - an earlier
+      version centred the glyph in its own width, which silently averaged the two padding
+      constants, so the right-hand one never took effect. The glyph's painted width is fractional,
+      so the widget width ceils it; rounding down clipped the right edge at zero right padding.
     - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
       is neither a click target nor a shortcut. Built and compiles clean; not run by me per
       AGENTS.md - awaiting visual confirmation.
