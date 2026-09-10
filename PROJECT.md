@@ -228,7 +228,15 @@
       below (the usual case, the statusline sitting at the bottom of the editor column). Same input
       + list + palette as `SwitcherWidget`, so the two pickers read as one UI; the fuzzy scorer they
       share moved out of `switcher.cpp` into `fuzzy.h`.
-    - Opened by clicking the git segment or with Ctrl+Shift+B. The click needed `SelectableLabel`
+    - Opened by clicking the git segment or with Ctrl+Shift+B, the latter handled in
+      `MainWindow::eventFilter` rather than as a `QShortcut`: QTermWidget takes Ctrl+key presses
+      before a shortcut fires, so a `QShortcut` reached everywhere except inside the terminal -
+      the same reason the Ctrl+-/Ctrl+= font keys already live there. The modifier match is exact,
+      so plain Ctrl+B (nvim's page-up, tmux's prefix) is untouched and only the Shift variant is
+      claimed. No other neobeam binding uses it; the one wrinkle is that a terminal cannot
+      normally tell Ctrl+Shift+B from Ctrl+B, so a tmux user who holds Shift over the prefix key
+      gets the switcher - Ctrl+Shift+G (VSCode's Source Control binding) is the alternative if
+      that ever bites. The click needed `SelectableLabel`
       to gain an optional click handler, which fires only on a release that selected no text, so
       selecting the statusline text still works. `StatuslineWidget::setGitSegmentClickable()` gates
       both the handler and the pointer cursor, and adds the "click to switch branches" line to the

@@ -903,14 +903,6 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             openSwitcher();
     });
 
-    // Ctrl+Shift+B toggles the branch switcher. Only bound when there is a git
-    // segment to hang it under (see [ui] git_status).
-    if (m_branchSwitcher) {
-        auto *branchShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_B), this);
-        connect(branchShortcut, &QShortcut::activated,
-                this, &MainWindow::toggleBranchSwitcher);
-    }
-
     m_nvim->start(nvimArgs);
 
     // Ctrl+Tab cycles focus through the editor grid and each terminal split.
@@ -994,6 +986,19 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
                 m_grid->setFocus();
             else
                 cycleGridTerminalFocus(ke->key() == Qt::Key_Tab);
+            return true;
+        }
+        // Ctrl+Shift+B toggles the git branch switcher from anywhere in the
+        // window - buffer, either terminal, the message log - and closes it
+        // again while it is open. Handled here rather than as a QShortcut for
+        // the same reason as the font keys below: QTermWidget takes Ctrl+key
+        // presses before a shortcut fires, so a QShortcut would work
+        // everywhere except inside the terminal. Exact modifier match, so
+        // Ctrl+B (nvim's page-up, tmux's prefix) is left alone and only the
+        // Shift variant is claimed.
+        if (m_branchSwitcher && ke->key() == Qt::Key_B
+            && ke->modifiers() == (Qt::ControlModifier | Qt::ShiftModifier)) {
+            toggleBranchSwitcher();
             return true;
         }
         // Ctrl+- / Ctrl+= change the font size of the focused terminal panel.
