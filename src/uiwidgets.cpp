@@ -1,7 +1,9 @@
 #include "uiwidgets.h"
+#include <cmath>
+#include <functional>
 #include "logging.h"
 #include <QHBoxLayout>
-#include <QFontMetrics>
+#include <QFontMetricsF>
 #include <QPainterPath>
 #include <QMouseEvent>
 #include <QGuiApplication>
@@ -480,6 +482,14 @@ void MessageWidget::showRuler(const QVariantList &content)
 
 namespace {
 
+/// The font every statusline segment renders with. Shared so the git glyph
+/// can size itself from the same metrics as the text beside it. Point-sized,
+/// so it follows the screen's logical DPI.
+QFont segmentFont()
+{
+    return QFont(QStringLiteral("monospace"), 10);
+}
+
 /// A QLabel whose text can be selected with the mouse; on release the current
 /// selection is auto-copied to the clipboard (mirrors the grid's behaviour).
 class SelectableLabel : public QLabel
@@ -488,15 +498,24 @@ public:
     explicit SelectableLabel(QWidget *parent = nullptr)
         : QLabel(parent)
     {
-        QFont f("monospace", 10);
-        setFont(f);
+        setFont(segmentFont());
         setAlignment(Qt::AlignVCenter | Qt::AlignLeft);
         setTextInteractionFlags(Qt::TextSelectableByMouse);
         setAutoFillBackground(true);
         // Show a text I-beam cursor to signal the text is selectable.
         setCursor(Qt::IBeamCursor);
         // Reproduce the old " text " padding around each segment.
-        setContentsMargins(6, 0, 6, 0);
+        setContentsMargins(1, 0, 1, 0);
+    }
+
+    /// Make the segment clickable: a left release that selected no text runs
+    /// the handler (the git segment opens the branch switcher with it).
+    /// Selecting the text still works and takes precedence, so the two
+    /// gestures do not collide. Passing an empty handler turns it back off.
+    void setClickHandler(std::function<void()> handler)
+    {
+        m_click = std::move(handler);
+        setCursor(m_click ? Qt::PointingHandCursor : Qt::IBeamCursor);
     }
 
     /// Apply foreground/background colours and boldness without a stylesheet
@@ -517,9 +536,139 @@ protected:
     {
         QLabel::mouseReleaseEvent(event);
         const QString sel = selectedText();
-        if (!sel.isEmpty())
+        if (!sel.isEmpty()) {
             QGuiApplication::clipboard()->setText(sel);
+            return;
+        }
+        if (m_click && event->button() == Qt::LeftButton)
+            m_click();
     }
+
+private:
+    std::function<void()> m_click;
+};
+
+/// The git-branch glyph at the head of the statusline's git segment.
+///
+/// Painted rather than loaded from an asset: the shape is five strokes (the
+/// git-branch outline from ionicons v5, MIT - three rings, a trunk and a
+/// curve), and drawing it means the pen takes the segment's own foreground,
+/// instead of shipping a black SVG that would need recolouring per theme and
+/// a runtime Qt6::Svg dependency the rest of neobeam avoids.
+class BranchIcon : public QWidget
+{
+public:
+    /// Bounding box of the stroked artwork inside the source 512x512 viewBox
+    /// (the rings sit off-centre in it), and the source stroke width. The
+    /// painter maps this rectangle onto the widget, so both scale together.
+    static constexpr QRectF kSrcRect{96, 32, 320, 448};
+    static constexpr qreal kSrcStroke = 32;
+    /// Glyph height, and the padding either side, as multiples of the segment
+    /// font's cap height. Derived from the font rather than fixed in pixels
+    /// because the font is point-sized: on a high-DPI screen the text grows
+    /// with the logical DPI while a pixel count does not, which left the glyph
+    /// half the height of the branch name and crammed against it. At 96 DPI
+    /// (cap height 9.3px) these give the hand-tuned 10px glyph, 10px in front
+    /// of it and 3px after.
+    static constexpr qreal kHeightPerCap = 1.08;
+    static constexpr qreal kPadLeftPerCap = 1.08;
+    static constexpr qreal kPadRightPerCap = 0.32;
+    /// Floor for the glyph height, for a font reporting no usable cap height;
+    /// below this the three rings blur into each other anyway.
+    static constexpr int kMinHeight = 6;
+
+    explicit BranchIcon(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        setFont(segmentFont());
+        applyFontMetrics();
+    }
+
+    void setColors(const QColor &fg, const QColor &bg)
+    {
+        m_fg = fg;
+        m_bg = bg;
+        update();
+    }
+
+    /// Same click handling as the branch label beside it, so the whole git
+    /// segment behaves as one target (see SelectableLabel::setClickHandler).
+    void setClickHandler(std::function<void()> handler)
+    {
+        m_click = std::move(handler);
+        setCursor(m_click ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    }
+
+protected:
+    /// Recompute the glyph size, the padding and with them the widget width
+    /// from the current font. Runs again on every font change, which is also
+    /// how a move to a screen with a different DPI reaches the widget.
+    void applyFontMetrics()
+    {
+        const qreal cap = QFontMetricsF(font()).capHeight();
+        m_height = qMax(kMinHeight, int(std::round(cap * kHeightPerCap)));
+        m_padLeft = int(std::round(cap * kPadLeftPerCap));
+        m_padRight = int(std::round(cap * kPadRightPerCap));
+        // Ceil, not round: the glyph's painted width is fractional, and
+        // rounding it down would clip the right edge when m_padRight is 0.
+        const int glyphWidth = int(std::ceil(m_height * kSrcRect.width() / kSrcRect.height()));
+        setFixedWidth(m_padLeft + glyphWidth + m_padRight);
+        update();
+    }
+
+    void changeEvent(QEvent *event) override
+    {
+        QWidget::changeEvent(event);
+        if (event->type() == QEvent::FontChange)
+            applyFontMetrics();
+    }
+
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter p(this);
+        p.fillRect(rect(), m_bg);
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        // Draw in source coordinates: scale to the glyph height, put the
+        // artwork's bounding box at m_padLeft and centre it vertically. The
+        // padding is applied as given rather than split evenly across the
+        // widget, so the two sides tune independently. The pen width is in
+        // source units too, so it scales with the shape.
+        const qreal scale = qreal(m_height) / kSrcRect.height();
+        p.translate(m_padLeft, (height() - m_height) / 2.0);
+        p.scale(scale, scale);
+        p.translate(-kSrcRect.x(), -kSrcRect.y());
+
+        QPen pen(m_fg, kSrcStroke);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+
+        p.drawEllipse(QPointF(160, 96), 48, 48);    // branch point
+        p.drawEllipse(QPointF(160, 416), 48, 48);   // trunk tip
+        p.drawEllipse(QPointF(352, 160), 48, 48);   // side branch
+        p.drawLine(QPointF(160, 368), QPointF(160, 144));
+        QPainterPath curve;
+        curve.moveTo(352, 208);
+        curve.cubicTo(352, 336, 160, 256, 160, 368);
+        p.drawPath(curve);
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        QWidget::mouseReleaseEvent(event);
+        if (m_click && event->button() == Qt::LeftButton)
+            m_click();
+    }
+
+private:
+    QColor m_fg{"#c0caf5"};
+    QColor m_bg{"#24283b"};
+    std::function<void()> m_click;
+    int m_height = kMinHeight;   // glyph geometry in device-independent px,
+    int m_padLeft = 0;           // all three derived from the font metrics
+    int m_padRight = 0;
 };
 
 /// Custom-painted powerline divider: a right-pointing triangle in the previous
@@ -607,6 +756,11 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
     // The file segment stretches to fill available width.
     layout->setStretchFactor(m_fileLabel, 1);
 
+    // The git glyph leads the branch segment, inside the same slot so it
+    // shares the segment's background and the divider colouring around it.
+    m_branchIcon = new BranchIcon(this);
+    layout->insertWidget(layout->indexOf(m_branchLabel), m_branchIcon);
+
     // The branch segment mixes two colours (branch name + accent-coloured git
     // counts), so it renders rich text. Explicit, because Qt's auto-detection
     // would not recognise a "&nbsp;"-prefixed string as rich text.
@@ -657,7 +811,7 @@ void StatuslineWidget::refresh()
     }
     QString branchText;
     if (!branchName.isEmpty()) {
-        branchText = QStringLiteral("&nbsp;") + branchName.toHtmlEscaped();
+        branchText = branchName.toHtmlEscaped();
         if (!counts.isEmpty())
             branchText += QStringLiteral("<span style=\"color:%1;\">%2</span>")
                               .arg(m_accent, counts.toHtmlEscaped());
@@ -707,6 +861,8 @@ void StatuslineWidget::refresh()
             if (overflow > 0)
                 tip += QStringLiteral("<br>...and %1 more files").arg(overflow);
         }
+        if (m_gitClickable)
+            tip += QStringLiteral("<br><br><i>Click to switch branches</i>");
         m_branchLabel->setToolTip(tip);
     } else {
         m_branchLabel->setToolTip(QString());
@@ -730,6 +886,13 @@ void StatuslineWidget::refresh()
         static_cast<SelectableLabel *>(cfg[i].label)->setColors(cfg[i].fg, cfg[i].bg, cfg[i].bold);
         cfg[i].label->setVisible(cfg[i].visible);
     }
+
+    // The glyph follows its slot: same colours, same visibility, same tooltip
+    // as the branch name it precedes.
+    auto *branchIcon = static_cast<BranchIcon *>(m_branchIcon);
+    branchIcon->setColors(fg, mid);
+    branchIcon->setVisible(!branchText.isEmpty());
+    branchIcon->setToolTip(m_branchLabel->toolTip());
 
     // Assign dividers: a slot's trailing divider is shown only between it and
     // the next visible slot. Walk left→right tracking the last visible slot.
@@ -765,6 +928,23 @@ void StatuslineWidget::setMode(const QString &mode)
 {
     m_mode = mode.toUpper();
     refresh();
+}
+
+void StatuslineWidget::setGitSegmentClickable(bool clickable)
+{
+    if (m_gitClickable == clickable)
+        return;
+    m_gitClickable = clickable;
+    auto *label = static_cast<SelectableLabel *>(m_branchLabel);
+    auto *icon = static_cast<BranchIcon *>(m_branchIcon);
+    if (clickable) {
+        label->setClickHandler([this]() { emit gitSegmentClicked(); });
+        icon->setClickHandler([this]() { emit gitSegmentClicked(); });
+    } else {
+        label->setClickHandler({});
+        icon->setClickHandler({});
+    }
+    refresh();   // the tooltip gains/loses its "click to switch branches" hint
 }
 
 void StatuslineWidget::setGitsignsBranch(bool enabled)

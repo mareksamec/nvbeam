@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QObject>
 #include <QString>
 #include <QStringList>
@@ -23,6 +24,17 @@ struct GitStatusInfo {
     QStringList untrackedFiles;
 
     bool operator==(const GitStatusInfo &other) const = default;
+};
+
+/// One branch offered by the branch switcher.
+struct GitBranch {
+    QString name;     // short ref name as git reports it ("main", "origin/feature")
+    QString target;   // what to hand `git checkout`: for a remote-only branch this is
+                      // the name without the remote prefix, so git creates a local
+                      // tracking branch instead of detaching HEAD
+    QString detail;   // relative date of the tip commit, shown beside the name
+    bool remote = false;
+    bool current = false;
 };
 
 /// Push-model git status provider for the native statusline. Refreshes only
@@ -52,6 +64,17 @@ public slots:
     /// current cwd is picked up without waiting for the cwd to change.
     void refresh();
 
+    /// Ask for the repository's branches (branch switcher). Answered
+    /// asynchronously with branchesReady(); local branches come first, most
+    /// recently committed to first, followed by the remote-only ones.
+    void requestBranches();
+
+    /// Check out `branch`, or create it from the current HEAD and switch to it
+    /// when `create` is true (`git checkout -b`). Answered asynchronously with
+    /// checkoutFinished(); a successful run also triggers a status refresh
+    /// instead of waiting for the .git watcher.
+    void checkoutBranch(const QString &branch, bool create);
+
 signals:
     /// Emitted when the repository state changed since the last emission.
     /// info.valid is false when the directory is not a git repo (the
@@ -63,6 +86,16 @@ signals:
     /// opposed to a status-count-only update. Terminals whose shell prompt
     /// shows the branch (zsh vcs_info, etc.) go stale after this.
     void branchChanged(const QString &branch);
+
+    /// Answer to requestBranches(). `error` is empty on success; it carries
+    /// git's own message (or "not a git repository") when the list could not
+    /// be produced, so the switcher can say why it is empty.
+    void branchesReady(const QList<GitBranch> &branches, const QString &error);
+
+    /// Answer to checkoutBranch(). `error` carries git's stderr when ok is
+    /// false - typically the "local changes would be overwritten" refusal,
+    /// which the user has to see rather than have swallowed.
+    void checkoutFinished(bool ok, const QString &branch, const QString &error);
 
 private:
     void resolveGitDir();
@@ -79,6 +112,10 @@ private:
     void rewatchAndRefresh();
     void publish(const GitStatusInfo &info);
     static GitStatusInfo parseStatus(const QString &output);
+    /// Turn `git for-each-ref` output into the switcher's branch list: locals
+    /// in git's order, then the remote branches that have no local counterpart
+    /// (checking those out is what creates the local tracking branch).
+    static QList<GitBranch> parseBranches(const QString &output);
 
     QString m_dir;      // working directory (nvim cwd)
     QString m_gitDir;   // resolved absolute .git dir; empty = not a repo
@@ -87,6 +124,7 @@ private:
     bool m_resolving = false;   // a rev-parse is in flight
     bool m_running = false;
     bool m_rerun = false;   // refresh arrived while a run was in flight
+    bool m_checkingOut = false; // a checkout is in flight; ignore further requests
     GitStatusInfo m_last;
     bool m_hasLast = false;
 };

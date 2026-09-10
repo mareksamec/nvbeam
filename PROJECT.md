@@ -220,9 +220,90 @@
       line-based parser to `-z`/NUL-delimited output. Verified by hand against a scratch repo with
       30 changed/untracked entries including a spaced filename - not by running the GUI myself, per
       AGENTS.md - awaiting visual confirmation.
-- [ ] Git switcher - add interface for git branch switcher (similar to vscode) - probabbly somewhere under the status line
-    - [ ] Switch between branches with dropdown
-    - [ ] Or create new branch and switch to it (`git checkout -b some-branch`)
+- [x] Git switcher - add interface for git branch switcher (similar to vscode) - probabbly somewhere under the status line
+    - [x] Switch between branches with dropdown
+    - [x] Or create new branch and switch to it (`git checkout -b some-branch`)
+    - `BranchSwitcherWidget` (`branchswitcher.{h,cpp}`): a popup child of `MainWindow`, anchored to
+      the statusline's git segment via `mapTo()` and flipped above it when the window has no room
+      below (the usual case, the statusline sitting at the bottom of the editor column). Same input
+      + list + palette as `SwitcherWidget`, so the two pickers read as one UI; the fuzzy scorer they
+      share moved out of `switcher.cpp` into `fuzzy.h`.
+    - Opened by clicking the git segment or with Ctrl+Shift+B. The click needed `SelectableLabel`
+      to gain an optional click handler, which fires only on a release that selected no text, so
+      selecting the statusline text still works. `StatuslineWidget::setGitSegmentClickable()` gates
+      both the handler and the pointer cursor, and adds the "click to switch branches" line to the
+      existing hover tooltip. A click on the segment while the popup is up dismisses it through the
+      input's focus loss before the click is delivered, so `toggle()` ignores an open request within
+      250ms of a close instead of reopening what the click just closed.
+    - No new git plumbing: `GitStatus` gained `requestBranches()`/`checkoutBranch()` plus
+      `branchesReady`/`checkoutFinished`, since it already resolves the repository and owns every
+      git invocation. The widget runs no process itself. Listing is one
+      `git for-each-ref --sort=-committerdate refs/heads refs/remotes` per open (not cached: a
+      fetch or a branch made in the terminal would make a cached list wrong), asked for on open
+      only, so the segment's own refresh path is untouched.
+    - Remote-only branches are listed after the locals, and checking one out drops the remote
+      prefix (`origin/feature-x` -> `feature-x`), which is what makes git create a local tracking
+      branch instead of detaching HEAD. A remote whose stripped name already exists locally is not
+      listed twice. `refs/remotes/*/HEAD` is skipped by matching the full refname: git shortens
+      that symref to the bare remote name ("origin"), not to "origin/HEAD", so a short-name check
+      would have missed it.
+    - `git checkout` rather than `git switch`: `switch` is 2.23+, and checkout's DWIM rule is what
+      the remote-branch case relies on anyway. Creating uses `checkout -b`, which also works on an
+      unborn HEAD (verified in a scratch `git init`), so the create row stays useful in a fresh
+      repository.
+    - A refused checkout (dirty worktree, branch checked out in another worktree, invalid name)
+      keeps the popup open and shows git's stderr verbatim, capped at 400 chars. On success the
+      popup closes, `GitStatus::refresh()` runs without waiting for the .git watcher, nvim gets a
+      `checktime` so open buffers are rechecked against the new working tree, and the existing
+      `branchChanged` -> terminal prompt refresh keeps a branch-aware shell prompt current.
+    - The create row is last in the list, not first as in VSCode: switching to an existing branch
+      is the common case, and Enter must not create a branch by surprise. It appears only for a
+      non-empty, whitespace-free name that no listed branch has (both the display name and the
+      checkout target are compared, so "feature-x" is not offered when only "origin/feature-x"
+      exists).
+    - The segment is led by a branch glyph (`BranchIcon` in `uiwidgets.cpp`), custom-painted from
+      ionicons' git-branch outline - three rings, a trunk and a cubic curve - instead of loaded
+      from the SVG. Painting it means the pen takes the segment's own foreground colour, so it
+      follows the statusline palette with no per-theme recolouring and no runtime Qt6::Svg, which
+      the rest of neobeam avoids too. The artwork's bounding box inside the 512 viewBox (the rings
+      sit off-centre in it) is mapped onto the glyph, pen width included, and the icon shares the
+      branch slot's colours, visibility, tooltip and click handler. Geometry checked by rendering
+      the same paint code to a PNG offscreen, not by running the GUI.
+    - Glyph height and the padding either side are multiples of the segment font's cap height, not
+      pixel counts: the statusline font is point-sized, so on a high-DPI screen the text grows with
+      the logical DPI while a fixed pixel glyph does not - it showed up on a 4K display as a glyph
+      half the height of the branch name and crammed against it. `applyFontMetrics()` recomputes
+      them on every `QEvent::FontChange`, which is also how a move to a differently scaled screen
+      arrives. `segmentFont()` now hands the same font to `SelectableLabel` and the glyph so the
+      two cannot drift apart. Still fixed in pixels, same family of bug, not touched here:
+      `StatuslineWidget`'s `setFixedHeight(28)` and `PowerlineDivider`'s `setFixedWidth(12)`.
+    - The padding is applied as given rather than split evenly across the widget - an earlier
+      version centred the glyph in its own width, which silently averaged the two padding
+      constants, so the right-hand one never took effect. The glyph's painted width is fractional,
+      so the widget width ceils it; rounding down clipped the right edge at zero right padding.
+    - Styled apart from the project switcher on request: highlighted with `[ui] focus_border_color`,
+      the OneDark blue neobeam already uses for the focused pane, instead of the green
+      `accent_color`. The border and the selected row are that same colour at fixed alphas via a
+      small `rgbaOf()` helper, so configuring the one colour recolours the popup coherently and no
+      new config key was needed.
+    - Monospaced rows with the commit dates in an aligned column. `showRows()` measures in pixels
+      rather than counting characters, because the row glyphs are geometric shapes a monospace
+      font usually lacks - they come from a fallback whose advance is not one cell - then pads
+      each name out to the widest with spaces. The fonts are set on the widgets instead of in the
+      style sheet: a style sheet font wins at paint time, which would leave the alignment measured
+      with metrics that are not the ones drawn. Family and size come from `[ui]
+      branch_switcher_font` / `branch_switcher_font_size` (defaults "monospace" and 10, the values
+      they were hardcoded to); the size applies to the list rows and the input line adds
+      `kInputSizeBump`. Out-of-range sizes are clamped to 4-72 with a warning, the bounds the
+      editor and terminal font zoom already uses.
+    - The name column takes what is left of the popup once the widest date and the gap are
+      reserved (`popupWidth()`, shared with `reposition()`), so a date is never pushed past the
+      right edge at any window size; a name too long for the column is middle-elided and stays in
+      full in the row's tooltip. Checked by rendering the real widget offscreen at 1920 and 900px
+      window widths, not by running the GUI.
+    - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
+      is neither a click target nor a shortcut. Built and compiles clean; not run by me per
+      AGENTS.md - awaiting visual confirmation.
 - [x] Increase/Decrease font size for nvim buffers (Ctrl + and Ctrl -) - Evaluate possiblities.
     - `GridWidget::changeFontSize()` steps `m_font`'s point size (clamped 4..72, the same bounds the
       terminal panel uses) and recomputes the cell metrics through the new `applyFontMetrics()`,

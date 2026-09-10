@@ -145,6 +145,20 @@ public:
     /// Update the current mode display
     void setMode(const QString &mode);
 
+    /// Turn the git segment into a click target for the branch switcher
+    /// (VSCode-style). Enabled by MainWindow only when a branch switcher
+    /// exists, so the segment does not advertise a click that does nothing.
+    void setGitSegmentClickable(bool clickable);
+
+    /// The git segment widget, for anchoring the branch switcher popup under
+    /// it. Hidden while the current directory is not a repository.
+    QWidget *gitSegment() const { return m_branchLabel; }
+
+signals:
+    /// The git segment was clicked (no text selected). MainWindow answers by
+    /// toggling the branch switcher.
+    void gitSegmentClicked();
+
 public slots:
     /// Update the git segment (branch + staged/modified/untracked and
     /// ahead/behind counts) from the push-model GitStatus provider.
@@ -154,6 +168,7 @@ private:
     // Per-segment selectable labels (concrete types live in the .cpp).
     QLabel *m_modeLabel = nullptr;
     QLabel *m_branchLabel = nullptr;
+    QWidget *m_branchIcon = nullptr;   // git glyph leading the branch segment
     QLabel *m_fileLabel = nullptr;
     QLabel *m_diagLabel = nullptr;
     QLabel *m_encLabel = nullptr;
@@ -167,6 +182,7 @@ private:
     QString m_file;
     QString m_branch;   // from statusline.lua (gitsigns); used only when m_gitsignsBranch
     bool m_gitsignsBranch = false;
+    bool m_gitClickable = false; // git segment opens the branch switcher
     GitStatusInfo m_git; // from the Qt-side GitStatus provider
     QString m_diag;
     QString m_pos;

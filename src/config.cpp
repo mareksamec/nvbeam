@@ -38,6 +38,11 @@ void warnType(QList<ConfigIssue> *issues, const char *sec, const char *key,
                     QLatin1String(typeName(got))));
 }
 
+/// Point-size bounds accepted for a configurable font, matching what the
+/// editor and terminal font zoom clamps to at runtime.
+constexpr int kMinFontPointSize = 4;
+constexpr int kMaxFontPointSize = 72;
+
 bool readBool(const toml::value &sec, const char *secName, const char *key,
               bool &out, QList<ConfigIssue> *issues)
 {
@@ -149,7 +154,8 @@ const KnownSection kKnownSections[] = {
     {"side_terminal", {"width", "font", "font_size"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
-            "focus_border_color", "window_title"}},
+            "focus_border_color", "window_title", "branch_switcher_font",
+            "branch_switcher_font_size"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
     {"switcher", {"keep_running", "max_recent"}},
@@ -339,6 +345,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# accent_color = \"#50fa7b\"\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
+                "# branch_switcher_font = \"monospace\"  # git branch switcher popup font family\n"
+                "# branch_switcher_font_size = 10  # its list rows; the input line is one point larger\n"
                 "# window_title = \"\"  # custom title template (empty = default \"Neobeam - ~/path\",\n"
                 "#                     # or \"<project> - ~/path\" after a switcher project pick).\n"
                 "#                     # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,\n"
@@ -437,6 +445,24 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                                           "(expected powerline, pipe or none)").arg(divider));
             }
             readColor(*ui, "ui", "focus_border_color", cfg.focusBorderColor, issues);
+            readString(*ui, "ui", "branch_switcher_font", cfg.branchSwitcherFont, issues);
+            if (readInt(*ui, "ui", "branch_switcher_font_size",
+                        cfg.branchSwitcherFontSize, issues)) {
+                // Same bounds the editor and terminal font zoom clamps to. A
+                // zero or negative point size makes Qt pick an arbitrary
+                // fallback rather than fail, so it is worth catching here.
+                if (cfg.branchSwitcherFontSize < kMinFontPointSize
+                    || cfg.branchSwitcherFontSize > kMaxFontPointSize) {
+                    report(issues, ConfigIssue::Warning,
+                           QStringLiteral("[ui] branch_switcher_font_size: %1 is out of range "
+                                          "(%2-%3), clamped")
+                               .arg(cfg.branchSwitcherFontSize)
+                               .arg(kMinFontPointSize).arg(kMaxFontPointSize));
+                    cfg.branchSwitcherFontSize = qBound(kMinFontPointSize,
+                                                        cfg.branchSwitcherFontSize,
+                                                        kMaxFontPointSize);
+                }
+            }
             if (readString(*ui, "ui", "window_title", cfg.uiWindowTitle, issues)) {
                 // Unknown placeholders render literally; flag them so a typo
                 // like %P is caught by `neobeam -k` instead of shipping as-is.

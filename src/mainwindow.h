@@ -12,6 +12,7 @@ class TablineWidget;
 class MessageWidget;
 class CmdlineWidget;
 class StatuslineWidget;
+class BranchSwitcherWidget;
 class TerminalPanel;
 class MinimapWidget;
 class ImageRenderer;
@@ -52,6 +53,11 @@ private:
 
     /// Show the project switcher with a freshly built item list.
     void openSwitcher();
+
+    /// Open the git branch switcher under the statusline's git segment, or
+    /// close it when it is already up (the git segment click and
+    /// Ctrl+Shift+B both land here). No-op without a git segment.
+    void toggleBranchSwitcher();
 
     /// Pinned projects followed by recent folders and files (deduplicated,
     /// stale paths pruned).
@@ -113,6 +119,7 @@ private:
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor row vs bottom terminal
     QSplitter *m_hsplitter = nullptr; // horizontal splitter: editor area vs side terminal
     SwitcherWidget *m_switcher = nullptr;
+    BranchSwitcherWidget *m_branchSwitcher = nullptr; // git branch picker under the statusline
     Session *m_session = nullptr;
     Config m_cfg;
     int m_lastGridCols = -1;   // last size actually sent via resizeNvimGrid(), to dedupe
