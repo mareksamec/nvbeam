@@ -168,6 +168,7 @@ private:
     // Per-segment selectable labels (concrete types live in the .cpp).
     QLabel *m_modeLabel = nullptr;
     QLabel *m_branchLabel = nullptr;
+    QWidget *m_branchIcon = nullptr;   // git glyph leading the branch segment
     QLabel *m_fileLabel = nullptr;
     QLabel *m_diagLabel = nullptr;
     QLabel *m_encLabel = nullptr;

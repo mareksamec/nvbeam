@@ -261,6 +261,14 @@
       non-empty, whitespace-free name that no listed branch has (both the display name and the
       checkout target are compared, so "feature-x" is not offered when only "origin/feature-x"
       exists).
+    - The segment is led by a branch glyph (`BranchIcon` in `uiwidgets.cpp`), custom-painted from
+      ionicons' git-branch outline - three rings, a trunk and a cubic curve - instead of loaded
+      from the SVG. Painting it means the pen takes the segment's own foreground colour, so it
+      follows the statusline palette with no per-theme recolouring and no runtime Qt6::Svg, which
+      the rest of neobeam avoids too. The artwork's bounding box inside the 512 viewBox (the rings
+      sit off-centre in it) is mapped onto a 16px-tall glyph, pen width included, and the icon
+      shares the branch slot's colours, visibility, tooltip and click handler. Geometry checked by
+      rendering the same paint code to a PNG offscreen, not by running the GUI.
     - Gated on `[ui] git_status` (it is created alongside `GitStatus`); with the segment off there
       is neither a click target nor a shortcut. Built and compiles clean; not run by me per
       AGENTS.md - awaiting visual confirmation.

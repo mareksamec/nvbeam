@@ -540,6 +540,92 @@ private:
     std::function<void()> m_click;
 };
 
+/// The git-branch glyph at the head of the statusline's git segment.
+///
+/// Painted rather than loaded from an asset: the shape is five strokes (the
+/// git-branch outline from ionicons v5, MIT - three rings, a trunk and a
+/// curve), and drawing it means the pen takes the segment's own foreground,
+/// instead of shipping a black SVG that would need recolouring per theme and
+/// a runtime Qt6::Svg dependency the rest of neobeam avoids.
+class BranchIcon : public QWidget
+{
+public:
+    /// Bounding box of the stroked artwork inside the source 512x512 viewBox
+    /// (the rings sit off-centre in it), and the source stroke width. The
+    /// painter maps this rectangle onto the widget, so both scale together.
+    static constexpr QRectF kSrcRect{96, 32, 320, 448};
+    static constexpr qreal kSrcStroke = 32;
+    static constexpr int kHeight = 16;   // rendered glyph height, px
+    static constexpr int kPadLeft = 6;   // matches SelectableLabel's segment padding
+    static constexpr int kPadRight = 2;  // small gap before the branch name
+
+    explicit BranchIcon(QWidget *parent = nullptr)
+        : QWidget(parent)
+    {
+        const int glyphWidth = qRound(kHeight * kSrcRect.width() / kSrcRect.height());
+        setFixedWidth(kPadLeft + glyphWidth + kPadRight);
+    }
+
+    void setColors(const QColor &fg, const QColor &bg)
+    {
+        m_fg = fg;
+        m_bg = bg;
+        update();
+    }
+
+    /// Same click handling as the branch label beside it, so the whole git
+    /// segment behaves as one target (see SelectableLabel::setClickHandler).
+    void setClickHandler(std::function<void()> handler)
+    {
+        m_click = std::move(handler);
+        setCursor(m_click ? Qt::PointingHandCursor : Qt::ArrowCursor);
+    }
+
+protected:
+    void paintEvent(QPaintEvent * /*event*/) override
+    {
+        QPainter p(this);
+        p.fillRect(rect(), m_bg);
+        p.setRenderHint(QPainter::Antialiasing, true);
+
+        // Draw in source coordinates: scale to the target height, then centre
+        // the artwork's bounding box in the widget. The pen width is given in
+        // source units too, so it scales with the shape.
+        const qreal scale = qreal(kHeight) / kSrcRect.height();
+        p.translate((width() - kSrcRect.width() * scale) / 2.0,
+                    (height() - kHeight) / 2.0);
+        p.scale(scale, scale);
+        p.translate(-kSrcRect.x(), -kSrcRect.y());
+
+        QPen pen(m_fg, kSrcStroke);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+
+        p.drawEllipse(QPointF(160, 96), 48, 48);    // branch point
+        p.drawEllipse(QPointF(160, 416), 48, 48);   // trunk tip
+        p.drawEllipse(QPointF(352, 160), 48, 48);   // side branch
+        p.drawLine(QPointF(160, 368), QPointF(160, 144));
+        QPainterPath curve;
+        curve.moveTo(352, 208);
+        curve.cubicTo(352, 336, 160, 256, 160, 368);
+        p.drawPath(curve);
+    }
+
+    void mouseReleaseEvent(QMouseEvent *event) override
+    {
+        QWidget::mouseReleaseEvent(event);
+        if (m_click && event->button() == Qt::LeftButton)
+            m_click();
+    }
+
+private:
+    QColor m_fg{"#c0caf5"};
+    QColor m_bg{"#24283b"};
+    std::function<void()> m_click;
+};
+
 /// Custom-painted powerline divider: a right-pointing triangle in the previous
 /// segment's colour over the next segment's background.
 class PowerlineDivider : public QWidget
@@ -624,6 +710,11 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
     }
     // The file segment stretches to fill available width.
     layout->setStretchFactor(m_fileLabel, 1);
+
+    // The git glyph leads the branch segment, inside the same slot so it
+    // shares the segment's background and the divider colouring around it.
+    m_branchIcon = new BranchIcon(this);
+    layout->insertWidget(layout->indexOf(m_branchLabel), m_branchIcon);
 
     // The branch segment mixes two colours (branch name + accent-coloured git
     // counts), so it renders rich text. Explicit, because Qt's auto-detection
@@ -751,6 +842,13 @@ void StatuslineWidget::refresh()
         cfg[i].label->setVisible(cfg[i].visible);
     }
 
+    // The glyph follows its slot: same colours, same visibility, same tooltip
+    // as the branch name it precedes.
+    auto *branchIcon = static_cast<BranchIcon *>(m_branchIcon);
+    branchIcon->setColors(fg, mid);
+    branchIcon->setVisible(!branchText.isEmpty());
+    branchIcon->setToolTip(m_branchLabel->toolTip());
+
     // Assign dividers: a slot's trailing divider is shown only between it and
     // the next visible slot. Walk left→right tracking the last visible slot.
     int prev = -1;
@@ -793,10 +891,14 @@ void StatuslineWidget::setGitSegmentClickable(bool clickable)
         return;
     m_gitClickable = clickable;
     auto *label = static_cast<SelectableLabel *>(m_branchLabel);
-    if (clickable)
+    auto *icon = static_cast<BranchIcon *>(m_branchIcon);
+    if (clickable) {
         label->setClickHandler([this]() { emit gitSegmentClicked(); });
-    else
+        icon->setClickHandler([this]() { emit gitSegmentClicked(); });
+    } else {
         label->setClickHandler({});
+        icon->setClickHandler({});
+    }
     refresh();   // the tooltip gains/loses its "click to switch branches" hint
 }
 
