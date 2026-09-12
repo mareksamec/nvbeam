@@ -370,6 +370,18 @@
       `File` per what is on disk, so a folder sets the cwd and opens the file browser and a file
       opens with its parent as cwd. No new config keys.
 
+## Side TERM - AI agent features
+
+### Claude
+[ ] **Support diff view**
+- Enable if claude is running in the side term (how to do the detection properly? E.g. I use alias claude and claude-personal for personal account)
+- (available in Claude Code cloud and some editors like Zed)
+- Diff view can be expanded next to the side term
+- Add button and a keyboard shortcut for it
+
+### Codex (ChatGPT)
+- Same for Codex CLI if possible.
+
 
 ## Project rename
 
