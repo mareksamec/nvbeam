@@ -11,7 +11,9 @@
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
+#include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
+#include <QTextDocument>
 #include <QToolBar>
 #include <QToolButton>
 #include <QHBoxLayout>
@@ -22,6 +24,10 @@ namespace {
 /// Shortest poll interval accepted, so a mistyped config cannot spawn a git
 /// process per frame.
 constexpr int kMinRefreshMs = 250;
+
+/// Shortest an expanded body is ever made, so an empty or one-line diff still
+/// shows as an open row rather than a sliver.
+constexpr int kMinBodyHeight = 24;
 
 /// Bytes of an untracked file read for its preview. Past this the file is
 /// almost certainly not something to review line by line.
@@ -214,10 +220,24 @@ void FileCard::applyBody()
 
 void FileCard::fitBody()
 {
-    const int width = qMax(1, m_body->viewport()->width());
-    m_body->document()->setTextWidth(width);
-    const int content = int(m_body->document()->size().height()) + 6;
-    m_body->setFixedHeight(qBound(24, content, qMax(24, m_cfg.fileMaxHeight)));
+    // A QPlainTextEdit's document reports its height in lines, not pixels, so
+    // the pixel height has to be summed from the laid-out blocks. The layout
+    // wraps at the widget's own width, which the panel's layout has already
+    // set, and blockBoundingRect lays a block out on demand; the loop stops at
+    // the cap, so a huge diff never lays out more than one screenful.
+    const int cap = qMax(kMinBodyHeight, m_cfg.fileMaxHeight);
+    QTextDocument *doc = m_body->document();
+    QAbstractTextDocumentLayout *layout = doc->documentLayout();
+    qreal content = 2 * doc->documentMargin();
+    for (QTextBlock block = doc->begin(); block.isValid(); block = block.next()) {
+        content += layout->blockBoundingRect(block).height();
+        if (content >= cap)
+            break;
+    }
+    // A pixel of slack: a fractional line height would otherwise round down
+    // and give the body a scrollbar for the last line alone.
+    const int height = int(content) + 1 + 2 * m_body->frameWidth();
+    m_body->setFixedHeight(qBound(kMinBodyHeight, height, cap));
 }
 
 void FileCard::loadUntracked()
