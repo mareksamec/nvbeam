@@ -148,7 +148,9 @@ shows what it wrote. While the panel is open it re-reads the worktree every
 `[review] refresh_ms` milliseconds (2000 by default, `0` disables the poll and
 leaves the **⟳** button), so changes appear as the agent writes them. A row
 whose diff did not change is left untouched, so an open file stays open and a
-selection inside it survives the refresh.
+selection inside it survives the refresh. A `git` that stops answering (a
+repository on a dead network mount) is killed after `[review] timeout_ms` and
+the panel says so, rather than freezing on the last diff it managed to read.
 
 Set `[review] base` to diff against a revision (`"main"`, `"HEAD~3"`) instead of
 the working tree against `HEAD`, `[review] show_context = true` to have rows
@@ -224,6 +226,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # [review]
 # width = 600  # startup width of the change review panel, in pixels
 # refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
 # base = ""  # revision to diff against (empty = the worktree against HEAD)
 # font = ""  # review font (empty = use the side terminal font)
 # font_size = 0  # review font size (0 = use the side terminal font size)

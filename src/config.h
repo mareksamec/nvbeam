@@ -68,6 +68,7 @@ struct Config {
     // mode, where the IDE bridge never asks for approval).
     int reviewWidth = 600;                // startup width in pixels
     int reviewRefreshMs = 2000;           // poll interval in ms; floored at 250, 0 = no poll
+    int reviewTimeoutMs = 10000;          // a git run is killed after this long; 0 = no timeout
     QString reviewBase;                   // revision to diff against; empty = worktree vs HEAD
     QString reviewFont;                   // empty = use terminal font
     int reviewFontSize = 0;               // 0 = use terminal font size

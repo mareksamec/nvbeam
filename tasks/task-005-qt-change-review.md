@@ -65,7 +65,11 @@ The panel therefore polls, bounded three ways:
    (an earlier version also required the window to be active, and the refresh
    then never happened in practice).
 2. One run at a time. A tick that lands while git is still running sets a rerun
-   flag instead of starting a second process.
+   flag instead of starting a second process. Each run answers exactly once,
+   from its exit, its failure to start or `timeout_ms` elapsing, whichever comes
+   first, and the in-flight flag is cleared with that answer. A run outliving
+   even twice its timeout is disowned by the watchdog in `collect()` so the poll
+   cannot be stranded on it.
 3. Rows are reconciled, not rebuilt: a file whose diff is unchanged keeps its
    row, its expanded state and any selection inside it. Only new, changed and
    removed files touch the widget tree.
@@ -84,6 +88,7 @@ A new `[review]` section, since none of these belong to an existing one:
 |---|---|---|
 | `width` | 600 | Startup width of the panel in pixels |
 | `refresh_ms` | 2000 | Poll interval; floored at 250, `0` disables the poll (manual refresh button only) |
+| `timeout_ms` | 10000 | A git run taking longer is killed and the refresh reported as failed; `0` waits forever |
 | `base` | `""` | Revision to diff against; empty means the worktree against `HEAD` |
 | `font` | `""` | Font family; empty means the terminal font |
 | `font_size` | 0 | Point size; `0` means the terminal font size |
@@ -124,7 +129,9 @@ A new `[review]` section, since none of these belong to an existing one:
 5. An open row stays open across refreshes, and an idle repository produces no
    visible movement at all.
 6. `refresh_ms = 0` leaves the panel static until the refresh button is pressed.
-7. The panel works with no IDE bridge and no Neovim plugin involved: it is
+7. A `git` that never exits leaves the panel polling: the run is killed at
+   `timeout_ms`, the panel says it gave up, and the next tick tries again.
+8. The panel works with no IDE bridge and no Neovim plugin involved: it is
    `git` plus Qt only.
 
 ## Risks

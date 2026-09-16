@@ -245,6 +245,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     ReviewConfig reviewCfg;
     reviewCfg.width = cfg.reviewWidth;
     reviewCfg.refreshMs = cfg.reviewRefreshMs;
+    reviewCfg.timeoutMs = cfg.reviewTimeoutMs;
     reviewCfg.base = cfg.reviewBase;
     // Font falls back to the side terminal's, which itself falls back to the
     // bottom terminal's: the panel sits beside them and should match.

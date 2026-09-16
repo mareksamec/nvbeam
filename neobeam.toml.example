@@ -38,6 +38,7 @@
 [review]
 # width = 600  # startup width of the change review panel, in pixels
 # refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
 # base = ""  # revision to diff against (empty = the worktree against HEAD)
 # font = ""  # review font (empty = use the side terminal font)
 # font_size = 0  # review font size (0 = use the side terminal font size)

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QElapsedTimer>
 #include <QHash>
 #include <QSet>
 #include <QString>
@@ -22,6 +23,7 @@ class QVBoxLayout;
 struct ReviewConfig {
     int width = 600;           // startup width of the panel, in pixels
     int refreshMs = 2000;      // poll interval; floored at kMinRefreshMs, 0 = no poll
+    int timeoutMs = 10000;     // a git run is killed after this long; 0 = wait forever
     QString base;              // revision to diff against; empty = worktree vs HEAD
     QString fontFamily = "Monospace";
     int fontSize = 10;         // points
@@ -157,9 +159,11 @@ protected:
     void hideEvent(QHideEvent *event) override;
 
 private:
-    /// One `git -C <dir> <args>` run, answered on the UI thread. `ok` is false
-    /// when git failed to start or exited non-zero, and `output` then carries
-    /// its stderr.
+    /// One `git -C <dir> <args>` run, answered on the UI thread exactly once:
+    /// on exit, on a failure to start, or on ReviewConfig::timeoutMs elapsing,
+    /// whichever comes first. `ok` is false for all three failures, and
+    /// `output` then carries git's stderr or the reason it was given up on.
+    /// Answering once is what keeps m_running from being stranded.
     void runGit(const QStringList &args, std::function<void(bool ok, const QString &output)> done);
 
     /// Start the diff run (and, with an empty base, the untracked listing that
@@ -189,6 +193,7 @@ private:
     QStringList m_order;           // paths currently laid out, in display order
     QSet<QString> m_expanded;      // paths the user opened, remembered across refreshes
     QTimer m_poll;
+    QElapsedTimer m_runStarted;    // when the in-flight run began, for the watchdog
     bool m_running = false;        // a git run is in flight
     bool m_rerun = false;          // a refresh arrived during that run
 };

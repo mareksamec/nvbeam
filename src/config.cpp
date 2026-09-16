@@ -152,7 +152,7 @@ const KnownSection kKnownSections[] = {
                   "word_characters", "antialiasing", "hinting", "scrollback",
                   "refresh_prompt_on_git_change"}},
     {"side_terminal", {"width", "font", "font_size"}},
-    {"review", {"width", "refresh_ms", "base", "font", "font_size", "max_lines",
+    {"review", {"width", "refresh_ms", "timeout_ms", "base", "font", "font_size", "max_lines",
                 "file_max_height", "show_context", "added_color", "removed_color",
                 "hunk_color", "file_color"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
@@ -439,6 +439,12 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 report(issues, ConfigIssue::Warning,
                        QStringLiteral("[review] refresh_ms: expected 0 or more (using 0)"));
                 cfg.reviewRefreshMs = 0;
+            }
+            if (readInt(*review, "review", "timeout_ms", cfg.reviewTimeoutMs, issues)
+                && cfg.reviewTimeoutMs < 0) {
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[review] timeout_ms: expected 0 or more (using 0)"));
+                cfg.reviewTimeoutMs = 0;
             }
             readString(*review, "review", "base", cfg.reviewBase, issues);
             readString(*review, "review", "font", cfg.reviewFont, issues);

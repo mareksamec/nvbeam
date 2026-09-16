@@ -8,6 +8,7 @@
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QProcess>
+#include <memory>
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -24,6 +25,10 @@ namespace {
 /// Shortest poll interval accepted, so a mistyped config cannot spawn a git
 /// process per frame.
 constexpr int kMinRefreshMs = 250;
+
+/// How many timeouts a git run has to overrun before the watchdog in collect()
+/// stops waiting for it and lets a new run start.
+constexpr int kWatchdogFactor = 2;
 
 /// Shortest an expanded body is ever made, so an empty or one-line diff still
 /// shows as an open row rather than a sliver.
@@ -382,21 +387,48 @@ void ChangeReviewPanel::runGit(const QStringList &args,
                                std::function<void(bool, const QString &)> done)
 {
     auto *proc = new QProcess(this);
+    // The process object outlives whichever signal answered first, so it is
+    // deleted by its own signals rather than by the callbacks below.
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
-            this, [proc, done](int code, QProcess::ExitStatus) {
-        proc->deleteLater();
-        const QString out = QString::fromUtf8(code == 0 ? proc->readAllStandardOutput()
-                                                        : proc->readAllStandardError());
-        done(code == 0, out);
+            proc, &QObject::deleteLater);
+    connect(proc, &QProcess::errorOccurred, proc, &QObject::deleteLater);
+
+    // Exactly one answer per run. A run given up on is killed, which makes
+    // finished() fire as well, and a second answer would clear m_running for a
+    // run that is no longer the one in flight.
+    auto answered = std::make_shared<bool>(false);
+    auto answer = [answered, done](bool ok, const QString &output) {
+        if (*answered)
+            return;
+        *answered = true;
+        done(ok, output);
+    };
+
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [proc, answer](int code, QProcess::ExitStatus) {
+        answer(code == 0, QString::fromUtf8(code == 0 ? proc->readAllStandardOutput()
+                                                      : proc->readAllStandardError()));
     });
     // FailedToStart (git not installed) never reaches finished().
     connect(proc, &QProcess::errorOccurred, this,
-            [proc, done](QProcess::ProcessError error) {
-        if (error != QProcess::FailedToStart)
-            return;
-        proc->deleteLater();
-        done(false, QStringLiteral("git could not be started"));
+            [answer](QProcess::ProcessError error) {
+        if (error == QProcess::FailedToStart)
+            answer(false, QStringLiteral("git could not be started"));
     });
+
+    // Timeout: a git that never exits (a repository on a dead network mount, a
+    // command waiting on a prompt) would otherwise hold the panel on the last
+    // diff it managed to read, silently and for the rest of the session.
+    if (m_cfg.timeoutMs > 0) {
+        QTimer::singleShot(m_cfg.timeoutMs, proc, [this, proc, answer] {
+            if (proc->state() == QProcess::NotRunning)
+                return;
+            proc->kill();
+            answer(false, QStringLiteral("git took longer than %1 ms; giving up on this refresh")
+                              .arg(m_cfg.timeoutMs));
+        });
+    }
+
     QStringList full{QStringLiteral("-C"), m_dir, QStringLiteral("--no-pager")};
     full += args;
     proc->start(QStringLiteral("git"), full);
@@ -406,11 +438,21 @@ void ChangeReviewPanel::collect()
 {
     if (m_dir.isEmpty())
         return;
-    if (m_running) { // one git run at a time; the burst collapses into one rerun
-        m_rerun = true;
-        return;
+    if (m_running) {
+        // Watchdog: the in-flight run should always answer, timeout included,
+        // but a run that somehow outlives even that must not freeze the panel,
+        // so it is disowned and a fresh one started.
+        if (m_cfg.timeoutMs > 0 && m_runStarted.isValid()
+            && m_runStarted.elapsed() > qint64(m_cfg.timeoutMs) * kWatchdogFactor) {
+            qWarning("change review: a git run has been in flight for %lld ms; starting a new one",
+                     m_runStarted.elapsed());
+        } else { // one git run at a time; the burst collapses into one rerun
+            m_rerun = true;
+            return;
+        }
     }
     m_running = true;
+    m_runStarted.start();
 
     const QString base = m_cfg.base;
     QStringList args{QStringLiteral("diff")};
