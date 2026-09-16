@@ -35,6 +35,18 @@
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
 
+[review]
+# width = 600  # startup width of the change review panel, in pixels
+# refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# base = ""  # revision to diff against (empty = the worktree against HEAD)
+# font = ""  # review font (empty = use the side terminal font)
+# font_size = 0  # review font size (0 = use the side terminal font size)
+# max_lines = 20000  # cap on rendered diff lines
+# added_color = "#98c379"  # "+" lines
+# removed_color = "#e06c75"  # "-" lines
+# hunk_color = "#61afef"  # "@@" hunk headers
+# file_color = "#c678dd"  # file header lines
+
 [ui]
 # ext_popupmenu = true
 # ext_tabline = true

@@ -63,6 +63,20 @@ struct Config {
     QString sideTerminalFont;             // empty = use terminal font
     int sideTerminalFontSize = 0;         // 0 = use terminal font size
 
+    // Change review panel (opens to the right of the side terminal and shows
+    // the worktree diff, so an agent's changes are reviewable in auto-accept
+    // mode, where the IDE bridge never asks for approval).
+    int reviewWidth = 600;                // startup width in pixels
+    int reviewRefreshMs = 2000;           // poll interval in ms; floored at 250, 0 = no poll
+    QString reviewBase;                   // revision to diff against; empty = worktree vs HEAD
+    QString reviewFont;                   // empty = use terminal font
+    int reviewFontSize = 0;               // 0 = use terminal font size
+    int reviewMaxLines = 20000;           // cap on rendered diff lines
+    QString reviewAddedColor = "#98c379";   // "+" lines
+    QString reviewRemovedColor = "#e06c75"; // "-" lines
+    QString reviewHunkColor = "#61afef";    // "@@" hunk headers
+    QString reviewFileColor = "#c678dd";    // file header lines
+
     // UI extensions (native chrome)
     bool extPopupmenu = true;
     bool extTabline = true;

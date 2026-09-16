@@ -28,6 +28,7 @@
 #include <QSet>
 #include <QShortcut>
 #include <QSplitter>
+#include "changereview.h"
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
@@ -238,10 +239,49 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     hsplitter->setStyleSheet("QSplitter::handle { background: #333; width: 2px; }");
     hsplitter->setChildrenCollapsible(false);
     m_sideTerminal = new TerminalPanel(sideCfg, hsplitter);
+    // Change review panel: third child, so it opens to the right of the side
+    // terminal that runs the agent whose changes it shows. Hidden until asked
+    // for (the review button or Ctrl+Shift+G).
+    ReviewConfig reviewCfg;
+    reviewCfg.width = cfg.reviewWidth;
+    reviewCfg.refreshMs = cfg.reviewRefreshMs;
+    reviewCfg.base = cfg.reviewBase;
+    // Font falls back to the side terminal's, which itself falls back to the
+    // bottom terminal's: the panel sits beside them and should match.
+    reviewCfg.fontFamily = !cfg.reviewFont.isEmpty() ? cfg.reviewFont : sideCfg.fontFamily;
+    reviewCfg.fontSize = cfg.reviewFontSize > 0 ? cfg.reviewFontSize : sideCfg.fontSize;
+    reviewCfg.maxLines = cfg.reviewMaxLines;
+    reviewCfg.added = QColor(cfg.reviewAddedColor);
+    reviewCfg.removed = QColor(cfg.reviewRemovedColor);
+    reviewCfg.hunk = QColor(cfg.reviewHunkColor);
+    reviewCfg.file = QColor(cfg.reviewFileColor);
+    m_review = new ChangeReviewPanel(reviewCfg, hsplitter);
+    m_review->hide();
+
     hsplitter->addWidget(editorArea);
     hsplitter->addWidget(m_sideTerminal);
+    hsplitter->addWidget(m_review);
     hsplitter->setStretchFactor(0, 1); // editor area takes extra space
     hsplitter->setStretchFactor(1, 0);
+    hsplitter->setStretchFactor(2, 0);
+    // A hidden child gets no splitter space, so the panel's width can only be
+    // applied once it is on screen. It takes that space from the editor area,
+    // leaving the side terminal at whatever width the user dragged it to, and
+    // reopens at the width it had when it was last closed.
+    connect(m_review, &ChangeReviewPanel::visibilityChanged, this,
+            [hsplitter, width = cfg.reviewWidth](bool visible) mutable {
+        QList<int> sizes = hsplitter->sizes();
+        if (sizes.size() < 3)
+            return;
+        if (!visible) {
+            if (sizes[2] > 0)
+                width = sizes[2];
+            return;
+        }
+        sizes[0] = qMax(1, sizes[0] - width);
+        sizes[2] = width;
+        hsplitter->setSizes(sizes);
+    });
     // Seed the side terminal with its configured startup width on its first
     // show; setting sizes while the panel is hidden has no effect (hidden
     // widgets get no splitter space).
@@ -328,6 +368,13 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // again restores exactly the ones that were actually visible before.
     auto *maximizeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X), this);
     connect(maximizeShortcut, &QShortcut::activated, this, &MainWindow::toggleMaximizedMode);
+
+    // Ctrl+Shift+G: toggle the change review panel (same as the side
+    // terminal's review button).
+    auto *reviewShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G), this);
+    connect(reviewShortcut, &QShortcut::activated, this, &MainWindow::toggleChangeReview);
+    connect(m_sideTerminal, &TerminalPanel::changeReviewRequested,
+            this, &MainWindow::toggleChangeReview);
 
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
     // the panel whose button was clicked.
@@ -732,6 +779,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_gitStatus = new GitStatus(this);
         connect(m_gitStatus, &GitStatus::changed,
                 m_statusline, &StatuslineWidget::updateGit);
+        // A commit or a branch switch changes the whole diff at once; the
+        // review panel picks it up here instead of on its next poll.
+        connect(m_gitStatus, &GitStatus::changed, this, [this](const GitStatusInfo &) {
+            if (m_review && m_review->isVisible())
+                m_review->refresh();
+        });
         connect(m_nvim, &NvimProcess::notification, this,
                 [this](const QString &method, const QVariantList &) {
             if (method == QLatin1String("neobeam_git_event"))
@@ -970,8 +1023,14 @@ bool MainWindow::eventFilter(QObject *watched, QEvent *event)
     // WindowActivate rather than ApplicationActivate: the latter is deprecated
     // in Qt 6 and not delivered on every platform. It reaches every child
     // widget of the window, hence the sender check.
-    if (event->type() == QEvent::WindowActivate && watched == this && m_gitStatus)
-        m_gitStatus->refresh();
+    if (event->type() == QEvent::WindowActivate && watched == this) {
+        if (m_gitStatus)
+            m_gitStatus->refresh();
+        // The review panel skips its poll while the window is in the
+        // background, so coming back to it is what brings the diff up to date.
+        if (m_review && m_review->isVisible())
+            m_review->refresh();
+    }
 
     if (event->type() == QEvent::KeyPress) {
         auto *ke = static_cast<QKeyEvent *>(event);
@@ -1175,6 +1234,8 @@ void MainWindow::updateTitleCwd(const QString &cwd)
         // The git segment follows the same cwd-change choke point as the title.
         if (m_gitStatus)
             m_gitStatus->setWorkingDirectory(cwd);
+        if (m_review)
+            m_review->setWorkingDirectory(cwd);
     }
     applyWindowTitle();
 }
@@ -1209,6 +1270,25 @@ void MainWindow::toggleMaximizedMode()
         enterMaximized(MaximizedPane::Editor);
 }
 
+void MainWindow::toggleChangeReview()
+{
+    if (!m_review)
+        return;
+    if (m_review->isVisible()) {
+        m_review->hide();
+        return;
+    }
+    // A maximized pane owns the whole window; the panel would have nowhere to
+    // open, so leave that mode first (Ctrl+Shift+X does the same on toggle).
+    if (m_maximized != MaximizedPane::None)
+        leaveMaximized();
+    // nvim's cwd is the repository the panel reports on; it arrives via
+    // updateTitleCwd() and is empty only before nvim has reported one.
+    if (!m_titleCwd.isEmpty())
+        m_review->setWorkingDirectory(m_titleCwd);
+    m_review->show();
+}
+
 void MainWindow::enterMaximized(MaximizedPane pane)
 {
     // Capture what's actually open before touching anything, so a panel the
@@ -1218,6 +1298,7 @@ void MainWindow::enterMaximized(MaximizedPane pane)
     m_maxEditorWasVisible = m_editorArea->isVisible();
     m_maxTerminalWasVisible = m_terminal->isVisible();
     m_maxSideTerminalWasVisible = m_sideTerminal->isVisible();
+    m_maxReviewWasVisible = m_review->isVisible();
     m_maxMessagesWasVisible = m_cfg.extMessages && m_messages->isVisible();
     m_maxVSplitterState = m_vsplitter->saveState();
     m_maxHSplitterState = m_hsplitter->saveState();
@@ -1230,6 +1311,7 @@ void MainWindow::enterMaximized(MaximizedPane pane)
         // session persistence stay exactly as consistent as normal use.
         if (m_maxTerminalWasVisible) m_termBtn->setChecked(false);
         if (m_maxSideTerminalWasVisible) m_sideTermBtn->setChecked(false);
+        if (m_maxReviewWasVisible) m_review->hide();
         if (m_maxMessagesWasVisible) m_messages->hidePanel();
         m_grid->setFocus(); // land on the buffer now filling the freed space
         break;
@@ -1243,6 +1325,7 @@ void MainWindow::enterMaximized(MaximizedPane pane)
     case MaximizedPane::SideTerminal:
         m_editorArea->hide();
         if (m_maxTerminalWasVisible) m_termBtn->setChecked(false);
+        if (m_maxReviewWasVisible) m_review->hide();
         m_sideTerminal->focusTerminal();
         break;
     case MaximizedPane::None:
@@ -1266,6 +1349,7 @@ void MainWindow::leaveMaximized()
     // before maximizing). showEvent's own visibilityChanged still syncs the
     // button's checked state, same as session restore does.
     if (m_maxSideTerminalWasVisible) m_sideTerminal->show();
+    if (m_maxReviewWasVisible) m_review->show();
     if (m_maxMessagesWasVisible) m_messages->showPanel();
     if (!m_maxVSplitterState.isEmpty()) m_vsplitter->restoreState(m_maxVSplitterState);
     if (!m_maxHSplitterState.isEmpty()) m_hsplitter->restoreState(m_maxHSplitterState);

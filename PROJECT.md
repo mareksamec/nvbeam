@@ -379,6 +379,17 @@
 - Diff view can be expanded next to the side term
 - Add button and a keyboard shortcut for it
 
+- [x] **Change review panel** (`src/changereview.cpp`, task 005) - a native Qt
+  panel opening to the right of the side terminal (`◧` on its toolbar, or
+  Ctrl+Shift+G) that shows `git diff` of the worktree plus the untracked file
+  names, colored and selectable. It reads what is on disk rather than the CLI's
+  diff request, which is the agent's permission-request surface and therefore
+  never arrives in auto-accept or bypass mode. While open it polls every
+  `[review] refresh_ms`, skipping ticks while the window is in the background
+  and redrawing only when the diff text changed. No filesystem watcher: an
+  agent's write touches neither `.git` nor an nvim buffer, and inotify does not
+  recurse.
+
 ### Codex (ChatGPT)
 - Same for Codex CLI if possible.
 

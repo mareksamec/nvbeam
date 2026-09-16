@@ -230,6 +230,14 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     connect(cwdAct, &QAction::triggered, this, &TerminalPanel::cwdBroadcastRequested);
     auto *closeAct = m_toolbar->addAction("✕", this, &TerminalPanel::removeCurrentTerminal);
     closeAct->setToolTip("Close terminal");
+    // Side panel only: the change review panel opens directly next to this
+    // one, showing what the agent running here has written, so its toggle
+    // belongs on this toolbar and not on the bottom panel's.
+    if (m_cfg.sidePanel) {
+        auto *reviewAct = m_toolbar->addAction("◧");
+        reviewAct->setToolTip("Review changes (Ctrl+Shift+G)");
+        connect(reviewAct, &QAction::triggered, this, &TerminalPanel::changeReviewRequested);
+    }
 
     layout->addWidget(m_toolbar);
 

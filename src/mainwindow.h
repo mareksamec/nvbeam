@@ -17,6 +17,7 @@ class TerminalPanel;
 class MinimapWidget;
 class ImageRenderer;
 class GitStatus;
+class ChangeReviewPanel;
 class Session;
 class QSplitter;
 class QFrame;
@@ -89,6 +90,11 @@ private:
     /// is a no-op.
     void resizeNvimGrid(int cols, int rows);
 
+    /// Open the change review panel to the right of the side terminal, or
+    /// close it when it is already up (the side terminal's review button and
+    /// Ctrl+Shift+G both land here).
+    void toggleChangeReview();
+
     /// Which pane Ctrl+Shift+X is currently giving the whole window to.
     enum class MaximizedPane { None, Editor, Terminal, SideTerminal };
 
@@ -114,6 +120,7 @@ private:
     QPushButton *m_sideTermBtn = nullptr; // bottom-right toggle, kept in sync with m_sideTerminal
     MinimapWidget *m_minimap = nullptr;
     GitStatus *m_gitStatus = nullptr; // push-model git provider for the statusline
+    ChangeReviewPanel *m_review = nullptr; // worktree diff panel, right of the side terminal
     QFrame *m_editorArea = nullptr; // border-highlighted when the grid has focus
     ImageRenderer *m_imageRenderer = nullptr;
     QSplitter *m_vsplitter = nullptr; // vertical splitter: editor row vs bottom terminal
@@ -136,6 +143,7 @@ private:
     bool m_maxEditorWasVisible = false;       // pane state captured when m_maximized was entered,
     bool m_maxTerminalWasVisible = false;     // so leaving it restores only what was actually open
     bool m_maxSideTerminalWasVisible = false;
+    bool m_maxReviewWasVisible = false;
     bool m_maxMessagesWasVisible = false;
     QByteArray m_maxVSplitterState;  // splitter proportions captured alongside, since hiding a
     QByteArray m_maxHSplitterState;  // child hands its space to its siblings for good

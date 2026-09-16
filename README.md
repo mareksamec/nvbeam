@@ -10,6 +10,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - **Native statusline** — mode indicator, file, git branch, diagnostics, position
 - **Git branch switcher** – VSCode-style branch picker under the statusline: click the git segment (or Ctrl+Shift+B) to switch branches or create a new one
 - **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
+- **Change review** — panel next to the side terminal showing the worktree diff (Ctrl+Shift+G), colored and selectable, refreshing itself while an agent writes
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
 - **Drag & drop** — drop files onto the buffer area to open them in the window under the cursor; modifier keys choose split/tab placement. Dropping onto the terminal pastes the path
@@ -101,6 +102,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode) |
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
+| Ctrl+Shift+G | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
 
 ### Project switcher
 
@@ -123,6 +125,27 @@ When git refuses (uncommitted changes that the checkout would overwrite, a branc
 The popup is monospaced (`[ui] branch_switcher_font` and `branch_switcher_font_size`), with the commit dates padded into a column that lines up, and highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance. The name column takes whatever width is left once the widest date is reserved, so a date is never pushed off the edge; a branch name too long for it is elided in the middle and shown in full in the row's tooltip.
 
 The switcher needs the statusline's git segment, so it follows `[ui] git_status`; with that off, neither the click target nor the shortcut exists.
+
+### Change review
+
+The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+G**, opens a
+review panel to the right of that terminal. It shows `git diff` of the working
+tree (untracked files are listed by name underneath, since `git diff` does not
+report them) with added lines in green and removed lines in red, and a header
+counting the changed files and the added/removed lines. The text is plain and
+selectable: a copied hunk pastes as the diff itself.
+
+This is a review of what is on disk, which is the point: an agent running in
+the side terminal in auto-accept mode never asks for approval, so nothing else
+shows what it wrote. While the panel is open it re-reads the worktree every
+`[review] refresh_ms` milliseconds (2000 by default, `0` disables the poll and
+leaves the **⟳** button), so changes appear as the agent writes them. Ticks are
+skipped while the neobeam window is in the background, and the view is only
+redrawn when the diff text actually changed, so scroll position and an active
+selection survive an idle refresh.
+
+Set `[review] base` to diff against a revision (`"main"`, `"HEAD~3"`) instead of
+the working tree against `HEAD`.
 
 ### Drag & drop
 
@@ -189,6 +212,18 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # width = 400  # startup width in pixels
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
+
+# [review]
+# width = 600  # startup width of the change review panel, in pixels
+# refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# base = ""  # revision to diff against (empty = the worktree against HEAD)
+# font = ""  # review font (empty = use the side terminal font)
+# font_size = 0  # review font size (0 = use the side terminal font size)
+# max_lines = 20000  # cap on rendered diff lines
+# added_color = "#98c379"  # "+" lines
+# removed_color = "#e06c75"  # "-" lines
+# hunk_color = "#61afef"  # "@@" hunk headers
+# file_color = "#c678dd"  # file header lines
 
 # [ui]
 # ext_popupmenu = true
