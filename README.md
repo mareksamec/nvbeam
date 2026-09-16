@@ -10,7 +10,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - **Native statusline** — mode indicator, file, git branch, diagnostics, position
 - **Git branch switcher** – VSCode-style branch picker under the statusline: click the git segment (or Ctrl+Shift+B) to switch branches or create a new one
 - **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
-- **Change review** — panel next to the side terminal showing the worktree diff (Ctrl+Shift+G), colored and selectable, refreshing itself while an agent writes
+- **Change review** — panel next to the side terminal listing each changed file, expandable to its colored, selectable diff (Ctrl+Shift+G), refreshing itself while an agent writes
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
 - **Drag & drop** — drop files onto the buffer area to open them in the window under the cursor; modifier keys choose split/tab placement. Dropping onto the terminal pastes the path
@@ -129,23 +129,31 @@ The switcher needs the statusline's git segment, so it follows `[ui] git_status`
 ### Change review
 
 The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+G**, opens a
-review panel to the right of that terminal. It shows `git diff` of the working
-tree (untracked files are listed by name underneath, since `git diff` does not
-report them) with added lines in green and removed lines in red, and a header
-counting the changed files and the added/removed lines. The text is plain and
-selectable: a copied hunk pastes as the diff itself.
+review panel to the right of that terminal. It lists one row per changed file,
+each showing the file name, its directory and `+added -removed` counts, and a
+tag for a new, deleted, renamed or untracked file. A row is collapsed by
+default; clicking it (or **⌄** / **⌃** in the header, which open and close every
+row) reveals that file's diff, and inside a row the **⋯** button brings back the
+unchanged context lines, which are hidden so an open file shows only what
+actually changed. Untracked files are listed too, with their content read from
+disk as added lines when the row is opened.
+
+Each file's diff lives in its own read-only text area, so the text is selectable
+and **Ctrl+C** copies it as the plain diff. Added lines are green, removed lines
+red, hunk headers blue (all four colors are configurable).
 
 This is a review of what is on disk, which is the point: an agent running in
 the side terminal in auto-accept mode never asks for approval, so nothing else
 shows what it wrote. While the panel is open it re-reads the worktree every
 `[review] refresh_ms` milliseconds (2000 by default, `0` disables the poll and
-leaves the **⟳** button), so changes appear as the agent writes them. Ticks are
-skipped while the neobeam window is in the background, and the view is only
-redrawn when the diff text actually changed, so scroll position and an active
-selection survive an idle refresh.
+leaves the **⟳** button), so changes appear as the agent writes them. A row
+whose diff did not change is left untouched, so an open file stays open and a
+selection inside it survives the refresh.
 
 Set `[review] base` to diff against a revision (`"main"`, `"HEAD~3"`) instead of
-the working tree against `HEAD`.
+the working tree against `HEAD`, `[review] show_context = true` to have rows
+open on the full hunks, and `[review] file_max_height` to cap how tall one open
+file grows before it scrolls on its own.
 
 ### Drag & drop
 
@@ -219,7 +227,9 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # base = ""  # revision to diff against (empty = the worktree against HEAD)
 # font = ""  # review font (empty = use the side terminal font)
 # font_size = 0  # review font size (0 = use the side terminal font size)
-# max_lines = 20000  # cap on rendered diff lines
+# max_lines = 20000  # cap on the diff lines kept per file
+# file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
+# show_context = false  # expand a file to the full hunks instead of the changed lines only
 # added_color = "#98c379"  # "+" lines
 # removed_color = "#e06c75"  # "-" lines
 # hunk_color = "#61afef"  # "@@" hunk headers

@@ -251,6 +251,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.fontFamily = !cfg.reviewFont.isEmpty() ? cfg.reviewFont : sideCfg.fontFamily;
     reviewCfg.fontSize = cfg.reviewFontSize > 0 ? cfg.reviewFontSize : sideCfg.fontSize;
     reviewCfg.maxLines = cfg.reviewMaxLines;
+    reviewCfg.fileMaxHeight = cfg.reviewFileMaxHeight;
+    reviewCfg.showContext = cfg.reviewShowContext;
     reviewCfg.added = QColor(cfg.reviewAddedColor);
     reviewCfg.removed = QColor(cfg.reviewRemovedColor);
     reviewCfg.hunk = QColor(cfg.reviewHunkColor);

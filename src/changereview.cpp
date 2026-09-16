@@ -1,13 +1,20 @@
 #include "changereview.h"
 
 #include <QAction>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QFontDatabase>
 #include <QLabel>
 #include <QPlainTextEdit>
 #include <QProcess>
+#include <QResizeEvent>
+#include <QScrollArea>
 #include <QScrollBar>
 #include <QTextBlock>
 #include <QToolBar>
+#include <QToolButton>
+#include <QHBoxLayout>
 #include <QVBoxLayout>
 
 namespace {
@@ -15,6 +22,20 @@ namespace {
 /// Shortest poll interval accepted, so a mistyped config cannot spawn a git
 /// process per frame.
 constexpr int kMinRefreshMs = 250;
+
+/// Bytes of an untracked file read for its preview. Past this the file is
+/// almost certainly not something to review line by line.
+constexpr qint64 kMaxUntrackedBytes = 1 << 20;
+
+/// The monospace font the diff bodies use.
+QFont diffFont(const ReviewConfig &cfg)
+{
+    if (cfg.fontFamily.isEmpty())
+        return QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    QFont font(cfg.fontFamily, cfg.fontSize);
+    font.setStyleHint(QFont::Monospace);
+    return font;
+}
 
 } // namespace
 
@@ -24,36 +45,212 @@ DiffHighlighter::DiffHighlighter(const ReviewConfig &cfg, QTextDocument *documen
     m_added.setForeground(cfg.added);
     m_removed.setForeground(cfg.removed);
     m_hunk.setForeground(cfg.hunk);
-    m_file.setForeground(cfg.file);
-    m_file.setFontWeight(QFont::Bold);
 }
 
 void DiffHighlighter::highlightBlock(const QString &text)
 {
     if (text.isEmpty())
         return;
-    // The file header markers are tested first: "+++" and "---" also start
-    // with the added/removed prefixes.
-    if (text.startsWith(QLatin1String("+++")) || text.startsWith(QLatin1String("---"))
-        || text.startsWith(QLatin1String("diff --git")) || text.startsWith(QLatin1String("index "))
-        || text.startsWith(QLatin1String("new file")) || text.startsWith(QLatin1String("deleted file"))
-        || text.startsWith(QLatin1String("rename ")) || text.startsWith(QLatin1String("similarity "))
-        || text.startsWith(QLatin1String("Untracked files"))) {
-        setFormat(0, text.size(), m_file);
-    } else if (text.startsWith(QLatin1String("@@"))) {
+    // The file header lines are not in the body (the row's own header carries
+    // the name), so a leading "+"/"-" here is always a changed line.
+    if (text.startsWith(QLatin1String("@@")))
         setFormat(0, text.size(), m_hunk);
-    } else if (text.startsWith(QLatin1Char('+'))) {
+    else if (text.startsWith(QLatin1Char('+')))
         setFormat(0, text.size(), m_added);
-    } else if (text.startsWith(QLatin1Char('-'))) {
+    else if (text.startsWith(QLatin1Char('-')))
         setFormat(0, text.size(), m_removed);
-    }
 }
+
+// --- FileCard ---------------------------------------------------------------
+
+FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *parent)
+    : QWidget(parent), m_cfg(cfg), m_file(file), m_context(cfg.showContext)
+{
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+
+    // Header row: the arrow doubles as the expander, so the whole row is one
+    // click target rather than a separate button plus a label.
+    auto *row = new QWidget(this);
+    auto *rowLayout = new QHBoxLayout(row);
+    rowLayout->setContentsMargins(2, 1, 4, 1);
+    rowLayout->setSpacing(4);
+
+    m_header = new QToolButton(row);
+    m_header->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_header->setArrowType(Qt::RightArrow);
+    m_header->setAutoRaise(true);
+    m_header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    m_header->setStyleSheet(QStringLiteral(
+        "QToolButton { color: %1; background: transparent; border: none; padding: 1px 2px;"
+        " text-align: left; }"
+        "QToolButton:hover { background: #2f2f2f; }").arg(m_cfg.file.name()));
+    connect(m_header, &QToolButton::clicked, this, [this] { setExpanded(!isExpanded()); });
+    rowLayout->addWidget(m_header, 1);
+
+    // Per-file context toggle: the body opens on the changed lines only, and
+    // this brings the surrounding hunk lines back (the review pane in the
+    // Claude Code client hides them the same way).
+    m_contextBtn = new QToolButton(row);
+    m_contextBtn->setText(QStringLiteral("⋯"));
+    m_contextBtn->setCheckable(true);
+    m_contextBtn->setChecked(m_context);
+    m_contextBtn->setAutoRaise(true);
+    m_contextBtn->setToolTip(QStringLiteral("Show unchanged context lines"));
+    m_contextBtn->setStyleSheet(QStringLiteral(
+        "QToolButton { color: #888; background: transparent; border: none; padding: 1px 4px; }"
+        "QToolButton:checked { color: #ddd; background: #333; border-radius: 3px; }"));
+    connect(m_contextBtn, &QToolButton::toggled, this, [this](bool on) {
+        m_context = on;
+        applyBody();
+    });
+    rowLayout->addWidget(m_contextBtn);
+
+    m_stats = new QLabel(row);
+    m_stats->setTextFormat(Qt::RichText);
+    rowLayout->addWidget(m_stats);
+    layout->addWidget(row);
+
+    m_body = new QPlainTextEdit(this);
+    m_body->setReadOnly(true);
+    m_body->setUndoRedoEnabled(false);
+    m_body->setFrameStyle(QFrame::NoFrame);
+    // Wrapped, so a long line stays readable in a narrow panel; the height is
+    // then computed from the wrapped document (fitBody).
+    m_body->setLineWrapMode(QPlainTextEdit::WidgetWidth);
+    m_body->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
+    m_body->setFont(diffFont(m_cfg));
+    m_body->setStyleSheet(QStringLiteral(
+        "QPlainTextEdit { background: %1; color: %2; selection-background-color: #44475a; }")
+            .arg(m_cfg.background.darker(110).name(), m_cfg.foreground.name()));
+    m_body->hide();
+    layout->addWidget(m_body);
+
+    m_highlighter = new DiffHighlighter(m_cfg, m_body->document());
+
+    setFile(file);
+}
+
+void FileCard::setFile(const FileDiff &file)
+{
+    const bool bodyChanged = file.body != m_file.body;
+    m_file = file;
+
+    QString label = m_file.name;
+    if (!m_file.dir.isEmpty())
+        label += QStringLiteral("  %1").arg(m_file.dir);
+    m_header->setText(label);
+    m_header->setToolTip(m_file.path);
+
+    QString stats;
+    if (!m_file.tag.isEmpty())
+        stats += QStringLiteral("<span style='color:#888'>%1</span> ").arg(m_file.tag);
+    stats += QStringLiteral("<span style='color:%1'>+%2</span> <span style='color:%3'>-%4</span>")
+                 .arg(m_cfg.added.name()).arg(m_file.added)
+                 .arg(m_cfg.removed.name()).arg(m_file.removed);
+    m_stats->setText(stats);
+
+    // An untracked file's content is read on demand, so its body has to be
+    // re-read only when the row is open.
+    if (m_file.untracked && bodyChanged)
+        m_loaded = false;
+    if (bodyChanged && isExpanded())
+        applyBody();
+}
+
+void FileCard::setExpanded(bool expanded)
+{
+    if (expanded == isExpanded())
+        return;
+    m_header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
+    m_body->setVisible(expanded);
+    if (expanded)
+        applyBody();
+    emit expandedChanged(m_file.path, expanded);
+}
+
+bool FileCard::isExpanded() const
+{
+    return !m_body->isHidden();
+}
+
+void FileCard::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    if (isExpanded())
+        fitBody();
+}
+
+QString FileCard::bodyText() const
+{
+    if (m_context)
+        return m_file.body;
+    // Changed lines only, with the hunk headers kept: they are what says where
+    // in the file the change sits.
+    QStringList kept;
+    const QStringList lines = m_file.body.split(QLatin1Char('\n'));
+    for (const QString &line : lines) {
+        if (line.startsWith(QLatin1Char('+')) || line.startsWith(QLatin1Char('-'))
+            || line.startsWith(QLatin1String("@@")))
+            kept << line;
+    }
+    return kept.join(QLatin1Char('\n'));
+}
+
+void FileCard::applyBody()
+{
+    if (m_file.untracked && !m_loaded)
+        loadUntracked();
+    const QString text = bodyText();
+    if (text != m_shown) {
+        m_shown = text;
+        const int scroll = m_body->verticalScrollBar()->value();
+        m_body->setPlainText(text);
+        m_body->verticalScrollBar()->setValue(scroll);
+    }
+    fitBody();
+}
+
+void FileCard::fitBody()
+{
+    const int width = qMax(1, m_body->viewport()->width());
+    m_body->document()->setTextWidth(width);
+    const int content = int(m_body->document()->size().height()) + 6;
+    m_body->setFixedHeight(qBound(24, content, qMax(24, m_cfg.fileMaxHeight)));
+}
+
+void FileCard::loadUntracked()
+{
+    m_loaded = true;
+    // An absolute path, since git reports the name relative to the repository
+    // while the application's own working directory is something else.
+    QFile file(m_file.absolutePath);
+    if (!file.open(QIODevice::ReadOnly)) {
+        m_file.body = QStringLiteral("+ (cannot read %1)").arg(m_file.path);
+        return;
+    }
+    if (file.size() > kMaxUntrackedBytes) {
+        m_file.body = QStringLiteral("+ (%1 is too large to preview)").arg(m_file.path);
+        return;
+    }
+    const QStringList lines =
+        QString::fromUtf8(file.readAll()).split(QLatin1Char('\n'));
+    QStringList body;
+    const int limit = m_cfg.maxLines > 0 ? m_cfg.maxLines : lines.size();
+    for (int i = 0; i < lines.size() && i < limit; ++i)
+        body << QLatin1Char('+') + lines.at(i);
+    if (lines.size() > limit)
+        body << QStringLiteral("... truncated at %1 lines ([review] max_lines)").arg(limit);
+    m_file.body = body.join(QLatin1Char('\n'));
+}
+
+// --- ChangeReviewPanel ------------------------------------------------------
 
 ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     : QWidget(parent), m_cfg(cfg)
 {
     const QString bg = m_cfg.background.name();
-    const QString fg = m_cfg.foreground.name();
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -69,6 +266,7 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
         "QToolButton:hover { background: #333; border-radius: 3px; }").arg(bg));
 
     m_stats = new QLabel(QStringLiteral("Changes"), toolbar);
+    m_stats->setTextFormat(Qt::RichText);
     m_stats->setStyleSheet(QStringLiteral("color: #aaa; padding: 2px 6px;"));
     toolbar->addWidget(m_stats);
 
@@ -77,42 +275,45 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     spacer->setStyleSheet(QStringLiteral("background: transparent;"));
     toolbar->addWidget(spacer);
 
+    auto *expandAct = toolbar->addAction(QStringLiteral("⌄"), this, &ChangeReviewPanel::expandAll);
+    expandAct->setToolTip(QStringLiteral("Expand all files"));
+    auto *collapseAct = toolbar->addAction(QStringLiteral("⌃"), this,
+                                           &ChangeReviewPanel::collapseAll);
+    collapseAct->setToolTip(QStringLiteral("Collapse all files"));
     auto *refreshAct = toolbar->addAction(QStringLiteral("⟳"), this, &ChangeReviewPanel::refresh);
     refreshAct->setToolTip(QStringLiteral("Refresh now"));
     auto *closeAct = toolbar->addAction(QStringLiteral("✕"), this, &QWidget::hide);
     closeAct->setToolTip(QStringLiteral("Close review panel"));
     layout->addWidget(toolbar);
 
-    // Plain text, not rich text: selection and Ctrl+C then yield the diff
-    // exactly as git wrote it, and the block-based document stays responsive
-    // on a diff thousands of lines long.
-    m_view = new QPlainTextEdit(this);
-    m_view->setReadOnly(true);
-    m_view->setUndoRedoEnabled(false);
-    m_view->setLineWrapMode(QPlainTextEdit::NoWrap);
-    m_view->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
-    m_view->setFrameStyle(QFrame::NoFrame);
-    QFont font(m_cfg.fontFamily, m_cfg.fontSize);
-    font.setStyleHint(QFont::Monospace);
-    if (m_cfg.fontFamily.isEmpty())
-        font = QFontDatabase::systemFont(QFontDatabase::FixedFont);
-    m_view->setFont(font);
-    m_view->setStyleSheet(QStringLiteral(
-        "QPlainTextEdit { background: %1; color: %2; selection-background-color: #44475a; }")
-            .arg(bg, fg));
-    layout->addWidget(m_view, 1);
+    // One scrolling column of file rows. The rows are widgets rather than tree
+    // items so each carries a real text editor: selection and Ctrl+C inside a
+    // diff then work the way they do anywhere else.
+    m_scroll = new QScrollArea(this);
+    m_scroll->setWidgetResizable(true);
+    m_scroll->setFrameStyle(QFrame::NoFrame);
+    m_scroll->setStyleSheet(QStringLiteral("QScrollArea { background: %1; border: none; }").arg(bg));
+    m_list = new QWidget(m_scroll);
+    m_list->setStyleSheet(QStringLiteral("background: %1;").arg(bg));
+    m_listLayout = new QVBoxLayout(m_list);
+    m_listLayout->setContentsMargins(0, 0, 0, 0);
+    m_listLayout->setSpacing(1);
 
-    m_highlighter = new DiffHighlighter(m_cfg, m_view->document());
+    m_message = new QLabel(m_list);
+    m_message->setWordWrap(true);
+    m_message->setStyleSheet(QStringLiteral("color: #888; padding: 8px;"));
+    m_message->hide();
+    m_listLayout->addWidget(m_message);
+    m_listLayout->addStretch(1);
+
+    m_scroll->setWidget(m_list);
+    layout->addWidget(m_scroll, 1);
 
     // The poll is what keeps the view current while an agent writes files:
     // those writes touch neither .git nor an nvim buffer, so no push trigger
-    // exists for them. It runs only while the panel is visible (show/hideEvent)
-    // and only while the window is active.
+    // exists for them. It runs while the panel is visible (see show/hideEvent).
     m_poll.setInterval(qMax(m_cfg.refreshMs, kMinRefreshMs));
-    connect(&m_poll, &QTimer::timeout, this, [this] {
-        if (isVisible() && window() && window()->isActiveWindow())
-            refresh();
-    });
+    connect(&m_poll, &QTimer::timeout, this, &ChangeReviewPanel::refresh);
 }
 
 void ChangeReviewPanel::setWorkingDirectory(const QString &dir)
@@ -120,7 +321,6 @@ void ChangeReviewPanel::setWorkingDirectory(const QString &dir)
     if (dir.isEmpty() || dir == m_dir)
         return;
     m_dir = dir;
-    m_text.clear(); // force a redraw: the new directory's diff may be identical text
     if (isVisible())
         refresh();
 }
@@ -128,6 +328,18 @@ void ChangeReviewPanel::setWorkingDirectory(const QString &dir)
 void ChangeReviewPanel::refresh()
 {
     collect();
+}
+
+void ChangeReviewPanel::expandAll()
+{
+    for (FileCard *card : std::as_const(m_cards))
+        card->setExpanded(true);
+}
+
+void ChangeReviewPanel::collapseAll()
+{
+    for (FileCard *card : std::as_const(m_cards))
+        card->setExpanded(false);
 }
 
 void ChangeReviewPanel::showEvent(QShowEvent *event)
@@ -150,7 +362,6 @@ void ChangeReviewPanel::runGit(const QStringList &args,
                                std::function<void(bool, const QString &)> done)
 {
     auto *proc = new QProcess(this);
-    const QString dir = m_dir;
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [proc, done](int code, QProcess::ExitStatus) {
         proc->deleteLater();
@@ -166,7 +377,7 @@ void ChangeReviewPanel::runGit(const QStringList &args,
         proc->deleteLater();
         done(false, QStringLiteral("git could not be started"));
     });
-    QStringList full{QStringLiteral("-C"), dir, QStringLiteral("--no-pager")};
+    QStringList full{QStringLiteral("-C"), m_dir, QStringLiteral("--no-pager")};
     full += args;
     proc->start(QStringLiteral("git"), full);
 }
@@ -187,8 +398,14 @@ void ChangeReviewPanel::collect()
         args << base;
 
     runGit(args, [this, base](bool ok, const QString &output) {
-        if (!ok) {
+        auto finish = [this] {
             m_running = false;
+            if (m_rerun) {
+                m_rerun = false;
+                collect();
+            }
+        };
+        if (!ok) {
             // Only git's first line: outside a repository it answers with its
             // whole `git diff` usage text, which is not what to show a reader.
             const QString first = output.section(QLatin1Char('\n'), 0, 0).trimmed();
@@ -196,97 +413,204 @@ void ChangeReviewPanel::collect()
                                                Qt::CaseInsensitive);
             m_stats->setText(noRepo ? QStringLiteral("Not a repository")
                                     : QStringLiteral("git error"));
-            render(noRepo ? QStringLiteral("%1 is not a git repository.").arg(m_dir)
-                          : (first.isEmpty() ? QStringLiteral("git failed.") : first));
-            if (m_rerun) { m_rerun = false; collect(); }
+            apply({});
+            showMessage(noRepo ? QStringLiteral("%1 is not a git repository.").arg(m_dir)
+                               : (first.isEmpty() ? QStringLiteral("git failed.") : first));
+            finish();
             return;
         }
-        // Untracked files never show up in `git diff`, so they are listed by
-        // name underneath. Only meaningful against the worktree: with an
-        // explicit base the comparison is between two revisions.
+        QList<FileDiff> files = parseDiff(output, m_cfg.maxLines);
+        // Untracked files never show up in `git diff`, so they are listed
+        // separately. Only meaningful against the worktree: with an explicit
+        // base the comparison is between two revisions.
         if (!base.isEmpty()) {
-            m_running = false;
-            m_stats->setText(statsFor(output, 0));
-            render(output.isEmpty() ? QStringLiteral("No changes against %1.").arg(base) : output);
-            if (m_rerun) { m_rerun = false; collect(); }
+            apply(files);
+            finish();
             return;
         }
         runGit({QStringLiteral("ls-files"), QStringLiteral("--others"),
                 QStringLiteral("--exclude-standard")},
-               [this, diff = output](bool listed, const QString &untracked) {
-            m_running = false;
-            const QStringList names = listed
-                ? untracked.split(QLatin1Char('\n'), Qt::SkipEmptyParts) : QStringList();
-            QString text = diff;
-            if (!names.isEmpty()) {
-                if (!text.isEmpty() && !text.endsWith(QLatin1Char('\n')))
-                    text += QLatin1Char('\n');
-                text += QStringLiteral("Untracked files (%1):\n").arg(names.size());
-                for (const QString &name : names)
-                    text += QStringLiteral("+ %1\n").arg(name);
+               [this, files, finish](bool listed, const QString &untracked) mutable {
+            if (listed) {
+                const QStringList names =
+                    untracked.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+                for (const QString &name : names) {
+                    FileDiff file;
+                    file.path = name;
+                    file.name = QFileInfo(name).fileName();
+                    file.dir = QFileInfo(name).path();
+                    if (file.dir == QLatin1String("."))
+                        file.dir.clear();
+                    file.tag = QStringLiteral("untracked");
+                    file.untracked = true;
+                    file.absolutePath = QDir(m_dir).absoluteFilePath(name);
+                    // Counted without reading the file: its size in lines is
+                    // what an "added" count would be anyway.
+                    QFile handle(file.absolutePath);
+                    if (handle.open(QIODevice::ReadOnly) && handle.size() <= kMaxUntrackedBytes)
+                        file.added = QString::fromUtf8(handle.readAll())
+                                         .count(QLatin1Char('\n'));
+                    files << file;
+                }
             }
-            m_stats->setText(statsFor(diff, names.size()));
-            render(text.isEmpty() ? QStringLiteral("No changes against HEAD.") : text);
-            if (m_rerun) { m_rerun = false; collect(); }
+            apply(files);
+            finish();
         });
     });
 }
 
-void ChangeReviewPanel::render(const QString &text)
+void ChangeReviewPanel::apply(const QList<FileDiff> &files)
 {
-    QString shown = text;
-    // A very large diff is capped rather than rendered in full: the panel is
-    // for reading, and laying out a hundred thousand blocks on every poll is
-    // not.
-    if (m_cfg.maxLines > 0) {
-        const QStringList lines = shown.split(QLatin1Char('\n'));
-        if (lines.size() > m_cfg.maxLines) {
-            shown = QStringList(lines.mid(0, m_cfg.maxLines)).join(QLatin1Char('\n'));
-            shown += QStringLiteral("\n... truncated at %1 lines ([review] max_lines)\n")
-                         .arg(m_cfg.maxLines);
-        }
-    }
-    // Unchanged text is left alone: this is what makes an idle poll invisible,
-    // keeping scroll position and the current selection intact.
-    if (shown == m_text)
-        return;
-    m_text = shown;
-
-    const int scroll = m_view->verticalScrollBar()->value();
-    const int hscroll = m_view->horizontalScrollBar()->value();
-    const int cursor = m_view->textCursor().position();
-    m_view->setPlainText(shown);
-    QTextCursor restored = m_view->textCursor();
-    restored.setPosition(qMin(cursor, qMax(0, m_view->document()->characterCount() - 1)));
-    m_view->setTextCursor(restored);
-    // After the cursor: setTextCursor scrolls to make it visible.
-    m_view->verticalScrollBar()->setValue(scroll);
-    m_view->horizontalScrollBar()->setValue(hscroll);
-}
-
-QString ChangeReviewPanel::statsFor(const QString &diff, int untracked)
-{
-    int files = 0;
     int added = 0;
     int removed = 0;
+    QStringList order;
+    for (const FileDiff &file : files) {
+        order << file.path;
+        added += file.added;
+        removed += file.removed;
+    }
+
+    // Drop rows for files that are no longer changed.
+    for (auto it = m_cards.begin(); it != m_cards.end();) {
+        if (order.contains(it.key())) {
+            ++it;
+            continue;
+        }
+        it.value()->deleteLater();
+        it = m_cards.erase(it);
+    }
+
+    // Create or update the rest. An unchanged file's row is left untouched, so
+    // a selection the user is reading inside it survives the refresh.
+    for (const FileDiff &file : files) {
+        FileCard *card = m_cards.value(file.path);
+        if (card) {
+            card->setFile(file);
+            continue;
+        }
+        card = new FileCard(m_cfg, file, m_list);
+        connect(card, &FileCard::expandedChanged, this,
+                [this](const QString &path, bool expanded) {
+            if (expanded)
+                m_expanded.insert(path);
+            else
+                m_expanded.remove(path);
+        });
+        m_cards.insert(file.path, card);
+        if (m_expanded.contains(file.path)) // reopened where the user had it open
+            card->setExpanded(true);
+    }
+
+    // Re-lay the column only when the order actually changed: moving widgets
+    // on every poll would fight with scrolling.
+    if (order != m_order) {
+        m_order = order;
+        for (int i = 0; i < order.size(); ++i)
+            m_listLayout->insertWidget(i + 1, m_cards.value(order.at(i))); // after m_message
+    }
+
+    if (files.isEmpty()) {
+        m_stats->setText(QStringLiteral("No changes"));
+        showMessage(m_cfg.base.isEmpty() ? QStringLiteral("No changes against HEAD.")
+                                         : QStringLiteral("No changes against %1.")
+                                               .arg(m_cfg.base));
+        return;
+    }
+    m_message->hide();
+    m_stats->setText(QStringLiteral("%1 file%2, <span style='color:%3'>+%4</span> "
+                                    "<span style='color:%5'>-%6</span>")
+                         .arg(files.size())
+                         .arg(files.size() == 1 ? QString() : QStringLiteral("s"),
+                              m_cfg.added.name())
+                         .arg(added)
+                         .arg(m_cfg.removed.name())
+                         .arg(removed));
+}
+
+void ChangeReviewPanel::showMessage(const QString &text)
+{
+    m_message->setText(text);
+    m_message->show();
+}
+
+QList<FileDiff> ChangeReviewPanel::parseDiff(const QString &diff, int maxLines)
+{
+    QList<FileDiff> files;
+    if (diff.isEmpty())
+        return files;
+
+    FileDiff current;
+    bool inFile = false;
+    QStringList body;
+    int kept = 0;
+    bool truncated = false;
+
+    auto flush = [&]() {
+        if (!inFile)
+            return;
+        current.body = body.join(QLatin1Char('\n'));
+        files << current;
+        current = FileDiff{};
+        body.clear();
+        kept = 0;
+        truncated = false;
+    };
+
     const QStringList lines = diff.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
-        if (line.startsWith(QLatin1String("diff --git")))
-            ++files;
-        else if (line.startsWith(QLatin1String("+++")) || line.startsWith(QLatin1String("---")))
+        if (line.startsWith(QLatin1String("diff --git "))) {
+            flush();
+            inFile = true;
+            // "diff --git a/<old> b/<new>": the b-side is the current path, and
+            // is what a rename should be filed under. A path containing " b/"
+            // is rare enough to accept the ambiguity.
+            const int bIndex = line.indexOf(QLatin1String(" b/"));
+            current.path = bIndex >= 0 ? line.mid(bIndex + 3) : line.mid(11);
+            current.name = QFileInfo(current.path).fileName();
+            current.dir = QFileInfo(current.path).path();
+            if (current.dir == QLatin1String("."))
+                current.dir.clear();
             continue;
-        else if (line.startsWith(QLatin1Char('+')))
-            ++added;
+        }
+        if (!inFile)
+            continue;
+        // Header lines carry the file's status but say nothing a reader needs
+        // inside the body, where the row's own header already names the file.
+        if (line.startsWith(QLatin1String("new file"))) {
+            current.tag = QStringLiteral("new");
+            continue;
+        }
+        if (line.startsWith(QLatin1String("deleted file"))) {
+            current.tag = QStringLiteral("deleted");
+            continue;
+        }
+        if (line.startsWith(QLatin1String("rename "))) {
+            current.tag = QStringLiteral("renamed");
+            continue;
+        }
+        if (line.startsWith(QLatin1String("index ")) || line.startsWith(QLatin1String("--- "))
+            || line.startsWith(QLatin1String("+++ ")) || line.startsWith(QLatin1String("old mode"))
+            || line.startsWith(QLatin1String("new mode"))
+            || line.startsWith(QLatin1String("similarity "))
+            || line.startsWith(QLatin1String("copy ")))
+            continue;
+
+        if (line.startsWith(QLatin1Char('+')))
+            ++current.added;
         else if (line.startsWith(QLatin1Char('-')))
-            ++removed;
+            ++current.removed;
+
+        if (maxLines > 0 && kept >= maxLines) {
+            if (!truncated) {
+                truncated = true;
+                body << QStringLiteral("... truncated at %1 lines ([review] max_lines)")
+                            .arg(maxLines);
+            }
+            continue;
+        }
+        body << line;
+        ++kept;
     }
-    files += untracked;
-    if (files == 0)
-        return QStringLiteral("No changes");
-    QString text = QStringLiteral("%1 file%2, +%3 -%4")
-                       .arg(files).arg(files == 1 ? QString() : QStringLiteral("s"))
-                       .arg(added).arg(removed);
-    if (untracked > 0)
-        text += QStringLiteral(" (%1 untracked)").arg(untracked);
-    return text;
+    flush();
+    return files;
 }

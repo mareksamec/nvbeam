@@ -1,15 +1,21 @@
 #pragma once
 
 #include <QColor>
-#include <functional>
+#include <QHash>
+#include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QSyntaxHighlighter>
 #include <QTextCharFormat>
 #include <QTimer>
 #include <QWidget>
+#include <functional>
 
 class QLabel;
 class QPlainTextEdit;
+class QScrollArea;
+class QToolButton;
+class QVBoxLayout;
 
 /// Look and behaviour of the change review panel, filled from [review] in
 /// neobeam.toml (see Config).
@@ -19,18 +25,35 @@ struct ReviewConfig {
     QString base;              // revision to diff against; empty = worktree vs HEAD
     QString fontFamily = "Monospace";
     int fontSize = 10;         // points
-    int maxLines = 20000;      // cap on rendered diff lines
+    int maxLines = 20000;      // cap on the diff lines kept for one file
+    int fileMaxHeight = 600;   // tallest an expanded file body grows before it scrolls itself
+    bool showContext = false;  // expand a file straight to the full hunks instead of
+                               // the changed lines only
     QColor added{"#98c379"};   // "+" lines
     QColor removed{"#e06c75"}; // "-" lines
     QColor hunk{"#61afef"};    // "@@" hunk headers
-    QColor file{"#c678dd"};    // "diff --git", "index", "---", "+++" header lines
+    QColor file{"#c678dd"};    // file name in the header row
     QColor background{"#1e1e1e"};
     QColor foreground{"#c8c8c8"};
 };
 
+/// One changed file, as parsed out of `git diff` (or listed as untracked).
+struct FileDiff {
+    QString path;          // repository-relative path, as git reports it
+    QString name;          // basename, shown first in the header row
+    QString dir;           // parent directory, shown dimmed next to the name
+    QString tag;           // "new", "deleted", "renamed", "untracked"; empty for a plain edit
+    int added = 0;
+    int removed = 0;
+    bool untracked = false;
+    QString absolutePath;  // untracked files are read from disk when expanded
+    QString body;          // the file's hunks; empty for an untracked file, whose
+                           // content is read from disk when it is first expanded
+};
+
 /// Colors a unified diff held in a plain-text document. A highlighter rather
 /// than rich text on purpose: the document stays plain, so a copied selection
-/// pastes as the diff itself, and Qt re-highlights only the blocks that changed.
+/// pastes as the diff, and Qt re-highlights only the blocks that changed.
 class DiffHighlighter : public QSyntaxHighlighter
 {
     Q_OBJECT
@@ -45,11 +68,61 @@ private:
     QTextCharFormat m_added;
     QTextCharFormat m_removed;
     QTextCharFormat m_hunk;
-    QTextCharFormat m_file;
+};
+
+/// One file's row in the review panel: a header button that expands to reveal
+/// that file's diff. Collapsed by default, the way the Claude Code review pane
+/// behaves, so a change touching twenty files is still readable at a glance.
+class FileCard : public QWidget
+{
+    Q_OBJECT
+
+public:
+    FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *parent = nullptr);
+
+    /// Adopt fresh content for the same path: stats and, when it changed, the
+    /// body text. An untouched body is left alone so a selection in it survives.
+    void setFile(const FileDiff &file);
+
+    void setExpanded(bool expanded);
+    bool isExpanded() const;
+    QString path() const { return m_file.path; }
+
+signals:
+    /// The user opened or closed this file; the panel remembers it by path so
+    /// the state outlives a rebuild of the row.
+    void expandedChanged(const QString &path, bool expanded);
+
+protected:
+    /// The body wraps, so its height depends on the panel's width.
+    void resizeEvent(QResizeEvent *event) override;
+
+private:
+    /// Compose what the body shows: the whole hunks with `context` on, only the
+    /// added/removed lines (and the hunk headers that locate them) with it off.
+    QString bodyText() const;
+    /// Put bodyText() into the editor and size the editor to its content.
+    void applyBody();
+    /// Fit the editor to the wrapped text, capped at ReviewConfig::fileMaxHeight.
+    void fitBody();
+    /// Read an untracked file from disk and turn it into added lines.
+    void loadUntracked();
+
+    ReviewConfig m_cfg;
+    FileDiff m_file;
+    QString m_shown;               // body text currently in the editor
+    QToolButton *m_header = nullptr;
+    QLabel *m_stats = nullptr;
+    QToolButton *m_contextBtn = nullptr;
+    QPlainTextEdit *m_body = nullptr;
+    DiffHighlighter *m_highlighter = nullptr;
+    bool m_context = false;        // show unchanged context lines too
+    bool m_loaded = false;         // untracked content already read from disk
 };
 
 /// Panel showing the changes already written to the worktree: `git diff`
-/// against [review] base (HEAD by default) plus the names of untracked files.
+/// against [review] base (HEAD by default) plus the untracked files, one
+/// expandable row per file.
 ///
 /// It exists because the IDE bridge's diff is the agent's permission-request
 /// surface and therefore never appears in auto-accept or bypass mode, while the
@@ -70,6 +143,10 @@ public slots:
     /// still running is remembered and served by a single extra run.
     void refresh();
 
+    /// Open or close every file row at once (the header's ⌄/⌃ buttons).
+    void expandAll();
+    void collapseAll();
+
 signals:
     /// Emitted on show/hide, so the toolbar button that opens the panel can
     /// track its state (mirrors TerminalPanel).
@@ -89,20 +166,29 @@ private:
     /// follows it), unless one is already in flight.
     void collect();
 
-    /// Replace what is on screen, but only when the text actually differs:
-    /// an unchanged poll must not move the scrollbar or drop a selection.
-    void render(const QString &text);
+    /// Reconcile the rows on screen with a fresh file list: rows are created,
+    /// updated in place or dropped, so an untouched file's row (and any
+    /// selection inside it) is left exactly as it was.
+    void apply(const QList<FileDiff> &files);
 
-    /// "12 files, +340 -58" for the header, counted from the rendered diff.
-    static QString statsFor(const QString &diff, int untracked);
+    /// Show a message instead of the file rows (no changes, not a repository,
+    /// git failed).
+    void showMessage(const QString &text);
+
+    /// Split `git diff` output into one FileDiff per file.
+    static QList<FileDiff> parseDiff(const QString &diff, int maxLines);
 
     ReviewConfig m_cfg;
-    QString m_dir;              // working directory the diff is taken in
-    QLabel *m_stats = nullptr;  // header summary
-    QPlainTextEdit *m_view = nullptr;
-    DiffHighlighter *m_highlighter = nullptr;
+    QString m_dir;                 // working directory the diff is taken in
+    QLabel *m_stats = nullptr;     // header summary
+    QLabel *m_message = nullptr;   // shown instead of the rows when there is nothing to show
+    QScrollArea *m_scroll = nullptr;
+    QWidget *m_list = nullptr;     // row container inside the scroll area
+    QVBoxLayout *m_listLayout = nullptr;
+    QHash<QString, FileCard *> m_cards;
+    QStringList m_order;           // paths currently laid out, in display order
+    QSet<QString> m_expanded;      // paths the user opened, remembered across refreshes
     QTimer m_poll;
-    bool m_running = false;     // a git run is in flight
-    bool m_rerun = false;       // a refresh arrived during that run
-    QString m_text;             // text currently displayed, compared against on refresh
+    bool m_running = false;        // a git run is in flight
+    bool m_rerun = false;          // a refresh arrived during that run
 };

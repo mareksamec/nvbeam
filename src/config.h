@@ -71,7 +71,10 @@ struct Config {
     QString reviewBase;                   // revision to diff against; empty = worktree vs HEAD
     QString reviewFont;                   // empty = use terminal font
     int reviewFontSize = 0;               // 0 = use terminal font size
-    int reviewMaxLines = 20000;           // cap on rendered diff lines
+    int reviewMaxLines = 20000;           // cap on the diff lines kept per file
+    int reviewFileMaxHeight = 600;        // tallest an expanded file grows before it scrolls itself
+    bool reviewShowContext = false;       // expand a file to the full hunks instead of the
+                                          // changed lines only
     QString reviewAddedColor = "#98c379";   // "+" lines
     QString reviewRemovedColor = "#e06c75"; // "-" lines
     QString reviewHunkColor = "#61afef";    // "@@" hunk headers

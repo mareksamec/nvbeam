@@ -381,8 +381,9 @@
 
 - [x] **Change review panel** (`src/changereview.cpp`, task 005) - a native Qt
   panel opening to the right of the side terminal (`◧` on its toolbar, or
-  Ctrl+Shift+G) that shows `git diff` of the worktree plus the untracked file
-  names, colored and selectable. It reads what is on disk rather than the CLI's
+  Ctrl+Shift+G): a scrolling column of per-file rows (`FileCard`), collapsed to
+  name, path and `+/-` counts and expanding to that file's diff in its own
+  selectable text area, with a per-file toggle for the unchanged context lines. It reads what is on disk rather than the CLI's
   diff request, which is the agent's permission-request surface and therefore
   never arrives in auto-accept or bypass mode. While open it polls every
   `[review] refresh_ms`, skipping ticks while the window is in the background
