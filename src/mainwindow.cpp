@@ -40,6 +40,11 @@ namespace {
 /// the foreground.
 constexpr qreal kHoverBlend = 0.18;
 
+/// How far a file row's header band, and the hairline under it, are nudged
+/// from the panel background towards the foreground.
+constexpr qreal kRowHeaderBlend = 0.12;
+constexpr qreal kRowBorderBlend = 0.28;
+
 /// Paint the review panel in the terminal's colors: the same scheme file the
 /// side terminal loads, with the [terminal] foreground/background overrides
 /// applied on top of it, exactly as TerminalPanel does. A color the scheme
@@ -71,6 +76,8 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
     // Hover is not a scheme color: it is the background nudged towards the
     // foreground, so it works on a dark and on a light scheme alike.
     review.hover = blendColors(review.background, review.foreground, kHoverBlend);
+    review.rowHeader = blendColors(review.background, review.foreground, kRowHeaderBlend);
+    review.rowBorder = blendColors(review.background, review.foreground, kRowBorderBlend);
 }
 
 } // namespace

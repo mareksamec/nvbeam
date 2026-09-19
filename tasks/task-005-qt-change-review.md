@@ -119,7 +119,8 @@ The panel has no palette of its own. `applyTerminalScheme()` in
 through `src/colorscheme.{h,cpp}` (the loader `TerminalPanel` also uses now)
 and maps it: background and foreground as they are, green for `+`, red for
 `-`, blue for `@@`, magenta for the file name, bright black for dimmed text,
-black for the selection, and a background/foreground blend for hover. The
+black for the selection, and background/foreground blends for hover and for
+the band each file row's name sits on. The
 `[terminal] foreground`/`background` overrides win over the scheme, the same
 precedence the terminal itself applies. A color the scheme does not declare
 keeps the `ReviewConfig` default.

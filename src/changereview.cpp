@@ -40,6 +40,9 @@ constexpr int kMinRefreshMs = 250;
 /// stops waiting for it and lets a new run start.
 constexpr int kWatchdogFactor = 2;
 
+/// Gap between two file rows, on top of the band each row's header carries.
+constexpr int kRowSpacing = 3;
+
 /// How much of the added/removed color is mixed into a changed line's
 /// background when the code on it carries the language's own colors.
 constexpr qreal kDiffTint = 0.22;
@@ -215,8 +218,16 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     layout->setSpacing(0);
 
     // Header row: the arrow doubles as the expander, so the whole row is one
-    // click target rather than a separate button plus a label.
+    // click target rather than a separate button plus a label. It carries a
+    // band across the panel's full width, which is what separates one file
+    // from the next once several are expanded.
     auto *row = new QWidget(this);
+    row->setObjectName(QStringLiteral("fileCardHeader"));
+    // A plain QWidget does not paint a style sheet background on its own.
+    row->setAttribute(Qt::WA_StyledBackground, true);
+    row->setStyleSheet(QStringLiteral(
+        "QWidget#fileCardHeader { background: %1; border-bottom: 1px solid %2; }")
+            .arg(m_cfg.rowHeader.name(), m_cfg.rowBorder.name()));
     auto *rowLayout = new QHBoxLayout(row);
     rowLayout->setContentsMargins(2, 1, 4, 1);
     rowLayout->setSpacing(4);
@@ -464,7 +475,7 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     m_list->setStyleSheet(QStringLiteral("background: %1;").arg(bg));
     m_listLayout = new QVBoxLayout(m_list);
     m_listLayout->setContentsMargins(0, 0, 0, 0);
-    m_listLayout->setSpacing(1);
+    m_listLayout->setSpacing(kRowSpacing);
 
     m_message = new QLabel(m_list);
     m_message->setWordWrap(true);

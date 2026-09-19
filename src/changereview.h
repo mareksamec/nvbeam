@@ -50,6 +50,9 @@ struct ReviewConfig {
     QColor dim{"#888888"};     // directories, tags, messages, toolbar text
     QColor selection{"#44475a"};  // selected diff text
     QColor hover{"#2f2f2f"};   // button under the pointer, and a pressed toggle
+    QColor rowHeader{"#2a2a2a"};  // band behind a file row's name, separating one file
+                                  // from the next
+    QColor rowBorder{"#3a3a3a"};  // hairline under that band
 };
 
 /// One changed file, as parsed out of `git diff` (or listed as untracked).

@@ -139,8 +139,9 @@ The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+G**, opens a
 review panel to the right of that terminal. It lists one row per changed file,
 each showing the file name, its directory and `+added -removed` counts, and a
 tag for a new, deleted, renamed or untracked file. A row is collapsed by
-default; clicking it (or **⌄** / **⌃** in the header, which open and close every
-row) reveals that file's diff, and inside a row the **⋯** button brings back the
+default; its name sits on a band running the full width of the panel, which is
+what keeps one expanded file apart from the next. Clicking the row (or **⌄** /
+**⌃** in the header, which open and close every row) reveals that file's diff, and inside a row the **⋯** button brings back the
 unchanged context lines, which are hidden so an open file shows only what
 actually changed. Untracked files are listed too, with their content read from
 disk as added lines when the row is opened.
