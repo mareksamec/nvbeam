@@ -149,11 +149,13 @@ disk as added lines when the row is opened.
 Each file's diff lives in its own read-only text area, so the text is selectable
 and **Ctrl+C** copies it as the plain diff. In a build with
 KF6SyntaxHighlighting the code inside a diff is colored by the file's own
-language: an added line is then a green-tinted background rather than green
-text, a removed one red-tinted, and the leading `+`/`-` keeps the diff color.
+language, and an added or removed line carries its color as a stripe across the
+panel's full width instead of as text color, with the leading `+`/`-` keeping
+the diff color.
 Set `[review] syntax = false` for plain diff coloring. The panel draws itself in the
 terminal's colors: the scheme named by `[terminal] color_scheme` (and the
-`foreground`/`background` overrides there) supplies its background and text,
+`foreground`/`background` overrides there) supplies its text and, a shade
+lighter than the terminal itself, its background,
 green for added lines, red for removed ones, blue for hunk headers and magenta
 for the file name, so the panel and the terminal next to it match.
 

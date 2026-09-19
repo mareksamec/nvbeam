@@ -40,6 +40,11 @@ namespace {
 /// the foreground.
 constexpr qreal kHoverBlend = 0.18;
 
+/// How far the panel's own background is lifted off the terminal's: the diff
+/// reads better on a slightly lighter, greyer ground, and the lift also tells
+/// the two panes apart where they meet.
+constexpr qreal kPanelLift = 0.08;
+
 /// How far a file row's header band, and the hairline under it, are nudged
 /// from the panel background towards the foreground.
 constexpr qreal kRowHeaderBlend = 0.12;
@@ -72,6 +77,7 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
     // applies in TerminalPanel::effectiveColorScheme().
     take(review.foreground, QColor(cfg.terminalForeground));
     take(review.background, QColor(cfg.terminalBackground));
+    review.background = blendColors(review.background, review.foreground, kPanelLift);
 
     // Hover is not a scheme color: it is the background nudged towards the
     // foreground, so it works on a dark and on a light scheme alike.

@@ -74,8 +74,9 @@ struct FileDiff {
 /// pastes as the diff, and Qt re-highlights only the blocks that changed.
 ///
 /// With KSyntaxHighlighting available it also colors the code itself: the
-/// added/removed color then tints the line's background, the way a code review
-/// marks a changed line, and the text carries the language's own colors. The
+/// added/removed color then colors the marker column only, the text carries the
+/// language's own colors, and the line's green or red background is painted by
+/// FileCard as a full-width selection behind it. The
 /// language is fed the line without its leading +/- marker and the formats it
 /// returns are shifted back by that one character, so the document's text is
 /// still the diff, character for character.
@@ -108,10 +109,6 @@ private:
     QTextCharFormat m_removed;
     QTextCharFormat m_hunk;
 #ifdef NEOBEAM_HAS_SYNTAX
-    QTextCharFormat m_addedLine;    // background tint of a "+" line
-    QTextCharFormat m_removedLine;  // background tint of a "-" line
-    QColor m_lineBackground;        // tint of the line being highlighted, re-applied
-                                    // with every token so a token keeps it
     int m_offset = 0;               // width of the marker column skipped on that line
 #endif
 };
@@ -151,6 +148,10 @@ private:
     void applyBody();
     /// Fit the editor to the wrapped text, capped at ReviewConfig::fileMaxHeight.
     void fitBody();
+    /// Paint an added or removed line's background across the editor's whole
+    /// width. A character format would stop at the end of the text, so the
+    /// stripe is drawn as a full-width extra selection per changed line.
+    void paintChangedLines();
     /// Read an untracked file from disk and turn it into added lines.
     void loadUntracked();
 

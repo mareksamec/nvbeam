@@ -19,12 +19,14 @@
 #include <KSyntaxHighlighting/Theme>
 #endif
 #include <QResizeEvent>
+#include <QFrame>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextBlockUserData>
+#include <QTextEdit>
 #include <QToolBar>
 #include <QToolButton>
 #include <QHBoxLayout>
@@ -95,14 +97,6 @@ DiffHighlighter::DiffHighlighter(const ReviewConfig &cfg, QTextDocument *documen
     m_removed.setForeground(cfg.removed);
     m_hunk.setForeground(cfg.hunk);
 #ifdef NEOBEAM_HAS_SYNTAX
-    // With the code colored by its language, "added" and "removed" have to be
-    // said by the line's background instead of its text color.
-    m_addedLine.setBackground(blendColors(cfg.background, cfg.added, kDiffTint));
-    m_addedLine.setForeground(cfg.added);
-    m_removedLine.setBackground(blendColors(cfg.background, cfg.removed, kDiffTint));
-    m_removedLine.setForeground(cfg.removed);
-    // The marker column keeps the diff color, so a line still reads as added
-    // or removed where the language paints nothing.
     // A theme matching the panel, which is the terminal's scheme: a light
     // theme's colors would be unreadable on a dark terminal and the other way
     // round.
@@ -159,15 +153,6 @@ void DiffHighlighter::highlightBlock(const QString &text)
         return;
     }
 
-    if (added || removed) {
-        // Replaces the plain coloring above: tint the whole line, text color
-        // included, and let the language paint over it token by token.
-        setFormat(0, text.size(), added ? m_addedLine : m_removedLine);
-        m_lineBackground = (added ? m_addedLine : m_removedLine).background().color();
-    } else {
-        m_lineBackground = QColor();
-    }
-
     KSyntaxHighlighting::State previous;
     const QTextBlock prev = currentBlock().previous();
     if (prev.isValid()) {
@@ -200,10 +185,6 @@ void DiffHighlighter::applyFormat(int offset, int length,
         out.setFontWeight(QFont::Bold);
     if (format.isItalic(theme()))
         out.setFontItalic(true);
-    // setFormat() replaces a range's format rather than merging into it, so
-    // the line's tint has to be carried by every token.
-    if (m_lineBackground.isValid())
-        out.setBackground(m_lineBackground);
     setFormat(offset + m_offset, length, out);
 }
 #endif
@@ -280,10 +261,18 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_body->setFont(diffFont(m_cfg));
     m_body->setStyleSheet(QStringLiteral(
         "QPlainTextEdit { background: %1; color: %2; selection-background-color: %3; }")
-            .arg(m_cfg.background.darker(110).name(), m_cfg.foreground.name(),
+            .arg(m_cfg.background.name(), m_cfg.foreground.name(),
                  m_cfg.selection.name()));
     m_body->hide();
     layout->addWidget(m_body);
+
+    // Closes the file block off, so two files in a row do not run together
+    // once both are expanded.
+    auto *separator = new QFrame(this);
+    separator->setFrameShape(QFrame::NoFrame);
+    separator->setFixedHeight(1);
+    separator->setStyleSheet(QStringLiteral("background: %1;").arg(m_cfg.rowBorder.name()));
+    layout->addWidget(separator);
 
     m_highlighter = new DiffHighlighter(m_cfg, m_body->document());
     m_highlighter->setFileName(file.path);
@@ -371,8 +360,34 @@ void FileCard::applyBody()
         const int scroll = m_body->verticalScrollBar()->value();
         m_body->setPlainText(text);
         m_body->verticalScrollBar()->setValue(scroll);
+        paintChangedLines();
     }
     fitBody();
+}
+
+void FileCard::paintChangedLines()
+{
+    const QColor addedTint = blendColors(m_cfg.background, m_cfg.added, kDiffTint);
+    const QColor removedTint = blendColors(m_cfg.background, m_cfg.removed, kDiffTint);
+
+    QList<QTextEdit::ExtraSelection> stripes;
+    for (QTextBlock block = m_body->document()->begin(); block.isValid();
+         block = block.next()) {
+        const QString line = block.text();
+        const bool added = line.startsWith(QLatin1Char('+'));
+        const bool removed = !added && line.startsWith(QLatin1Char('-'))
+                             && !line.startsWith(QLatin1String("--"));
+        if (!added && !removed)
+            continue;
+        QTextEdit::ExtraSelection stripe;
+        stripe.format.setBackground(added ? addedTint : removedTint);
+        // Without this the stripe ends where the text does.
+        stripe.format.setProperty(QTextFormat::FullWidthSelection, true);
+        stripe.cursor = QTextCursor(block);
+        stripe.cursor.clearSelection();
+        stripes << stripe;
+    }
+    m_body->setExtraSelections(stripes);
 }
 
 void FileCard::fitBody()

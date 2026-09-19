@@ -119,8 +119,14 @@ The panel has no palette of its own. `applyTerminalScheme()` in
 through `src/colorscheme.{h,cpp}` (the loader `TerminalPanel` also uses now)
 and maps it: background and foreground as they are, green for `+`, red for
 `-`, blue for `@@`, magenta for the file name, bright black for dimmed text,
-black for the selection, and background/foreground blends for hover and for
-the band each file row's name sits on. The
+black for the selection, and background/foreground blends for hover, for the
+band each file row's name sits on, for the hairline that closes a file block
+off, and for the panel background itself, which sits a shade lighter than the
+terminal's so the diff reads on a greyer ground.
+
+An added or removed line's color is painted as a full-width extra selection on
+the row's editor (`FileCard::paintChangedLines`), not as a character format,
+which would stop where the text does. The
 `[terminal] foreground`/`background` overrides win over the scheme, the same
 precedence the terminal itself applies. A color the scheme does not declare
 keeps the `ReviewConfig` default.
