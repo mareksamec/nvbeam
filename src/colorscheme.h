@@ -40,6 +40,10 @@ QStringList neobeamSchemeDirs();
 /// Returns an empty string if not found.
 QString findColorSchemeFile(const QString &scheme);
 
+/// A fraction of `over` mixed into `under`, for the shades a color scheme does
+/// not declare (a hover background, a diff line's tint).
+QColor blendColors(const QColor &under, const QColor &over, qreal fraction);
+
 /// Read a scheme by name or path. The file is QSettings-compatible INI with
 /// one group per color holding "r,g,b"; a group that is missing or malformed
 /// leaves that color invalid rather than failing the whole load.

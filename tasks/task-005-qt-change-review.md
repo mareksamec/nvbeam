@@ -94,7 +94,23 @@ A new `[review]` section, since none of these belong to an existing one:
 | `font_size` | 0 | Point size; `0` means the terminal font size |
 | `max_lines` | 20000 | Cap on the diff lines kept per file, so a huge change cannot stall the UI |
 | `file_max_height` | 600 | Tallest an expanded file grows before it scrolls itself, in pixels |
+| `syntax` | true | Color the code in a diff line by the file's language; ignored in a build without KF6SyntaxHighlighting |
 | `show_context` | false | Expand rows to the full hunks instead of the changed lines only |
+
+## Code coloring
+
+`DiffHighlighter` also derives from `KSyntaxHighlighting::AbstractHighlighter`
+when the optional KF6SyntaxHighlighting dependency is present
+(`NEOBEAM_SYNTAX`, on by default, silently off when the package is missing).
+Per line it hands the language the text without its `+`/`-` marker and shifts
+the returned token offsets back over that column, so the document still holds
+the diff character for character and a copied selection still pastes as one.
+The added/removed color then tints the line's background instead of coloring
+its text, the marker column keeps that color, and the lexer state is carried
+between lines in a `QTextBlockUserData` and reset at every hunk header, since a
+hunk starts at an arbitrary line of the file. The language is chosen from the
+file path (`Repository::definitionForFileName`) and the theme from the panel
+background's lightness.
 
 ## Colors
 

@@ -1,5 +1,7 @@
 #include "changereview.h"
 
+#include "colorscheme.h"
+
 #include <QAction>
 #include <QDir>
 #include <QFile>
@@ -9,12 +11,20 @@
 #include <QPlainTextEdit>
 #include <QProcess>
 #include <memory>
+
+#ifdef NEOBEAM_HAS_SYNTAX
+#include <KSyntaxHighlighting/Definition>
+#include <KSyntaxHighlighting/Repository>
+#include <KSyntaxHighlighting/State>
+#include <KSyntaxHighlighting/Theme>
+#endif
 #include <QResizeEvent>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QAbstractTextDocumentLayout>
 #include <QTextBlock>
 #include <QTextDocument>
+#include <QTextBlockUserData>
 #include <QToolBar>
 #include <QToolButton>
 #include <QHBoxLayout>
@@ -29,6 +39,10 @@ constexpr int kMinRefreshMs = 250;
 /// How many timeouts a git run has to overrun before the watchdog in collect()
 /// stops waiting for it and lets a new run start.
 constexpr int kWatchdogFactor = 2;
+
+/// How much of the added/removed color is mixed into a changed line's
+/// background when the code on it carries the language's own colors.
+constexpr qreal kDiffTint = 0.22;
 
 /// Shortest an expanded body is ever made, so an empty or one-line diff still
 /// shows as an open row rather than a sliver.
@@ -48,14 +62,67 @@ QFont diffFont(const ReviewConfig &cfg)
     return font;
 }
 
+#ifdef NEOBEAM_HAS_SYNTAX
+
+/// The lexer state a line ended in, kept so the next line continues it (a
+/// string or comment running across lines). QSyntaxHighlighter's own int state
+/// cannot hold it.
+class DiffBlockState : public QTextBlockUserData
+{
+public:
+    KSyntaxHighlighting::State state;
+};
+
+/// One repository for the process: constructing it reads the definition files,
+/// which is far too much work to repeat per file row.
+KSyntaxHighlighting::Repository &syntaxRepository()
+{
+    static KSyntaxHighlighting::Repository repo;
+    return repo;
+}
+
+#endif // NEOBEAM_HAS_SYNTAX
+
 } // namespace
 
 DiffHighlighter::DiffHighlighter(const ReviewConfig &cfg, QTextDocument *document)
-    : QSyntaxHighlighter(document)
+    : QSyntaxHighlighter(document), m_cfg(cfg)
 {
     m_added.setForeground(cfg.added);
     m_removed.setForeground(cfg.removed);
     m_hunk.setForeground(cfg.hunk);
+#ifdef NEOBEAM_HAS_SYNTAX
+    // With the code colored by its language, "added" and "removed" have to be
+    // said by the line's background instead of its text color.
+    m_addedLine.setBackground(blendColors(cfg.background, cfg.added, kDiffTint));
+    m_addedLine.setForeground(cfg.added);
+    m_removedLine.setBackground(blendColors(cfg.background, cfg.removed, kDiffTint));
+    m_removedLine.setForeground(cfg.removed);
+    // The marker column keeps the diff color, so a line still reads as added
+    // or removed where the language paints nothing.
+    // A theme matching the panel, which is the terminal's scheme: a light
+    // theme's colors would be unreadable on a dark terminal and the other way
+    // round.
+    setTheme(syntaxRepository().defaultTheme(
+        cfg.background.lightness() < 128 ? KSyntaxHighlighting::Repository::DarkTheme
+                                         : KSyntaxHighlighting::Repository::LightTheme));
+#endif
+}
+
+void DiffHighlighter::setFileName(const QString &path)
+{
+#ifdef NEOBEAM_HAS_SYNTAX
+    if (!m_cfg.syntax)
+        return;
+    const KSyntaxHighlighting::Definition def =
+        syntaxRepository().definitionForFileName(path);
+    if (def.name() == definition().name())
+        return;
+    setDefinition(def);
+    rehighlight();
+#else
+    Q_UNUSED(path);
+#endif
 }
 
 void DiffHighlighter::highlightBlock(const QString &text)
@@ -64,13 +131,79 @@ void DiffHighlighter::highlightBlock(const QString &text)
         return;
     // The file header lines are not in the body (the row's own header carries
     // the name), so a leading "+"/"-" here is always a changed line.
-    if (text.startsWith(QLatin1String("@@")))
+    const bool hunk = text.startsWith(QLatin1String("@@"));
+    const bool added = !hunk && text.startsWith(QLatin1Char('+'));
+    const bool removed = !hunk && text.startsWith(QLatin1Char('-'));
+    const bool context = !hunk && !added && !removed && text.startsWith(QLatin1Char(' '));
+
+    if (hunk)
         setFormat(0, text.size(), m_hunk);
-    else if (text.startsWith(QLatin1Char('+')))
+    else if (added)
         setFormat(0, text.size(), m_added);
-    else if (text.startsWith(QLatin1Char('-')))
+    else if (removed)
         setFormat(0, text.size(), m_removed);
+
+#ifdef NEOBEAM_HAS_SYNTAX
+    if (!m_cfg.syntax || !definition().isValid())
+        return;
+
+    auto *data = new DiffBlockState;
+    // A hunk header is diff syntax, not the file's language, and it also ends
+    // whatever the lexer was in the middle of: the next hunk starts at an
+    // arbitrary line of the file, so its state begins empty.
+    if (hunk || !(added || removed || context)) {
+        setCurrentBlockUserData(data);
+        return;
+    }
+
+    if (added || removed) {
+        // Replaces the plain coloring above: tint the whole line, text color
+        // included, and let the language paint over it token by token.
+        setFormat(0, text.size(), added ? m_addedLine : m_removedLine);
+        m_lineBackground = (added ? m_addedLine : m_removedLine).background().color();
+    } else {
+        m_lineBackground = QColor();
+    }
+
+    KSyntaxHighlighting::State previous;
+    const QTextBlock prev = currentBlock().previous();
+    if (prev.isValid()) {
+        if (auto *prevData = dynamic_cast<DiffBlockState *>(prev.userData()))
+            previous = prevData->state;
+    }
+
+    // The marker column is not part of the code, so the language never sees
+    // it; applyFormat() shifts the token offsets back over it.
+    m_offset = 1;
+    data->state = highlightLine(QStringView(text).mid(m_offset), previous);
+    setCurrentBlockUserData(data);
+#else
+    Q_UNUSED(context);
+#endif
 }
+
+#ifdef NEOBEAM_HAS_SYNTAX
+void DiffHighlighter::applyFormat(int offset, int length,
+                                  const KSyntaxHighlighting::Format &format)
+{
+    if (length <= 0)
+        return;
+    QTextCharFormat out;
+    if (format.hasTextColor(theme()))
+        out.setForeground(format.textColor(theme()));
+    else
+        out.setForeground(m_cfg.foreground);
+    if (format.isBold(theme()))
+        out.setFontWeight(QFont::Bold);
+    if (format.isItalic(theme()))
+        out.setFontItalic(true);
+    // setFormat() replaces a range's format rather than merging into it, so
+    // the line's tint has to be carried by every token.
+    if (m_lineBackground.isValid())
+        out.setBackground(m_lineBackground);
+    setFormat(offset + m_offset, length, out);
+}
+#endif
 
 // --- FileCard ---------------------------------------------------------------
 
@@ -142,6 +275,7 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     layout->addWidget(m_body);
 
     m_highlighter = new DiffHighlighter(m_cfg, m_body->document());
+    m_highlighter->setFileName(file.path);
 
     setFile(file);
 }
@@ -149,7 +283,10 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
 void FileCard::setFile(const FileDiff &file)
 {
     const bool bodyChanged = file.body != m_file.body;
+    const bool pathChanged = file.path != m_file.path;
     m_file = file;
+    if (pathChanged)
+        m_highlighter->setFileName(m_file.path);
 
     QString label = m_file.name;
     if (!m_file.dir.isEmpty())

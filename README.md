@@ -26,6 +26,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - CMake 3.20+
 - C++20 compiler
 - qtermwidget6 (optional, for embedded terminal)
+- KF6SyntaxHighlighting (optional, for code coloring in the review panel's diffs)
 
 ## Build
 
@@ -49,6 +50,8 @@ cmake --build build -j$(nproc)
 sudo apt install cmake g++ qt6-base-dev libgl1-mesa-dev
 # Optional: for embedded terminal
 sudo apt install qtermwidget6-dev
+# Optional: for code coloring in review diffs
+sudo apt install libkf6syntaxhighlighting-dev
 ```
 
 ### Dependencies (Fedora)
@@ -57,6 +60,8 @@ sudo apt install qtermwidget6-dev
 sudo dnf install cmake gcc-c++ qt6-qtbase-devel mesa-libGL-devel
 # Optional: for embedded terminal
 sudo dnf install qtermwidget-qt6-devel
+# Optional: for code coloring in review diffs
+sudo dnf install kf6-syntax-highlighting-devel
 ```
 
 ### Dependencies (Arch)
@@ -65,6 +70,8 @@ sudo dnf install qtermwidget-qt6-devel
 sudo pacman -S cmake qt6-base
 # Optional: for embedded terminal
 sudo pacman -S qtermwidget
+# Optional: for code coloring in review diffs
+sudo pacman -S syntax-highlighting
 ```
 
 ## Usage
@@ -139,7 +146,11 @@ actually changed. Untracked files are listed too, with their content read from
 disk as added lines when the row is opened.
 
 Each file's diff lives in its own read-only text area, so the text is selectable
-and **Ctrl+C** copies it as the plain diff. The panel draws itself in the
+and **Ctrl+C** copies it as the plain diff. In a build with
+KF6SyntaxHighlighting the code inside a diff is colored by the file's own
+language: an added line is then a green-tinted background rather than green
+text, a removed one red-tinted, and the leading `+`/`-` keeps the diff color.
+Set `[review] syntax = false` for plain diff coloring. The panel draws itself in the
 terminal's colors: the scheme named by `[terminal] color_scheme` (and the
 `foreground`/`background` overrides there) supplies its background and text,
 green for added lines, red for removed ones, blue for hunk headers and magenta
@@ -236,6 +247,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # max_lines = 20000  # cap on the diff lines kept per file
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
+# syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
 # The panel has no colors of its own: it follows [terminal] color_scheme and
 # the foreground/background overrides there.
 

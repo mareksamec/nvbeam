@@ -393,7 +393,9 @@
   buffer, and inotify does not recurse. Its palette is the terminal's: the
   `[terminal] color_scheme` file, read through `src/colorscheme.cpp` (shared
   with `TerminalPanel`) and mapped to the panel's backgrounds, diff colors and
-  dimmed text.
+  dimmed text. With the optional KF6SyntaxHighlighting dependency the code
+  inside a diff is colored by the file's language, with the added/removed color
+  moved to the line's background.
 
 ### Codex (ChatGPT)
 - Same for Codex CLI if possible.

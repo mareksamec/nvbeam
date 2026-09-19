@@ -36,16 +36,9 @@
 
 namespace {
 
-/// A fraction of `over` mixed into `under`, for shades a color scheme does not
-/// declare (the hover background).
-QColor blend(const QColor &under, const QColor &over, qreal fraction)
-{
-    const qreal keep = 1.0 - fraction;
-    return QColor(int(under.red() * keep + over.red() * fraction),
-                  int(under.green() * keep + over.green() * fraction),
-                  int(under.blue() * keep + over.blue() * fraction));
-}
-
+/// How far the hover background is nudged from the panel background towards
+/// the foreground.
+constexpr qreal kHoverBlend = 0.18;
 
 /// Paint the review panel in the terminal's colors: the same scheme file the
 /// side terminal loads, with the [terminal] foreground/background overrides
@@ -77,7 +70,7 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
 
     // Hover is not a scheme color: it is the background nudged towards the
     // foreground, so it works on a dark and on a light scheme alike.
-    review.hover = blend(review.background, review.foreground, 0.18);
+    review.hover = blendColors(review.background, review.foreground, kHoverBlend);
 }
 
 } // namespace
@@ -303,6 +296,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.maxLines = cfg.reviewMaxLines;
     reviewCfg.fileMaxHeight = cfg.reviewFileMaxHeight;
     reviewCfg.showContext = cfg.reviewShowContext;
+    reviewCfg.syntax = cfg.reviewSyntax;
     applyTerminalScheme(reviewCfg, cfg);
     m_review = new ChangeReviewPanel(reviewCfg, hsplitter);
     m_review->hide();

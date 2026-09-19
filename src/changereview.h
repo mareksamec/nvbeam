@@ -7,6 +7,10 @@
 #include <QString>
 #include <QStringList>
 #include <QSyntaxHighlighter>
+#ifdef NEOBEAM_HAS_SYNTAX
+#include <KSyntaxHighlighting/AbstractHighlighter>
+#include <KSyntaxHighlighting/Format>
+#endif
 #include <QTextCharFormat>
 #include <QTimer>
 #include <QWidget>
@@ -31,6 +35,8 @@ struct ReviewConfig {
     int fileMaxHeight = 600;   // tallest an expanded file body grows before it scrolls itself
     bool showContext = false;  // expand a file straight to the full hunks instead of
                                // the changed lines only
+    bool syntax = true;        // color the code inside a diff line by the file's language
+                               // (needs a build with KSyntaxHighlighting)
     // Palette, taken from the terminal's color scheme (see reviewPalette() in
     // mainwindow.cpp) so the panel and the side terminal it opens next to are
     // one piece of furniture. The defaults below are only what a build with no
@@ -63,20 +69,48 @@ struct FileDiff {
 /// Colors a unified diff held in a plain-text document. A highlighter rather
 /// than rich text on purpose: the document stays plain, so a copied selection
 /// pastes as the diff, and Qt re-highlights only the blocks that changed.
+///
+/// With KSyntaxHighlighting available it also colors the code itself: the
+/// added/removed color then tints the line's background, the way a code review
+/// marks a changed line, and the text carries the language's own colors. The
+/// language is fed the line without its leading +/- marker and the formats it
+/// returns are shifted back by that one character, so the document's text is
+/// still the diff, character for character.
 class DiffHighlighter : public QSyntaxHighlighter
+#ifdef NEOBEAM_HAS_SYNTAX
+                      , public KSyntaxHighlighting::AbstractHighlighter
+#endif
 {
     Q_OBJECT
 
 public:
     DiffHighlighter(const ReviewConfig &cfg, QTextDocument *document);
 
+    /// Pick the language definition from a file path. A path with no known
+    /// definition (or a build without KSyntaxHighlighting) leaves the diff
+    /// coloring on its own.
+    void setFileName(const QString &path);
+
 protected:
     void highlightBlock(const QString &text) override;
+#ifdef NEOBEAM_HAS_SYNTAX
+    /// Called by highlightLine() for each token of the code on the line.
+    void applyFormat(int offset, int length,
+                     const KSyntaxHighlighting::Format &format) override;
+#endif
 
 private:
+    ReviewConfig m_cfg;
     QTextCharFormat m_added;
     QTextCharFormat m_removed;
     QTextCharFormat m_hunk;
+#ifdef NEOBEAM_HAS_SYNTAX
+    QTextCharFormat m_addedLine;    // background tint of a "+" line
+    QTextCharFormat m_removedLine;  // background tint of a "-" line
+    QColor m_lineBackground;        // tint of the line being highlighted, re-applied
+                                    // with every token so a token keeps it
+    int m_offset = 0;               // width of the marker column skipped on that line
+#endif
 };
 
 /// One file's row in the review panel: a header button that expands to reveal

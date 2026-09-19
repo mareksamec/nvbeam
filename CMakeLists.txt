@@ -9,6 +9,7 @@ set(CMAKE_AUTORCC ON)  # compile .qrc resources (generated app icons)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
 option(NEOBEAM_TERMINAL "Build with embedded terminal (requires qtermwidget6)" ON)
+option(NEOBEAM_SYNTAX "Color code in review diffs (requires KF6SyntaxHighlighting)" ON)
 
 include(FetchContent)
 FetchContent_Declare(
@@ -20,6 +21,16 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(toml11)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
+
+# Code coloring inside the change review panel's diffs. Optional: without it
+# the panel still colors added/removed/hunk lines itself.
+if(NEOBEAM_SYNTAX)
+    find_package(KF6SyntaxHighlighting QUIET)
+    if(NOT KF6SyntaxHighlighting_FOUND)
+        message(STATUS "KF6SyntaxHighlighting not found - diffs without code coloring")
+        set(NEOBEAM_SYNTAX OFF)
+    endif()
+endif()
 
 if(NEOBEAM_TERMINAL)
     find_package(qtermwidget6 QUIET)
@@ -62,6 +73,11 @@ target_link_libraries(neobeam PRIVATE
 if(NEOBEAM_TERMINAL)
     target_compile_definitions(neobeam PRIVATE NEOBEAM_HAS_TERMINAL)
     target_link_libraries(neobeam PRIVATE qtermwidget6)
+endif()
+
+if(NEOBEAM_SYNTAX)
+    target_compile_definitions(neobeam PRIVATE NEOBEAM_HAS_SYNTAX)
+    target_link_libraries(neobeam PRIVATE KF6::SyntaxHighlighting)
 endif()
 
 # --- Application icon ---

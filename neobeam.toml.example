@@ -45,6 +45,7 @@
 # max_lines = 20000  # cap on the diff lines kept per file
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
+# syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
 # The panel has no colors of its own: it follows [terminal] color_scheme and
 # the foreground/background overrides there.
 

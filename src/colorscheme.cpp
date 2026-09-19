@@ -51,6 +51,14 @@ QString findColorSchemeFile(const QString &scheme)
     return {};
 }
 
+QColor blendColors(const QColor &under, const QColor &over, qreal fraction)
+{
+    const qreal keep = 1.0 - fraction;
+    return QColor(int(under.red() * keep + over.red() * fraction),
+                  int(under.green() * keep + over.green() * fraction),
+                  int(under.blue() * keep + over.blue() * fraction));
+}
+
 TerminalScheme loadTerminalScheme(const QString &scheme)
 {
     TerminalScheme out;
