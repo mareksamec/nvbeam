@@ -139,8 +139,11 @@ actually changed. Untracked files are listed too, with their content read from
 disk as added lines when the row is opened.
 
 Each file's diff lives in its own read-only text area, so the text is selectable
-and **Ctrl+C** copies it as the plain diff. Added lines are green, removed lines
-red, hunk headers blue (all four colors are configurable).
+and **Ctrl+C** copies it as the plain diff. The panel draws itself in the
+terminal's colors: the scheme named by `[terminal] color_scheme` (and the
+`foreground`/`background` overrides there) supplies its background and text,
+green for added lines, red for removed ones, blue for hunk headers and magenta
+for the file name, so the panel and the terminal next to it match.
 
 This is a review of what is on disk, which is the point: an agent running in
 the side terminal in auto-accept mode never asks for approval, so nothing else
@@ -233,10 +236,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # max_lines = 20000  # cap on the diff lines kept per file
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
-# added_color = "#98c379"  # "+" lines
-# removed_color = "#e06c75"  # "-" lines
-# hunk_color = "#61afef"  # "@@" hunk headers
-# file_color = "#c678dd"  # file header lines
+# The panel has no colors of its own: it follows [terminal] color_scheme and
+# the foreground/background overrides there.
 
 # [ui]
 # ext_popupmenu = true

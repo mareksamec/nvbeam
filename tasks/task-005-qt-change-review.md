@@ -95,10 +95,18 @@ A new `[review]` section, since none of these belong to an existing one:
 | `max_lines` | 20000 | Cap on the diff lines kept per file, so a huge change cannot stall the UI |
 | `file_max_height` | 600 | Tallest an expanded file grows before it scrolls itself, in pixels |
 | `show_context` | false | Expand rows to the full hunks instead of the changed lines only |
-| `added_color` | `#98c379` | `+` lines |
-| `removed_color` | `#e06c75` | `-` lines |
-| `hunk_color` | `#61afef` | `@@` hunk headers |
-| `file_color` | `#c678dd` | File name in a row's header |
+
+## Colors
+
+The panel has no palette of its own. `applyTerminalScheme()` in
+`src/mainwindow.cpp` reads the scheme named by `[terminal] color_scheme`
+through `src/colorscheme.{h,cpp}` (the loader `TerminalPanel` also uses now)
+and maps it: background and foreground as they are, green for `+`, red for
+`-`, blue for `@@`, magenta for the file name, bright black for dimmed text,
+black for the selection, and a background/foreground blend for hover. The
+`[terminal] foreground`/`background` overrides win over the scheme, the same
+precedence the terminal itself applies. A color the scheme does not declare
+keeps the `ReviewConfig` default.
 
 ## Wiring
 

@@ -45,10 +45,8 @@
 # max_lines = 20000  # cap on the diff lines kept per file
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
-# added_color = "#98c379"  # "+" lines
-# removed_color = "#e06c75"  # "-" lines
-# hunk_color = "#61afef"  # "@@" hunk headers
-# file_color = "#c678dd"  # file header lines
+# The panel has no colors of its own: it follows [terminal] color_scheme and
+# the foreground/background overrides there.
 
 [ui]
 # ext_popupmenu = true

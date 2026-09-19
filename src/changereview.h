@@ -31,12 +31,19 @@ struct ReviewConfig {
     int fileMaxHeight = 600;   // tallest an expanded file body grows before it scrolls itself
     bool showContext = false;  // expand a file straight to the full hunks instead of
                                // the changed lines only
-    QColor added{"#98c379"};   // "+" lines
-    QColor removed{"#e06c75"}; // "-" lines
-    QColor hunk{"#61afef"};    // "@@" hunk headers
-    QColor file{"#c678dd"};    // file name in the header row
+    // Palette, taken from the terminal's color scheme (see reviewPalette() in
+    // mainwindow.cpp) so the panel and the side terminal it opens next to are
+    // one piece of furniture. The defaults below are only what a build with no
+    // readable scheme falls back to.
     QColor background{"#1e1e1e"};
     QColor foreground{"#c8c8c8"};
+    QColor added{"#98c379"};   // "+" lines; the scheme's green
+    QColor removed{"#e06c75"}; // "-" lines; the scheme's red
+    QColor hunk{"#61afef"};    // "@@" hunk headers; the scheme's blue
+    QColor file{"#c678dd"};    // file name in a row's header; the scheme's magenta
+    QColor dim{"#888888"};     // directories, tags, messages, toolbar text
+    QColor selection{"#44475a"};  // selected diff text
+    QColor hover{"#2f2f2f"};   // button under the pointer, and a pressed toggle
 };
 
 /// One changed file, as parsed out of `git diff` (or listed as untracked).

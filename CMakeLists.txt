@@ -40,6 +40,7 @@ add_executable(neobeam
     src/branchswitcher.cpp
     src/uiwidgets.cpp
     src/gitstatus.cpp
+    src/colorscheme.cpp
     src/changereview.cpp
     src/terminalpanel.cpp
     src/minimap.cpp

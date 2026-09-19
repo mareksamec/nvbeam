@@ -96,7 +96,8 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_header->setStyleSheet(QStringLiteral(
         "QToolButton { color: %1; background: transparent; border: none; padding: 1px 2px;"
         " text-align: left; }"
-        "QToolButton:hover { background: #2f2f2f; }").arg(m_cfg.file.name()));
+        "QToolButton:hover { background: %2; }")
+            .arg(m_cfg.file.name(), m_cfg.hover.name()));
     connect(m_header, &QToolButton::clicked, this, [this] { setExpanded(!isExpanded()); });
     rowLayout->addWidget(m_header, 1);
 
@@ -110,8 +111,9 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_contextBtn->setAutoRaise(true);
     m_contextBtn->setToolTip(QStringLiteral("Show unchanged context lines"));
     m_contextBtn->setStyleSheet(QStringLiteral(
-        "QToolButton { color: #888; background: transparent; border: none; padding: 1px 4px; }"
-        "QToolButton:checked { color: #ddd; background: #333; border-radius: 3px; }"));
+        "QToolButton { color: %1; background: transparent; border: none; padding: 1px 4px; }"
+        "QToolButton:checked { color: %2; background: %3; border-radius: 3px; }")
+            .arg(m_cfg.dim.name(), m_cfg.foreground.name(), m_cfg.hover.name()));
     connect(m_contextBtn, &QToolButton::toggled, this, [this](bool on) {
         m_context = on;
         applyBody();
@@ -133,8 +135,9 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_body->setTextInteractionFlags(Qt::TextSelectableByMouse | Qt::TextSelectableByKeyboard);
     m_body->setFont(diffFont(m_cfg));
     m_body->setStyleSheet(QStringLiteral(
-        "QPlainTextEdit { background: %1; color: %2; selection-background-color: #44475a; }")
-            .arg(m_cfg.background.darker(110).name(), m_cfg.foreground.name()));
+        "QPlainTextEdit { background: %1; color: %2; selection-background-color: %3; }")
+            .arg(m_cfg.background.darker(110).name(), m_cfg.foreground.name(),
+                 m_cfg.selection.name()));
     m_body->hide();
     layout->addWidget(m_body);
 
@@ -156,7 +159,8 @@ void FileCard::setFile(const FileDiff &file)
 
     QString stats;
     if (!m_file.tag.isEmpty())
-        stats += QStringLiteral("<span style='color:#888'>%1</span> ").arg(m_file.tag);
+        stats += QStringLiteral("<span style='color:%1'>%2</span> ")
+                     .arg(m_cfg.dim.name(), m_file.tag);
     stats += QStringLiteral("<span style='color:%1'>+%2</span> <span style='color:%3'>-%4</span>")
                  .arg(m_cfg.added.name()).arg(m_file.added)
                  .arg(m_cfg.removed.name()).arg(m_file.removed);
@@ -287,12 +291,13 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     toolbar->setMovable(false);
     toolbar->setStyleSheet(QStringLiteral(
         "QToolBar { background: %1; border: none; spacing: 4px; }"
-        "QToolButton { color: #aaa; background: transparent; border: none; padding: 2px 6px; }"
-        "QToolButton:hover { background: #333; border-radius: 3px; }").arg(bg));
+        "QToolButton { color: %2; background: transparent; border: none; padding: 2px 6px; }"
+        "QToolButton:hover { background: %3; border-radius: 3px; }")
+            .arg(bg, m_cfg.dim.name(), m_cfg.hover.name()));
 
     m_stats = new QLabel(QStringLiteral("Changes"), toolbar);
     m_stats->setTextFormat(Qt::RichText);
-    m_stats->setStyleSheet(QStringLiteral("color: #aaa; padding: 2px 6px;"));
+    m_stats->setStyleSheet(QStringLiteral("color: %1; padding: 2px 6px;").arg(m_cfg.dim.name()));
     toolbar->addWidget(m_stats);
 
     auto *spacer = new QWidget(toolbar);
@@ -326,7 +331,7 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
 
     m_message = new QLabel(m_list);
     m_message->setWordWrap(true);
-    m_message->setStyleSheet(QStringLiteral("color: #888; padding: 8px;"));
+    m_message->setStyleSheet(QStringLiteral("color: %1; padding: 8px;").arg(m_cfg.dim.name()));
     m_message->hide();
     m_listLayout->addWidget(m_message);
     m_listLayout->addStretch(1);

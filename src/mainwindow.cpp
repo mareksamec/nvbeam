@@ -29,9 +29,58 @@
 #include <QShortcut>
 #include <QSplitter>
 #include "changereview.h"
+#include "colorscheme.h"
 #include <QTimer>
 #include <QVBoxLayout>
 #include <QWheelEvent>
+
+namespace {
+
+/// A fraction of `over` mixed into `under`, for shades a color scheme does not
+/// declare (the hover background).
+QColor blend(const QColor &under, const QColor &over, qreal fraction)
+{
+    const qreal keep = 1.0 - fraction;
+    return QColor(int(under.red() * keep + over.red() * fraction),
+                  int(under.green() * keep + over.green() * fraction),
+                  int(under.blue() * keep + over.blue() * fraction));
+}
+
+
+/// Paint the review panel in the terminal's colors: the same scheme file the
+/// side terminal loads, with the [terminal] foreground/background overrides
+/// applied on top of it, exactly as TerminalPanel does. A color the scheme
+/// does not declare leaves the ReviewConfig default in place, so a missing or
+/// half-written scheme degrades to readable rather than to invisible.
+void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
+{
+    const TerminalScheme scheme = loadTerminalScheme(cfg.terminalColorScheme);
+    auto take = [](QColor &target, const QColor &value) {
+        if (value.isValid())
+            target = value;
+    };
+    take(review.background, scheme.background);
+    take(review.foreground, scheme.foreground);
+    take(review.added, scheme.ansi[AnsiGreen]);
+    take(review.removed, scheme.ansi[AnsiRed]);
+    take(review.hunk, scheme.ansi[AnsiBlue]);
+    take(review.file, scheme.ansi[AnsiMagenta]);
+    // Dimmed text (directories, tags, toolbar): the scheme's bright black,
+    // which is what a terminal itself uses for de-emphasized output.
+    take(review.dim, scheme.ansiIntense[AnsiBlack]);
+    take(review.selection, scheme.ansi[AnsiBlack]);
+
+    // The overrides win over the scheme, the same precedence the terminal
+    // applies in TerminalPanel::effectiveColorScheme().
+    take(review.foreground, QColor(cfg.terminalForeground));
+    take(review.background, QColor(cfg.terminalBackground));
+
+    // Hover is not a scheme color: it is the background nudged towards the
+    // foreground, so it works on a dark and on a light scheme alike.
+    review.hover = blend(review.background, review.foreground, 0.18);
+}
+
+} // namespace
 
 /// Load a Lua script from the lua/ directory next to the executable.
 /// Sources are cached after the first successful read; the scripts are only
@@ -254,10 +303,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.maxLines = cfg.reviewMaxLines;
     reviewCfg.fileMaxHeight = cfg.reviewFileMaxHeight;
     reviewCfg.showContext = cfg.reviewShowContext;
-    reviewCfg.added = QColor(cfg.reviewAddedColor);
-    reviewCfg.removed = QColor(cfg.reviewRemovedColor);
-    reviewCfg.hunk = QColor(cfg.reviewHunkColor);
-    reviewCfg.file = QColor(cfg.reviewFileColor);
+    applyTerminalScheme(reviewCfg, cfg);
     m_review = new ChangeReviewPanel(reviewCfg, hsplitter);
     m_review->hide();
 
