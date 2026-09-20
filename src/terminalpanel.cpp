@@ -1,4 +1,7 @@
 #include "terminalpanel.h"
+
+#include "colorscheme.h"
+
 #include <QShowEvent>
 #include <QVBoxLayout>
 #include <QDesktopServices>
@@ -21,18 +24,6 @@
 #ifdef NEOBEAM_HAS_TERMINAL
 namespace {
 
-/// Directories holding .colorscheme files shipped with neobeam, covering the
-/// installed layout (/usr/bin/neobeam -> /usr/share/neobeam/color-schemes)
-/// and the source-tree layout used when running from the build directory.
-QStringList neobeamSchemeDirs()
-{
-    return {
-        QCoreApplication::applicationDirPath() + "/../share/neobeam/color-schemes",
-        QCoreApplication::applicationDirPath() + "/../resources/color-schemes",
-        QCoreApplication::applicationDirPath() + "/color-schemes",
-    };
-}
-
 /// Make neobeam-shipped schemes (Neoblue, the default, plus OneDark and
 /// Dracula) resolvable by name in setColorScheme(). Called once; QTermWidget
 /// keeps the dirs in a process-wide list.
@@ -46,49 +37,6 @@ void registerNeobeamSchemeDirs()
         if (QDir(dir).exists())
             QTermWidget::addCustomColorSchemeDir(dir);
     }
-}
-
-/// Locate the .colorscheme file for a scheme name across neobeam's own dirs
-/// and the system qtermwidget dirs. Returns an empty string if not found.
-QString findSchemeFile(const QString &scheme)
-{
-    // A path (rather than a bare name) is used as-is; setColorScheme()
-    // supports full paths too, so keep the same contract here.
-    if (scheme.contains(QLatin1Char('/')))
-        return QFile::exists(scheme) ? scheme : QString();
-
-    QStringList dirs = neobeamSchemeDirs();
-    dirs << QStringLiteral("/usr/share/qtermwidget6/color-schemes")
-         << QStringLiteral("/usr/local/share/qtermwidget6/color-schemes")
-         << QStringLiteral("/usr/share/qtermwidget5/color-schemes");
-    for (const QString &dir : dirs) {
-        const QString path = dir + QLatin1Char('/') + scheme + QStringLiteral(".colorscheme");
-        if (QFile::exists(path))
-            return path;
-    }
-    return {};
-}
-
-/// Background color declared by a scheme's [Background] group ("r,g,b" per
-/// the .colorscheme format). Invalid QColor when the scheme or entry is
-/// missing.
-QColor schemeBackgroundColor(const QString &scheme)
-{
-    const QString path = findSchemeFile(scheme);
-    if (path.isEmpty())
-        return {};
-    QSettings ini(path, QSettings::IniFormat);
-    const QStringList parts = ini.value(QStringLiteral("Background/Color")).toStringList();
-    if (parts.size() != 3)
-        return {};
-    int rgb[3];
-    for (int i = 0; i < 3; ++i) {
-        bool ok = false;
-        rgb[i] = parts[i].toInt(&ok);
-        if (!ok || rgb[i] < 0 || rgb[i] > 255)
-            return {};
-    }
-    return QColor(rgb[0], rgb[1], rgb[2]);
 }
 
 // --- Link detection ---------------------------------------------------------
@@ -230,6 +178,14 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     connect(cwdAct, &QAction::triggered, this, &TerminalPanel::cwdBroadcastRequested);
     auto *closeAct = m_toolbar->addAction("✕", this, &TerminalPanel::removeCurrentTerminal);
     closeAct->setToolTip("Close terminal");
+    // Side panel only: the change review panel opens directly next to this
+    // one, showing what the agent running here has written, so its toggle
+    // belongs on this toolbar and not on the bottom panel's.
+    if (m_cfg.sidePanel) {
+        auto *reviewAct = m_toolbar->addAction("◧");
+        reviewAct->setToolTip("Review changes (Ctrl+Shift+G)");
+        connect(reviewAct, &QAction::triggered, this, &TerminalPanel::changeReviewRequested);
+    }
 
     layout->addWidget(m_toolbar);
 
@@ -264,7 +220,7 @@ QColor TerminalPanel::panelBackgroundColor() const
     const QColor configured(m_cfg.background);
     if (configured.isValid())
         return configured;
-    const QColor schemeBg = schemeBackgroundColor(m_cfg.colorScheme);
+    const QColor schemeBg = loadTerminalScheme(m_cfg.colorScheme).background;
     if (schemeBg.isValid())
         return schemeBg;
 #endif
@@ -623,7 +579,7 @@ QString TerminalPanel::effectiveColorScheme()
     // Derive a scheme file with the overrides applied on top of the base
     // scheme's palette. QTermWidget has no per-color API; colors can only be
     // set through a .colorscheme file, so generate one in the cache dir.
-    const QString basePath = findSchemeFile(m_cfg.colorScheme);
+    const QString basePath = findColorSchemeFile(m_cfg.colorScheme);
     if (basePath.isEmpty())
         qWarning() << "Color scheme" << m_cfg.colorScheme
                    << "not found; foreground/background overrides applied to the default palette";

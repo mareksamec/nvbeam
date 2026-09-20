@@ -152,6 +152,8 @@ const KnownSection kKnownSections[] = {
                   "word_characters", "antialiasing", "hinting", "scrollback",
                   "refresh_prompt_on_git_change"}},
     {"side_terminal", {"width", "font", "font_size"}},
+    {"review", {"width", "refresh_ms", "timeout_ms", "base", "font", "font_size", "max_lines",
+                "file_max_height", "show_context", "syntax"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
             "focus_border_color", "window_title", "branch_switcher_font",
@@ -424,6 +426,34 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 cfg.sideTerminalWidth = qMax(150, cfg.sideTerminalWidth);
             readString(*side, "side_terminal", "font", cfg.sideTerminalFont, issues);
             readInt(*side, "side_terminal", "font_size", cfg.sideTerminalFontSize, issues);
+        }
+
+        if (const auto *review = sectionTable(data, "review")) {
+            if (readInt(*review, "review", "width", cfg.reviewWidth, issues))
+                cfg.reviewWidth = qMax(150, cfg.reviewWidth);
+            // 0 turns the poll off entirely; anything else is floored in the
+            // panel itself, so a tiny value cannot spawn a git run per frame.
+            if (readInt(*review, "review", "refresh_ms", cfg.reviewRefreshMs, issues)
+                && cfg.reviewRefreshMs < 0) {
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[review] refresh_ms: expected 0 or more (using 0)"));
+                cfg.reviewRefreshMs = 0;
+            }
+            if (readInt(*review, "review", "timeout_ms", cfg.reviewTimeoutMs, issues)
+                && cfg.reviewTimeoutMs < 0) {
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[review] timeout_ms: expected 0 or more (using 0)"));
+                cfg.reviewTimeoutMs = 0;
+            }
+            readString(*review, "review", "base", cfg.reviewBase, issues);
+            readString(*review, "review", "font", cfg.reviewFont, issues);
+            readInt(*review, "review", "font_size", cfg.reviewFontSize, issues);
+            if (readInt(*review, "review", "max_lines", cfg.reviewMaxLines, issues))
+                cfg.reviewMaxLines = qMax(0, cfg.reviewMaxLines);
+            if (readInt(*review, "review", "file_max_height", cfg.reviewFileMaxHeight, issues))
+                cfg.reviewFileMaxHeight = qMax(24, cfg.reviewFileMaxHeight);
+            readBool(*review, "review", "show_context", cfg.reviewShowContext, issues);
+            readBool(*review, "review", "syntax", cfg.reviewSyntax, issues);
         }
 
         if (const auto *ui = sectionTable(data, "ui")) {

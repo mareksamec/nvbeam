@@ -120,6 +120,9 @@ signals:
     /// Emitted when the user clicks the "send cwd" toolbar button; MainWindow
     /// resolves the current nvim cwd and calls broadcastCwd() with it.
     void cwdBroadcastRequested();
+    /// Emitted when the user clicks the review button (side panel only):
+    /// MainWindow toggles the change review panel next to this one.
+    void changeReviewRequested();
 
 protected:
     void showEvent(QShowEvent *event) override;

@@ -379,6 +379,25 @@
 - Diff view can be expanded next to the side term
 - Add button and a keyboard shortcut for it
 
+- [x] **Change review panel** (`src/changereview.cpp`, task 005) - a native Qt
+  panel opening to the right of the side terminal (`◧` on its toolbar, or
+  Ctrl+Shift+G): a scrolling column of per-file rows (`FileCard`), collapsed to
+  name, path and `+/-` counts and expanding to that file's diff in its own
+  selectable text area, with a per-file toggle for the unchanged context lines. It reads what is on disk rather than the CLI's
+  diff request, which is the agent's permission-request surface and therefore
+  never arrives in auto-accept or bypass mode. While open it polls every
+  `[review] refresh_ms` for as long as it is visible, redrawing only the rows
+  whose diff text changed, and each git run is killed after
+  `[review] timeout_ms` so one that never exits cannot freeze the panel. No
+  filesystem watcher: an agent's write touches neither `.git` nor an nvim
+  buffer, and inotify does not recurse. Its palette is the terminal's: the
+  `[terminal] color_scheme` file, read through `src/colorscheme.cpp` (shared
+  with `TerminalPanel`) and mapped to the panel's backgrounds, diff colors and
+  dimmed text. With the optional KF6SyntaxHighlighting dependency the code
+  inside a diff is colored by the file's language, with the added/removed color
+  moved to a full-width stripe behind the line, and a gutter carries each
+  line's number in the file it belongs to.
+
 ### Codex (ChatGPT)
 - Same for Codex CLI if possible.
 

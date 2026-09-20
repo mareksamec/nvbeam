@@ -10,6 +10,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - **Native statusline** — mode indicator, file, git branch, diagnostics, position
 - **Git branch switcher** – VSCode-style branch picker under the statusline: click the git segment (or Ctrl+Shift+B) to switch branches or create a new one
 - **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
+- **Change review** — panel next to the side terminal listing each changed file, expandable to its colored, selectable diff (Ctrl+Shift+G), refreshing itself while an agent writes
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
 - **Drag & drop** — drop files onto the buffer area to open them in the window under the cursor; modifier keys choose split/tab placement. Dropping onto the terminal pastes the path
@@ -25,6 +26,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - CMake 3.20+
 - C++20 compiler
 - qtermwidget6 (optional, for embedded terminal)
+- KF6SyntaxHighlighting (optional, for code coloring in the review panel's diffs)
 
 ## Build
 
@@ -48,6 +50,8 @@ cmake --build build -j$(nproc)
 sudo apt install cmake g++ qt6-base-dev libgl1-mesa-dev
 # Optional: for embedded terminal
 sudo apt install qtermwidget6-dev
+# Optional: for code coloring in review diffs
+sudo apt install libkf6syntaxhighlighting-dev
 ```
 
 ### Dependencies (Fedora)
@@ -56,6 +60,8 @@ sudo apt install qtermwidget6-dev
 sudo dnf install cmake gcc-c++ qt6-qtbase-devel mesa-libGL-devel
 # Optional: for embedded terminal
 sudo dnf install qtermwidget-qt6-devel
+# Optional: for code coloring in review diffs
+sudo dnf install kf6-syntax-highlighting-devel
 ```
 
 ### Dependencies (Arch)
@@ -64,6 +70,8 @@ sudo dnf install qtermwidget-qt6-devel
 sudo pacman -S cmake qt6-base
 # Optional: for embedded terminal
 sudo pacman -S qtermwidget
+# Optional: for code coloring in review diffs
+sudo pacman -S syntax-highlighting
 ```
 
 ## Usage
@@ -101,6 +109,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode) |
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
+| Ctrl+Shift+G | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
 
 ### Project switcher
 
@@ -123,6 +132,52 @@ When git refuses (uncommitted changes that the checkout would overwrite, a branc
 The popup is monospaced (`[ui] branch_switcher_font` and `branch_switcher_font_size`), with the commit dates padded into a column that lines up, and highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance. The name column takes whatever width is left once the widest date is reserved, so a date is never pushed off the edge; a branch name too long for it is elided in the middle and shown in full in the row's tooltip.
 
 The switcher needs the statusline's git segment, so it follows `[ui] git_status`; with that off, neither the click target nor the shortcut exists.
+
+### Change review
+
+The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+G**, opens a
+review panel to the right of that terminal. It lists one row per changed file,
+each showing the file name, its directory and `+added -removed` counts, and a
+tag for a new, deleted, renamed or untracked file. A row is collapsed by
+default; its name sits on a band running the full width of the panel, which is
+what keeps one expanded file apart from the next. Clicking the row (or **⌄** /
+**⌃** in the header, which open and close every row) reveals that file's diff, and inside a row the **⋯** button brings back the
+unchanged context lines, which are hidden so an open file shows only what
+actually changed. Untracked files are listed too, with their content read from
+disk as added lines when the row is opened.
+
+Each file's diff lives in its own read-only text area, so the text is selectable
+and **Ctrl+C** copies it as the plain diff. A gutter beside it carries the line
+numbers: the new file's number for an added or unchanged line, the old file's
+for a removed one, counted from the hunk headers so hidden context lines do not
+throw them off. A changed line's stripe runs behind its number, which is itself
+green or red. The numbers are painted, not part of the text, so a copied
+selection is still a usable diff. In a build with
+KF6SyntaxHighlighting the code inside a diff is colored by the file's own
+language, and an added or removed line carries its color as a stripe across the
+panel's full width instead of as text color, with the leading `+`/`-` keeping
+the diff color.
+Set `[review] syntax = false` for plain diff coloring. The panel draws itself in the
+terminal's colors: the scheme named by `[terminal] color_scheme` (and the
+`foreground`/`background` overrides there) supplies its text and, a shade
+lighter than the terminal itself, its background,
+green for added lines, red for removed ones, blue for hunk headers and magenta
+for the file name, so the panel and the terminal next to it match.
+
+This is a review of what is on disk, which is the point: an agent running in
+the side terminal in auto-accept mode never asks for approval, so nothing else
+shows what it wrote. While the panel is open it re-reads the worktree every
+`[review] refresh_ms` milliseconds (2000 by default, `0` disables the poll and
+leaves the **⟳** button), so changes appear as the agent writes them. A row
+whose diff did not change is left untouched, so an open file stays open and a
+selection inside it survives the refresh. A `git` that stops answering (a
+repository on a dead network mount) is killed after `[review] timeout_ms` and
+the panel says so, rather than freezing on the last diff it managed to read.
+
+Set `[review] base` to diff against a revision (`"main"`, `"HEAD~3"`) instead of
+the working tree against `HEAD`, `[review] show_context = true` to have rows
+open on the full hunks, and `[review] file_max_height` to cap how tall one open
+file grows before it scrolls on its own.
 
 ### Drag & drop
 
@@ -189,6 +244,20 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # width = 400  # startup width in pixels
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
+
+# [review]
+# width = 600  # startup width of the change review panel, in pixels
+# refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
+# base = ""  # revision to diff against (empty = the worktree against HEAD)
+# font = ""  # review font (empty = use the side terminal font)
+# font_size = 0  # review font size (0 = use the side terminal font size)
+# max_lines = 20000  # cap on the diff lines kept per file
+# file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
+# show_context = false  # expand a file to the full hunks instead of the changed lines only
+# syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
+# The panel has no colors of its own: it follows [terminal] color_scheme and
+# the foreground/background overrides there.
 
 # [ui]
 # ext_popupmenu = true
