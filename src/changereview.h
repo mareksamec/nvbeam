@@ -6,6 +6,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <QPlainTextEdit>
 #include <QSyntaxHighlighter>
 #ifdef NEOBEAM_HAS_SYNTAX
 #include <KSyntaxHighlighting/AbstractHighlighter>
@@ -17,7 +18,6 @@
 #include <functional>
 
 class QLabel;
-class QPlainTextEdit;
 class QScrollArea;
 class QToolButton;
 class QVBoxLayout;
@@ -113,6 +113,41 @@ private:
 #endif
 };
 
+/// The diff of one file, with the line numbers of the file it belongs to shown
+/// in a gutter beside it. The numbers live in the gutter rather than in the
+/// text so that a selection still copies as a usable diff.
+class DiffBody : public QPlainTextEdit
+{
+    Q_OBJECT
+
+public:
+    DiffBody(const ReviewConfig &cfg, QWidget *parent = nullptr);
+
+    /// One entry per line of the document: the number to show beside it, or 0
+    /// for a line that has none (a hunk header).
+    void setLineNumbers(const QList<int> &numbers);
+
+    /// Width the gutter needs for the widest number it has to show.
+    int gutterWidth() const;
+
+    /// Draw the numbers of the lines currently on screen. Called by the gutter
+    /// widget, which has no state of its own.
+    void paintGutter(QPaintEvent *event);
+
+protected:
+    void resizeEvent(QResizeEvent *event) override;
+
+private:
+    /// Reserve the gutter's width on the left of the viewport and place the
+    /// gutter widget in it.
+    void layOutGutter();
+
+    ReviewConfig m_cfg;
+    QWidget *m_gutter = nullptr;
+    QList<int> m_numbers;
+    int m_digits = 1;   // widest number currently shown, in digits
+};
+
 /// One file's row in the review panel: a header button that expands to reveal
 /// that file's diff. Collapsed by default, the way the Claude Code review pane
 /// behaves, so a change touching twenty files is still readable at a glance.
@@ -141,9 +176,15 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    /// Compose what the body shows: the whole hunks with `context` on, only the
-    /// added/removed lines (and the hunk headers that locate them) with it off.
-    QString bodyText() const;
+    /// What the body shows: the lines themselves plus, per line, the number it
+    /// carries in the file. With `context` off only the added/removed lines
+    /// (and the hunk headers that locate them) are kept, but the hidden lines
+    /// are still counted, so the numbers stay true.
+    struct BodyText {
+        QString text;
+        QList<int> numbers;
+    };
+    BodyText bodyText() const;
     /// Put bodyText() into the editor and size the editor to its content.
     void applyBody();
     /// Fit the editor to the wrapped text, capped at ReviewConfig::fileMaxHeight.
@@ -161,7 +202,7 @@ private:
     QToolButton *m_header = nullptr;
     QLabel *m_stats = nullptr;
     QToolButton *m_contextBtn = nullptr;
-    QPlainTextEdit *m_body = nullptr;
+    DiffBody *m_body = nullptr;
     DiffHighlighter *m_highlighter = nullptr;
     bool m_context = false;        // show unchanged context lines too
     bool m_loaded = false;         // untracked content already read from disk

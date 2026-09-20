@@ -20,6 +20,8 @@
 #endif
 #include <QResizeEvent>
 #include <QFrame>
+#include <QPainter>
+#include <QRegularExpression>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QAbstractTextDocumentLayout>
@@ -44,6 +46,9 @@ constexpr int kWatchdogFactor = 2;
 
 /// Gap between two file rows, on top of the band each row's header carries.
 constexpr int kRowSpacing = 3;
+
+/// Space left around the line numbers in their gutter, in pixels.
+constexpr int kGutterPadding = 6;
 
 /// The stripe painted across a changed line. Set directly rather than blended
 /// from the diff colors: the stripe has to stay dark enough to read code on,
@@ -191,6 +196,96 @@ void DiffHighlighter::applyFormat(int offset, int length,
 }
 #endif
 
+// --- DiffBody ---------------------------------------------------------------
+
+namespace {
+
+/// The strip drawn to the left of the diff. It holds no state: painting is the
+/// editor's job, which is the only side that knows which lines are on screen.
+class Gutter : public QWidget
+{
+public:
+    explicit Gutter(DiffBody *body) : QWidget(body), m_body(body) {}
+
+protected:
+    void paintEvent(QPaintEvent *event) override { m_body->paintGutter(event); }
+
+private:
+    DiffBody *m_body;
+};
+
+} // namespace
+
+DiffBody::DiffBody(const ReviewConfig &cfg, QWidget *parent)
+    : QPlainTextEdit(parent), m_cfg(cfg)
+{
+    m_gutter = new Gutter(this);
+    // The gutter follows the viewport: a new line count changes its width, and
+    // scrolling or an edited region repaints the part that moved.
+    connect(this, &QPlainTextEdit::blockCountChanged, this, [this] { layOutGutter(); });
+    connect(this, &QPlainTextEdit::updateRequest, this, [this](const QRect &rect, int dy) {
+        if (dy != 0)
+            m_gutter->scroll(0, dy);
+        else
+            m_gutter->update(0, rect.y(), m_gutter->width(), rect.height());
+    });
+    layOutGutter();
+}
+
+void DiffBody::setLineNumbers(const QList<int> &numbers)
+{
+    m_numbers = numbers;
+    int widest = 0;
+    for (int number : numbers)
+        widest = qMax(widest, number);
+    m_digits = qMax(1, QString::number(widest).size());
+    layOutGutter();
+    m_gutter->update();
+}
+
+int DiffBody::gutterWidth() const
+{
+    return kGutterPadding * 2 + m_digits * fontMetrics().horizontalAdvance(QLatin1Char('9'));
+}
+
+void DiffBody::layOutGutter()
+{
+    setViewportMargins(gutterWidth(), 0, 0, 0);
+    const QRect area = contentsRect();
+    m_gutter->setGeometry(area.left(), area.top(), gutterWidth(), area.height());
+}
+
+void DiffBody::resizeEvent(QResizeEvent *event)
+{
+    QPlainTextEdit::resizeEvent(event);
+    layOutGutter();
+}
+
+void DiffBody::paintGutter(QPaintEvent *event)
+{
+    QPainter painter(m_gutter);
+    painter.fillRect(event->rect(), m_cfg.background);
+    painter.setPen(m_cfg.dim);
+    painter.setFont(font());
+
+    QTextBlock block = firstVisibleBlock();
+    int top = int(blockBoundingGeometry(block).translated(contentOffset()).top());
+    while (block.isValid() && top <= event->rect().bottom()) {
+        const int height = int(blockBoundingRect(block).height());
+        const int index = block.blockNumber();
+        const int number = index < m_numbers.size() ? m_numbers.at(index) : 0;
+        if (block.isVisible() && top + height >= event->rect().top() && number > 0) {
+            // Right-aligned against the text, and on the first line of a
+            // wrapped block, which is where the line actually starts.
+            painter.drawText(0, top, m_gutter->width() - kGutterPadding,
+                             int(blockBoundingRect(block).height() / block.lineCount()),
+                             Qt::AlignRight | Qt::AlignTop, QString::number(number));
+        }
+        top += height;
+        block = block.next();
+    }
+}
+
 // --- FileCard ---------------------------------------------------------------
 
 FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *parent)
@@ -252,7 +347,7 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     rowLayout->addWidget(m_stats);
     layout->addWidget(row);
 
-    m_body = new QPlainTextEdit(this);
+    m_body = new DiffBody(m_cfg, this);
     m_body->setReadOnly(true);
     m_body->setUndoRedoEnabled(false);
     m_body->setFrameStyle(QFrame::NoFrame);
@@ -336,31 +431,61 @@ void FileCard::resizeEvent(QResizeEvent *event)
         fitBody();
 }
 
-QString FileCard::bodyText() const
+FileCard::BodyText FileCard::bodyText() const
 {
-    if (m_context)
-        return m_file.body;
-    // Changed lines only, with the hunk headers kept: they are what says where
-    // in the file the change sits.
+    // "@@ -old,count +new,count @@": the two numbers the lines after it are
+    // counted from.
+    static const QRegularExpression hunkHeader(
+        QStringLiteral("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)"));
+
+    BodyText out;
     QStringList kept;
+    int oldNo = 1;
+    int newNo = 1;
     const QStringList lines = m_file.body.split(QLatin1Char('\n'));
     for (const QString &line : lines) {
-        if (line.startsWith(QLatin1Char('+')) || line.startsWith(QLatin1Char('-'))
-            || line.startsWith(QLatin1String("@@")))
-            kept << line;
+        const bool hunk = line.startsWith(QLatin1String("@@"));
+        const bool added = !hunk && line.startsWith(QLatin1Char('+'));
+        const bool removed = !hunk && line.startsWith(QLatin1Char('-'));
+
+        int number = 0;
+        if (hunk) {
+            const QRegularExpressionMatch match = hunkHeader.match(line);
+            if (match.hasMatch()) {
+                oldNo = match.captured(1).toInt();
+                newNo = match.captured(2).toInt();
+            }
+        } else if (added) {
+            number = newNo++;
+        } else if (removed) {
+            number = oldNo++;
+        } else {
+            // A context line exists in both files; its number in the new one is
+            // what the reader is looking for. Counted even when it is hidden,
+            // which is what keeps the numbers of the lines around it true.
+            number = newNo++;
+            ++oldNo;
+        }
+
+        if (!m_context && !(hunk || added || removed))
+            continue;
+        kept << line;
+        out.numbers << number;
     }
-    return kept.join(QLatin1Char('\n'));
+    out.text = kept.join(QLatin1Char('\n'));
+    return out;
 }
 
 void FileCard::applyBody()
 {
     if (m_file.untracked && !m_loaded)
         loadUntracked();
-    const QString text = bodyText();
-    if (text != m_shown) {
-        m_shown = text;
+    const BodyText body = bodyText();
+    if (body.text != m_shown) {
+        m_shown = body.text;
         const int scroll = m_body->verticalScrollBar()->value();
-        m_body->setPlainText(text);
+        m_body->setPlainText(body.text);
+        m_body->setLineNumbers(body.numbers);
         m_body->verticalScrollBar()->setValue(scroll);
         paintChangedLines();
     }

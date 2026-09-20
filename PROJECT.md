@@ -395,7 +395,8 @@
   with `TerminalPanel`) and mapped to the panel's backgrounds, diff colors and
   dimmed text. With the optional KF6SyntaxHighlighting dependency the code
   inside a diff is colored by the file's language, with the added/removed color
-  moved to a full-width stripe behind the line.
+  moved to a full-width stripe behind the line, and a gutter carries each
+  line's number in the file it belongs to.
 
 ### Codex (ChatGPT)
 - Same for Codex CLI if possible.

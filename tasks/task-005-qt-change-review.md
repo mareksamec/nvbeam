@@ -45,7 +45,7 @@ flow owns that), no per-file tree or side-by-side view, no staging, no editing.
 | Panel header (stats, buttons) | `QToolBar` with a `QLabel` and four `QAction`s (expand all, collapse all, refresh, close) | Same construction the terminal panel's toolbar already uses, so the chrome matches |
 | File column | `QScrollArea` over a `QWidget` with a `QVBoxLayout` | One scrolling column whose rows are real widgets, so each row can hold a text editor |
 | File row | `FileCard`: `QToolButton` (arrow + name, the expander) plus a `QLabel` for the counts and a checkable `QToolButton` for context | A `QTreeWidget` would give the arrows for free but its items are not text-selectable, which is the one thing the diff has to be |
-| Diff text | one `QPlainTextEdit` per row, read-only, wrapped, sized to its content | Selectable and copyable with no extra work (`Ctrl+C`, context menu, keyboard selection); its block-based document handles a long diff far better than rich text |
+| Diff text | `DiffBody`, a `QPlainTextEdit` per row, read-only, wrapped, sized to its content, with a line-number gutter | Selectable and copyable with no extra work (`Ctrl+C`, context menu, keyboard selection); its block-based document handles a long diff far better than rich text |
 | Coloring | `QSyntaxHighlighter` subclass attached to each row's document | Colors on top of plain text, so the text stays plain for copying: a copied hunk pastes as the diff, not as markup. Re-highlights only the blocks that changed |
 | Periodic refresh | `QTimer` | Started when the panel is shown, stopped when hidden |
 | Running git | `QProcess`, asynchronous | Never block the UI thread; same pattern as `GitStatus` |
@@ -96,6 +96,17 @@ A new `[review]` section, since none of these belong to an existing one:
 | `file_max_height` | 600 | Tallest an expanded file grows before it scrolls itself, in pixels |
 | `syntax` | true | Color the code in a diff line by the file's language; ignored in a build without KF6SyntaxHighlighting |
 | `show_context` | false | Expand rows to the full hunks instead of the changed lines only |
+
+## Line numbers
+
+`DiffBody` reserves a gutter on the left of its viewport (`setViewportMargins`)
+and paints the numbers there per visible block, the way Qt's code editor
+example does. They are painted rather than written into the document so that a
+copied selection stays a usable diff. `FileCard::bodyText()` produces them
+alongside the text: the hunk headers say where each run starts, an added or
+context line takes the new file's number, a removed line the old file's, and
+lines hidden by the context filter are still counted so the visible numbers
+stay true.
 
 ## Code coloring
 

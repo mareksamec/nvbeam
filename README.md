@@ -147,7 +147,11 @@ actually changed. Untracked files are listed too, with their content read from
 disk as added lines when the row is opened.
 
 Each file's diff lives in its own read-only text area, so the text is selectable
-and **Ctrl+C** copies it as the plain diff. In a build with
+and **Ctrl+C** copies it as the plain diff. A gutter beside it carries the line
+numbers: the new file's number for an added or unchanged line, the old file's
+for a removed one, counted from the hunk headers so hidden context lines do not
+throw them off. The numbers are painted, not part of the text, so a copied
+selection is still a usable diff. In a build with
 KF6SyntaxHighlighting the code inside a diff is colored by the file's own
 language, and an added or removed line carries its color as a stripe across the
 panel's full width instead of as text color, with the leading `+`/`-` keeping
