@@ -265,7 +265,6 @@ void DiffBody::paintGutter(QPaintEvent *event)
 {
     QPainter painter(m_gutter);
     painter.fillRect(event->rect(), m_cfg.background);
-    painter.setPen(m_cfg.dim);
     painter.setFont(font());
 
     QTextBlock block = firstVisibleBlock();
@@ -274,12 +273,24 @@ void DiffBody::paintGutter(QPaintEvent *event)
         const int height = int(blockBoundingRect(block).height());
         const int index = block.blockNumber();
         const int number = index < m_numbers.size() ? m_numbers.at(index) : 0;
-        if (block.isVisible() && top + height >= event->rect().top() && number > 0) {
-            // Right-aligned against the text, and on the first line of a
-            // wrapped block, which is where the line actually starts.
-            painter.drawText(0, top, m_gutter->width() - kGutterPadding,
-                             int(blockBoundingRect(block).height() / block.lineCount()),
-                             Qt::AlignRight | Qt::AlignTop, QString::number(number));
+        if (block.isVisible() && top + height >= event->rect().top()) {
+            // The line's own text says what it is, so a changed line's stripe
+            // and number color are read straight off it: the gutter then
+            // continues the stripe behind the diff rather than cutting it off.
+            const QString line = block.text();
+            const bool added = line.startsWith(QLatin1Char('+'));
+            const bool removed = !added && line.startsWith(QLatin1Char('-'));
+            if (added || removed)
+                painter.fillRect(0, top, m_gutter->width(), height,
+                                 added ? kAddedStripe : kRemovedStripe);
+            if (number > 0) {
+                painter.setPen(added ? m_cfg.added : (removed ? m_cfg.removed : m_cfg.dim));
+                // Right-aligned against the text, and on the first line of a
+                // wrapped block, which is where the line actually starts.
+                painter.drawText(0, top, m_gutter->width() - kGutterPadding,
+                                 int(blockBoundingRect(block).height() / block.lineCount()),
+                                 Qt::AlignRight | Qt::AlignTop, QString::number(number));
+            }
         }
         top += height;
         block = block.next();

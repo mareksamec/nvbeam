@@ -106,7 +106,9 @@ copied selection stays a usable diff. `FileCard::bodyText()` produces them
 alongside the text: the hunk headers say where each run starts, an added or
 context line takes the new file's number, a removed line the old file's, and
 lines hidden by the context filter are still counted so the visible numbers
-stay true.
+stay true. A changed line's stripe continues behind its number, and the number
+itself takes the added or removed color, so the gutter reads as part of the
+line rather than as a column beside it.
 
 ## Code coloring
 
