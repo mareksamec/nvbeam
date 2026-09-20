@@ -313,9 +313,13 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     row->setObjectName(QStringLiteral("fileCardHeader"));
     // A plain QWidget does not paint a style sheet background on its own.
     row->setAttribute(Qt::WA_StyledBackground, true);
+    // The whole band lights up under the pointer, not the name button alone,
+    // so the counts at its right end never sit on a different grey.
+    row->setAttribute(Qt::WA_Hover, true);
     row->setStyleSheet(QStringLiteral(
-        "QWidget#fileCardHeader { background: %1; border-bottom: 1px solid %2; }")
-            .arg(m_cfg.rowHeader.name(), m_cfg.rowBorder.name()));
+        "QWidget#fileCardHeader { background: %1; border-bottom: 1px solid %2; }"
+        "QWidget#fileCardHeader:hover { background: %3; }")
+            .arg(m_cfg.rowHeader.name(), m_cfg.rowBorder.name(), m_cfg.hover.name()));
     auto *rowLayout = new QHBoxLayout(row);
     rowLayout->setContentsMargins(2, 1, 4, 1);
     rowLayout->setSpacing(4);
@@ -325,11 +329,11 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_header->setArrowType(Qt::RightArrow);
     m_header->setAutoRaise(true);
     m_header->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+    // Transparent, so the band behind it (and its hover state) shows through.
     m_header->setStyleSheet(QStringLiteral(
         "QToolButton { color: %1; background: transparent; border: none; padding: 1px 2px;"
-        " text-align: left; }"
-        "QToolButton:hover { background: %2; }")
-            .arg(m_cfg.file.name(), m_cfg.hover.name()));
+        " text-align: left; }")
+            .arg(m_cfg.file.name()));
     connect(m_header, &QToolButton::clicked, this, [this] { setExpanded(!isExpanded()); });
     rowLayout->addWidget(m_header, 1);
 
@@ -345,7 +349,7 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_contextBtn->setStyleSheet(QStringLiteral(
         "QToolButton { color: %1; background: transparent; border: none; padding: 1px 4px; }"
         "QToolButton:checked { color: %2; background: %3; border-radius: 3px; }")
-            .arg(m_cfg.dim.name(), m_cfg.foreground.name(), m_cfg.hover.name()));
+            .arg(m_cfg.dim.name(), m_cfg.foreground.name(), m_cfg.rowBorder.name()));
     connect(m_contextBtn, &QToolButton::toggled, this, [this](bool on) {
         m_context = on;
         applyBody();
@@ -354,6 +358,7 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
 
     m_stats = new QLabel(row);
     m_stats->setTextFormat(Qt::RichText);
+    m_stats->setStyleSheet(QStringLiteral("QLabel { background: transparent; padding: 1px 2px; }"));
     rowLayout->addWidget(m_stats);
     layout->addWidget(row);
 

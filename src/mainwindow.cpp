@@ -46,7 +46,7 @@ constexpr qreal kHoverBlend = 0.18;
 constexpr qreal kPanelLift = 0.08;
 
 /// How far a file row's header band, and the hairline under it, are nudged
-/// from the panel background towards the foreground.
+/// from the panel background towards a neutral grey.
 constexpr qreal kRowHeaderBlend = 0.12;
 constexpr qreal kRowBorderBlend = 0.28;
 
@@ -79,11 +79,14 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
     take(review.background, QColor(cfg.terminalBackground));
     review.background = blendColors(review.background, review.foreground, kPanelLift);
 
-    // Hover is not a scheme color: it is the background nudged towards the
-    // foreground, so it works on a dark and on a light scheme alike.
-    review.hover = blendColors(review.background, review.foreground, kHoverBlend);
-    review.rowHeader = blendColors(review.background, review.foreground, kRowHeaderBlend);
-    review.rowBorder = blendColors(review.background, review.foreground, kRowBorderBlend);
+    // None of these are scheme colors: the hover tint, the header band and its
+    // hairline are the background nudged towards a neutral grey of the
+    // foreground's brightness, so they work on a dark and on a light scheme
+    // alike, and a tinted foreground gives them no colour cast.
+    const QColor neutral = QColor::fromHsl(0, 0, qGray(review.foreground.rgb()));
+    review.hover = blendColors(review.background, neutral, kHoverBlend);
+    review.rowHeader = blendColors(review.background, neutral, kRowHeaderBlend);
+    review.rowBorder = blendColors(review.background, neutral, kRowBorderBlend);
 }
 
 } // namespace

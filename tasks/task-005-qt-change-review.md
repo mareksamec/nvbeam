@@ -132,10 +132,17 @@ The panel has no palette of its own. `applyTerminalScheme()` in
 through `src/colorscheme.{h,cpp}` (the loader `TerminalPanel` also uses now)
 and maps it: background and foreground as they are, green for `+`, red for
 `-`, blue for `@@`, magenta for the file name, bright black for dimmed text,
-black for the selection, and background/foreground blends for hover, for the
-band each file row's name sits on, for the hairline that closes a file block
-off, and for the panel background itself, which sits a shade lighter than the
-terminal's so the diff reads on a greyer ground.
+black for the selection, and background blends for hover, for the band each
+file row's name sits on, for the hairline that closes a file block off, and for
+the panel background itself, which sits a shade lighter than the terminal's so
+the diff reads on a greyer ground. Those three blends run towards a neutral
+grey of the foreground's brightness rather than the foreground, so a tinted
+scheme foreground gives the chrome no colour cast.
+
+The header band is painted by the row widget alone. Its children (the name
+button, the context toggle, the counts) are transparent, and the hover tint is
+a `:hover` rule on the row, so pointing at a file lights the band from edge to
+edge instead of leaving the counts on a different grey.
 
 An added or removed line's stripe is the block's own background
 (`FileCard::paintChangedLines`), not a character format, which would stop where
