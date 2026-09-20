@@ -45,9 +45,11 @@ constexpr int kWatchdogFactor = 2;
 /// Gap between two file rows, on top of the band each row's header carries.
 constexpr int kRowSpacing = 3;
 
-/// How much of the added/removed color is mixed into a changed line's
-/// background when the code on it carries the language's own colors.
-constexpr qreal kDiffTint = 0.22;
+/// The stripe painted across a changed line. Set directly rather than blended
+/// from the diff colors: the stripe has to stay dark enough to read code on,
+/// which is a different job from the marker color it would otherwise follow.
+const QColor kAddedStripe{"#2a3e29"};
+const QColor kRemovedStripe{"#3e2929"};
 
 /// Shortest an expanded body is ever made, so an empty or one-line diff still
 /// shows as an open row rather than a sliver.
@@ -367,9 +369,6 @@ void FileCard::applyBody()
 
 void FileCard::paintChangedLines()
 {
-    const QColor addedTint = blendColors(m_cfg.background, m_cfg.added, kDiffTint);
-    const QColor removedTint = blendColors(m_cfg.background, m_cfg.removed, kDiffTint);
-
     QList<QTextEdit::ExtraSelection> stripes;
     for (QTextBlock block = m_body->document()->begin(); block.isValid();
          block = block.next()) {
@@ -380,7 +379,7 @@ void FileCard::paintChangedLines()
         if (!added && !removed)
             continue;
         QTextEdit::ExtraSelection stripe;
-        stripe.format.setBackground(added ? addedTint : removedTint);
+        stripe.format.setBackground(added ? kAddedStripe : kRemovedStripe);
         // Without this the stripe ends where the text does.
         stripe.format.setProperty(QTextFormat::FullWidthSelection, true);
         stripe.cursor = QTextCursor(block);

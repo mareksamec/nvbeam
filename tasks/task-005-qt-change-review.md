@@ -124,9 +124,12 @@ band each file row's name sits on, for the hairline that closes a file block
 off, and for the panel background itself, which sits a shade lighter than the
 terminal's so the diff reads on a greyer ground.
 
-An added or removed line's color is painted as a full-width extra selection on
+An added or removed line's stripe is painted as a full-width extra selection on
 the row's editor (`FileCard::paintChangedLines`), not as a character format,
-which would stop where the text does. The
+which would stop where the text does. Its two colors (`kAddedStripe`,
+`kRemovedStripe` in `src/changereview.cpp`) are fixed rather than derived from
+the scheme's green and red: the stripe has to stay dark enough to read code on,
+which is a different job from the marker color. The
 `[terminal] foreground`/`background` overrides win over the scheme, the same
 precedence the terminal itself applies. A color the scheme does not declare
 keeps the `ReviewConfig` default.
