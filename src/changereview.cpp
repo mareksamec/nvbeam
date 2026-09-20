@@ -28,7 +28,6 @@
 #include <QTextBlock>
 #include <QTextDocument>
 #include <QTextBlockUserData>
-#include <QTextEdit>
 #include <QToolBar>
 #include <QToolButton>
 #include <QHBoxLayout>
@@ -359,6 +358,9 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     layout->addWidget(row);
 
     m_body = new DiffBody(m_cfg, this);
+    // No document margin: it would leave an unpainted strip between the
+    // gutter and the start of a line's stripe.
+    m_body->document()->setDocumentMargin(0);
     m_body->setReadOnly(true);
     m_body->setUndoRedoEnabled(false);
     m_body->setFrameStyle(QFrame::NoFrame);
@@ -505,24 +507,25 @@ void FileCard::applyBody()
 
 void FileCard::paintChangedLines()
 {
-    QList<QTextEdit::ExtraSelection> stripes;
+    // Block formats rather than extra selections: a full-width extra selection
+    // only reaches the first visual line of a wrapped block, leaving the rest
+    // of a long changed line unmarked.
+    QTextCursor cursor(m_body->document());
+    cursor.beginEditBlock();
     for (QTextBlock block = m_body->document()->begin(); block.isValid();
          block = block.next()) {
         const QString line = block.text();
         const bool added = line.startsWith(QLatin1Char('+'));
-        const bool removed = !added && line.startsWith(QLatin1Char('-'))
-                             && !line.startsWith(QLatin1String("--"));
-        if (!added && !removed)
-            continue;
-        QTextEdit::ExtraSelection stripe;
-        stripe.format.setBackground(added ? kAddedStripe : kRemovedStripe);
-        // Without this the stripe ends where the text does.
-        stripe.format.setProperty(QTextFormat::FullWidthSelection, true);
-        stripe.cursor = QTextCursor(block);
-        stripe.cursor.clearSelection();
-        stripes << stripe;
+        const bool removed = !added && line.startsWith(QLatin1Char('-'));
+        QTextBlockFormat format = block.blockFormat();
+        if (added || removed)
+            format.setBackground(added ? kAddedStripe : kRemovedStripe);
+        else
+            format.clearBackground();
+        cursor.setPosition(block.position());
+        cursor.setBlockFormat(format);
     }
-    m_body->setExtraSelections(stripes);
+    cursor.endEditBlock();
 }
 
 void FileCard::fitBody()

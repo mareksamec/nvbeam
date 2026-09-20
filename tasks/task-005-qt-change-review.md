@@ -137,9 +137,11 @@ band each file row's name sits on, for the hairline that closes a file block
 off, and for the panel background itself, which sits a shade lighter than the
 terminal's so the diff reads on a greyer ground.
 
-An added or removed line's stripe is painted as a full-width extra selection on
-the row's editor (`FileCard::paintChangedLines`), not as a character format,
-which would stop where the text does. Its two colors (`kAddedStripe`,
+An added or removed line's stripe is the block's own background
+(`FileCard::paintChangedLines`), not a character format, which would stop where
+the text does, and not a full-width extra selection either, which only reaches
+the first visual row of a wrapped line. The body's document margin is zero, so
+the stripe starts where the gutter ends with nothing unpainted between them. Its two colors (`kAddedStripe`,
 `kRemovedStripe` in `src/changereview.cpp`) are fixed rather than derived from
 the scheme's green and red: the stripe has to stay dark enough to read code on,
 which is a different job from the marker color. The
