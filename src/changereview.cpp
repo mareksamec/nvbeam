@@ -49,7 +49,7 @@ constexpr int kRowSpacing = 3;
 /// from the diff colors: the stripe has to stay dark enough to read code on,
 /// which is a different job from the marker color it would otherwise follow.
 const QColor kAddedStripe{"#2a3e29"};
-const QColor kRemovedStripe{"#3e2929"};
+const QColor kRemovedStripe{"#4d3030"};
 
 /// Shortest an expanded body is ever made, so an empty or one-line diff still
 /// shows as an open row rather than a sliver.
