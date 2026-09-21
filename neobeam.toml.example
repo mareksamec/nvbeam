@@ -46,6 +46,7 @@
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
 # syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
+# file_color = ""  # file name color in a row's header (empty = the color scheme's magenta)
 # The panel has no colors of its own: it follows [terminal] color_scheme and
 # the foreground/background overrides there.
 

@@ -78,8 +78,10 @@ struct Config {
                                           // changed lines only
     bool reviewSyntax = true;             // color the code in a diff line by the file's
                                           // language (build with KSyntaxHighlighting only)
-    // The panel has no colors of its own: it draws in the terminal's color
-    // scheme (plus the [terminal] foreground/background overrides).
+    // The panel otherwise has no colors of its own: it draws in the terminal's
+    // color scheme (plus the [terminal] foreground/background overrides).
+    QString reviewFileColor;              // file name in a row's header; empty = the
+                                          // scheme's magenta
 
     // UI extensions (native chrome)
     bool extPopupmenu = true;
