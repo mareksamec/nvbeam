@@ -9,6 +9,7 @@
 #include "gitstatus.h"
 #include "config.h"
 #include "session.h"
+#include "shortcuts.h"
 #include "logging.h"
 #include <QApplication>
 #include <QCloseEvent>
@@ -365,7 +366,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     layout->addWidget(m_vsplitter, 1);
 
     // Ctrl+` toggles terminal panel
-    auto *termShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::Key_QuoteLeft), this);
+    auto *termShortcut = new QShortcut(Shortcuts::toggleTerminal(), this);
     connect(termShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::toggle);
 
     // Ctrl+Shift+E splits the terminal; Ctrl+Shift+W closes the active split.
@@ -377,10 +378,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             return m_sideTerminal;
         return m_terminal;
     };
-    auto *termSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E), this);
+    auto *termSplitShortcut = new QShortcut(Shortcuts::splitTerminal(), this);
     connect(termSplitShortcut, &QShortcut::activated, this,
             [focusedPanel]() { focusedPanel()->addTerminal(); });
-    auto *termCloseSplitShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_W), this);
+    auto *termCloseSplitShortcut = new QShortcut(Shortcuts::closeTerminalSplit(), this);
     connect(termCloseSplitShortcut, &QShortcut::activated, this,
             [focusedPanel]() { focusedPanel()->removeCurrentTerminal(); });
 
@@ -388,26 +389,26 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // the fallback for links qtermwidget's URL filter does not detect on its
     // own (see TerminalPanel::openSelectedLink); it only acts on the panel that
     // has focus, so it can never open a stale selection from the other one.
-    auto *termLinkShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_L), this);
+    auto *termLinkShortcut = new QShortcut(Shortcuts::openSelectedLink(), this);
     connect(termLinkShortcut, &QShortcut::activated, this, [this]() {
         if (TerminalPanel *panel = terminalPanelFor(QApplication::focusWidget()))
             panel->openSelectedLink();
     });
 
     // Ctrl+Shift+Down performs the same action as the terminal's ↓ toolbar button.
-    auto *termCwdShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Down), this);
+    auto *termCwdShortcut = new QShortcut(Shortcuts::broadcastCwd(), this);
     connect(termCwdShortcut, &QShortcut::activated, m_terminal, &TerminalPanel::cwdBroadcastRequested);
 
     // Ctrl+Shift+. toggles text selection mode (terminal-style selection in
     // the nvim buffer regardless of nvim's 'mouse' option).
-    auto *selModeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Period), this);
+    auto *selModeShortcut = new QShortcut(Shortcuts::toggleSelectionMode(), this);
     connect(selModeShortcut, &QShortcut::activated, this, [this]() {
         m_grid->setSelectionModeActive(!m_grid->selectionModeActive());
     });
 
     // Ctrl+Shift+M toggles keyboard focus between the message log and the
     // nvim grid (Ctrl+Tab from the log also returns to the grid).
-    auto *msgFocusShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M), this);
+    auto *msgFocusShortcut = new QShortcut(Shortcuts::focusMessages(), this);
     connect(msgFocusShortcut, &QShortcut::activated, this, [this]() {
         if (!m_cfg.extMessages) return; // feature disabled entirely
         if (!m_messages->isVisible()) {
@@ -429,12 +430,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Ctrl+Shift+X: give the whole window to the focused pane (buffer area,
     // bottom terminal or side terminal) by hiding the others; pressing it
     // again restores exactly the ones that were actually visible before.
-    auto *maximizeShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X), this);
+    auto *maximizeShortcut = new QShortcut(Shortcuts::maximizePane(), this);
     connect(maximizeShortcut, &QShortcut::activated, this, &MainWindow::toggleMaximizedMode);
 
     // Ctrl+Shift+G: toggle the change review panel (same as the side
     // terminal's review button).
-    auto *reviewShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G), this);
+    auto *reviewShortcut = new QShortcut(Shortcuts::toggleChangeReview(), this);
     connect(reviewShortcut, &QShortcut::activated, this, &MainWindow::toggleChangeReview);
     connect(m_sideTerminal, &TerminalPanel::changeReviewRequested,
             this, &MainWindow::toggleChangeReview);
@@ -465,9 +466,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 m_nvim->request("nvim_paste", {text, true, -1});
         }
     };
-    auto *pasteShortcut1 = new QShortcut(QKeySequence(Qt::SHIFT | Qt::Key_Insert), this);
+    auto *pasteShortcut1 = new QShortcut(Shortcuts::pasteInsert(), this);
     connect(pasteShortcut1, &QShortcut::activated, this, pasteHandler);
-    auto *pasteShortcut2 = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V), this);
+    auto *pasteShortcut2 = new QShortcut(Shortcuts::pasteClipboard(), this);
     connect(pasteShortcut2, &QShortcut::activated, this, pasteHandler);
 
     // Bottom-right toggle buttons (minimap, terminal)
@@ -492,7 +493,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     btnLayout->addWidget(minimapBtn);
 
     m_termBtn = new QPushButton("⌨", central);
-    m_termBtn->setToolTip("Toggle terminal");
+    m_termBtn->setToolTip(Shortcuts::hint(QStringLiteral("Toggle terminal"),
+                                          Shortcuts::toggleTerminal()));
     m_termBtn->setCheckable(true);
     m_termBtn->setChecked(false);
     m_termBtn->setFixedSize(28, 20);
@@ -500,7 +502,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     btnLayout->addWidget(m_termBtn);
 
     m_sideTermBtn = new QPushButton("◨", central);
-    m_sideTermBtn->setToolTip("Toggle side terminal");
+    m_sideTermBtn->setToolTip(Shortcuts::hint(QStringLiteral("Toggle side terminal"),
+                                              Shortcuts::toggleSideTerminal()));
     m_sideTermBtn->setCheckable(true);
     m_sideTermBtn->setChecked(false);
     m_sideTermBtn->setFixedSize(28, 20);
@@ -508,7 +511,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     btnLayout->addWidget(m_sideTermBtn);
 
     auto *selModeBtn = new QPushButton("⌶", central);
-    selModeBtn->setToolTip("Toggle text selection mode (Ctrl+Shift+.)");
+    selModeBtn->setToolTip(Shortcuts::hint(QStringLiteral("Toggle text selection mode"),
+                                           Shortcuts::toggleSelectionMode()));
     selModeBtn->setCheckable(true);
     selModeBtn->setChecked(false);
     selModeBtn->setFixedSize(28, 20);
@@ -556,6 +560,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 m_sideTerminal->focusTerminal();
             });
     });
+    // Ctrl+Shift+` toggles the side terminal. It goes through the button
+    // rather than the panel: the button's handler above resolves nvim's cwd
+    // and seeds the splitter width before showing, which showing the panel
+    // directly would skip.
+    auto *sideTermShortcut = new QShortcut(Shortcuts::toggleSideTerminal(), this);
+    connect(sideTermShortcut, &QShortcut::activated, m_sideTermBtn, &QPushButton::toggle);
     connect(m_sideTerminal, &TerminalPanel::visibilityChanged, m_sideTermBtn, &QPushButton::setChecked);
     // Once the panel has been open in this session its visibility is real user
     // state again, so closeEvent may persist it (see m_sideTerminalSuppressed).
@@ -1011,7 +1021,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             [this]() { m_grid->setFocus(); });
 
     // Ctrl+Shift+P toggles the switcher manually.
-    auto *switcherShortcut = new QShortcut(QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_P), this);
+    auto *switcherShortcut = new QShortcut(Shortcuts::toggleProjectSwitcher(), this);
     connect(switcherShortcut, &QShortcut::activated, this, [this]() {
         if (m_switcher->isVisible())
             m_switcher->dismiss();
