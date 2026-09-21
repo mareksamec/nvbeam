@@ -22,7 +22,28 @@ env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 jobs:
+  # project() in CMakeLists.txt is the single source of the version the
+  # binaries and the deb/rpm artifacts carry, while the Arch package and the
+  # release name come from the tag. Releasing a tag that disagrees with it
+  # ships artifacts named after the wrong version, so stop before building.
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Tag matches project() version
+        run: |
+          project=$(sed -n 's/^project(neobeam VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          tag="${RELEASE_TAG#v}"          # "v0.2.8" -> "0.2.8"
+          tag="${tag%%-*}"                # "0.2.8-rc1" -> "0.2.8"
+          echo "project()=${project} tag=${tag}"
+          if [[ "${project}" != "${tag}" ]]; then
+            echo "::error::CMakeLists.txt project() version ${project} does not match tag ${RELEASE_TAG}. Bump project() first."
+            exit 1
+          fi
+
   build-deb:
+    needs: check-version
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -50,6 +71,7 @@ jobs:
           path: build/*.deb
 
   build-rpm:
+    needs: check-version
     runs-on: ubuntu-latest
     container: fedora:latest
     steps:
@@ -75,6 +97,7 @@ jobs:
           path: build/*.rpm
 
   build-arch:
+    needs: check-version
     runs-on: ubuntu-latest
     container: archlinux:latest
     steps:
