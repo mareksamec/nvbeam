@@ -1,4 +1,5 @@
 #include "terminalpanel.h"
+#include "shortcuts.h"
 
 #include "colorscheme.h"
 
@@ -172,18 +173,26 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
         "QToolButton:hover { background: #333; border-radius: 3px; }").arg(bg));
 
     auto *addAct = m_toolbar->addAction("+", this, &TerminalPanel::addTerminal);
-    addAct->setToolTip("New terminal");
+    addAct->setToolTip(Shortcuts::hint(QStringLiteral("New terminal"),
+                                       Shortcuts::splitTerminal()));
     auto *cwdAct = m_toolbar->addAction("↓");
-    cwdAct->setToolTip("Send nvim cwd to all terminals");
+    // The Ctrl+Shift+Down shortcut always drives the bottom panel, so only
+    // that panel's button may advertise it.
+    cwdAct->setToolTip(m_cfg.sidePanel
+                           ? QStringLiteral("Send nvim cwd to all terminals")
+                           : Shortcuts::hint(QStringLiteral("Send nvim cwd to all terminals"),
+                                             Shortcuts::broadcastCwd()));
     connect(cwdAct, &QAction::triggered, this, &TerminalPanel::cwdBroadcastRequested);
     auto *closeAct = m_toolbar->addAction("✕", this, &TerminalPanel::removeCurrentTerminal);
-    closeAct->setToolTip("Close terminal");
+    closeAct->setToolTip(Shortcuts::hint(QStringLiteral("Close terminal"),
+                                         Shortcuts::closeTerminalSplit()));
     // Side panel only: the change review panel opens directly next to this
     // one, showing what the agent running here has written, so its toggle
     // belongs on this toolbar and not on the bottom panel's.
     if (m_cfg.sidePanel) {
         auto *reviewAct = m_toolbar->addAction("◧");
-        reviewAct->setToolTip("Review changes (Ctrl+Shift+G)");
+        reviewAct->setToolTip(Shortcuts::hint(QStringLiteral("Review changes"),
+                                              Shortcuts::toggleChangeReview()));
         connect(reviewAct, &QAction::triggered, this, &TerminalPanel::changeReviewRequested);
     }
 
