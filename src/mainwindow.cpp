@@ -314,6 +314,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.showContext = cfg.reviewShowContext;
     reviewCfg.syntax = cfg.reviewSyntax;
     applyTerminalScheme(reviewCfg, cfg);
+    // An explicit file color beats the scheme, the same precedence the
+    // [terminal] foreground/background overrides have inside the scheme pass.
+    if (const QColor fileColor(cfg.reviewFileColor); fileColor.isValid())
+        reviewCfg.file = fileColor;
     m_review = new ChangeReviewPanel(reviewCfg, hsplitter);
     m_review->hide();
 

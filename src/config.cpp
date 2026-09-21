@@ -454,6 +454,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 cfg.reviewFileMaxHeight = qMax(24, cfg.reviewFileMaxHeight);
             readBool(*review, "review", "show_context", cfg.reviewShowContext, issues);
             readBool(*review, "review", "syntax", cfg.reviewSyntax, issues);
+            readColor(*review, "review", "file_color", cfg.reviewFileColor, issues);
         }
 
         if (const auto *ui = sectionTable(data, "ui")) {

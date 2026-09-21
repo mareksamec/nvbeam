@@ -35,6 +35,21 @@ refresh_prompt_on_git_change = true  # WARNING: sends Enter to the bottom termin
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
 
+[review]
+# width = 600  # startup width of the change review panel, in pixels
+# refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
+# timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
+# base = ""  # revision to diff against (empty = the worktree against HEAD)
+# font = ""  # review font (empty = use the side terminal font)
+# font_size = 0  # review font size (0 = use the side terminal font size)
+# max_lines = 20000  # cap on the diff lines kept per file
+# file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
+# show_context = false  # expand a file to the full hunks instead of the changed lines only
+# syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
+file_color = "#bcc3cf"  # file name color in a row's header (empty = the color scheme's magenta)
+# The panel has no colors of its own: it follows [terminal] color_scheme and
+# the foreground/background overrides there.
+
 [ui]
 # ext_popupmenu = true
 # ext_tabline = true
