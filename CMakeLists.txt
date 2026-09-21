@@ -27,7 +27,14 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Widgets)
 if(NEOBEAM_SYNTAX)
     find_package(KF6SyntaxHighlighting QUIET)
     if(NOT KF6SyntaxHighlighting_FOUND)
-        message(STATUS "KF6SyntaxHighlighting not found - diffs without code coloring")
+        # A warning rather than a status line: this option is ON by default, so
+        # reaching here means a build (usually a package recipe) is dropping a
+        # feature it asked for, and a status line is too quiet to notice.
+        message(WARNING "KF6SyntaxHighlighting not found - diffs lose code coloring. "
+                        "Install it (Arch: syntax-highlighting, Debian: "
+                        "libkf6syntaxhighlighting-dev, Fedora: "
+                        "kf6-syntax-highlighting-devel) or pass -DNEOBEAM_SYNTAX=OFF "
+                        "to silence this.")
         set(NEOBEAM_SYNTAX OFF)
     endif()
 endif()
@@ -155,11 +162,11 @@ set(CPACK_PACKAGE_CONTACT "marek@samec.me")
 set(CPACK_PACKAGE_LICENSE "MIT")
 
 # DEB
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, neovim (>= 0.10)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, libkf6syntaxhighlighting6, neovim (>= 0.10)")
 set(CPACK_DEBIAN_PACKAGE_SECTION "editors")
 
 # RPM
-set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, neovim >= 0.10")
+set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, kf6-syntax-highlighting, neovim >= 0.10")
 set(CPACK_RPM_PACKAGE_LICENSE "MIT")
 
 include(CPack)

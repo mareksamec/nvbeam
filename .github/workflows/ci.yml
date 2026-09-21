@@ -29,7 +29,8 @@ jobs:
             cmake \
             g++ \
             qt6-base-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            libkf6syntaxhighlighting-dev
 
       - name: Install qtermwidget6 (if available)
         if: matrix.terminal == 'ON'
@@ -59,6 +60,7 @@ jobs:
             gcc-c++ \
             qt6-qtbase-devel \
             mesa-libGL-devel \
+            kf6-syntax-highlighting-devel \
             qtermwidget
 
       - name: Configure
@@ -80,6 +82,7 @@ jobs:
             make \
             gcc \
             qt6-base \
+            syntax-highlighting \
             qtermwidget
 
       - uses: actions/checkout@v4

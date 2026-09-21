@@ -13,6 +13,7 @@ license=('MIT')
 depends=(
     'qt6-base'
     'qtermwidget'
+    'syntax-highlighting'
     'neovim>=0.10'
     'hicolor-icon-theme'
 )
@@ -88,6 +89,7 @@ build() {
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
         -DNEOBEAM_TERMINAL=ON \
+        -DNEOBEAM_SYNTAX=ON \
         -Wno-dev
     cmake --build build -j"$(nproc)"
 }

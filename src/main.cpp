@@ -3,6 +3,7 @@
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QFile>
+#include <QStringList>
 #include <cstdio>
 #include "mainwindow.h"
 #include "config.h"
@@ -34,11 +35,27 @@ static int checkConfig(const QString &customPath)
     return hasError ? 2 : 1;
 }
 
+// The optional features this binary was built with, appended to --version.
+// Both are compile-time: a package built without qtermwidget6 or
+// KF6SyntaxHighlighting still runs, it just silently lacks the terminal panel
+// or the code coloring in review diffs, and --version is where that shows.
+static QString buildFeatures()
+{
+    QStringList features;
+#ifdef NEOBEAM_HAS_TERMINAL
+    features << QStringLiteral("terminal");
+#endif
+#ifdef NEOBEAM_HAS_SYNTAX
+    features << QStringLiteral("syntax");
+#endif
+    return features.isEmpty() ? QStringLiteral("none") : features.join(QLatin1Char(' '));
+}
+
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName("neobeam");
-    app.setApplicationVersion("0.1.0");
+    app.setApplicationVersion(QStringLiteral("0.1.0 (built with: %1)").arg(buildFeatures()));
 
     // Application icon. The build rasterizes an SVG master into a PNG size
     // ladder and embeds it as a Qt resource (no runtime Qt6::Svg dependency).
