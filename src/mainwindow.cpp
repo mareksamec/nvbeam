@@ -8,6 +8,7 @@
 #include "imagerenderer.h"
 #include "gitstatus.h"
 #include "config.h"
+#include "pinnedprojects.h"
 #include "session.h"
 #include "shortcuts.h"
 #include "logging.h"
@@ -1019,6 +1020,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             &MainWindow::applySwitcherSelection);
     connect(m_switcher, &SwitcherWidget::dismissed, this,
             [this]() { m_grid->setFocus(); });
+    connect(m_switcher, &SwitcherWidget::pinRequested, this, &MainWindow::pinProject);
+    connect(m_switcher, &SwitcherWidget::unpinRequested, this, &MainWindow::unpinProject);
 
     // Ctrl+Shift+P toggles the switcher manually.
     auto *switcherShortcut = new QShortcut(Shortcuts::toggleProjectSwitcher(), this);
@@ -1206,6 +1209,38 @@ void MainWindow::openSwitcher()
     m_switcher->open(switcherItems(), m_titleCwd);
 }
 
+void MainWindow::pinProject(const QString &dir)
+{
+    ProjectEntry project;
+    project.path = QDir::cleanPath(dir);
+    project.name = QFileInfo(project.path).fileName();
+    // Whatever the side terminal is running right now becomes the project's
+    // side command, so pinning while an agent is open reproduces that setup
+    // on the next open. A plain shell leaves it out.
+    project.sideCommand = m_sideTerminal->runningCommand();
+
+    if (!PinnedProjects::add(project)) {
+        m_switcher->showMessage(QStringLiteral("Could not pin %1").arg(project.name));
+        return;
+    }
+    m_switcher->setItems(switcherItems());
+    m_switcher->showMessage(project.sideCommand.isEmpty()
+        ? QStringLiteral("Pinned %1").arg(project.name)
+        : QStringLiteral("Pinned %1 with \"%2\"").arg(project.name, project.sideCommand));
+}
+
+void MainWindow::unpinProject(const QString &dir)
+{
+    const QString path = QDir::cleanPath(dir);
+    if (!PinnedProjects::remove(path)) {
+        m_switcher->showMessage(QStringLiteral("Could not unpin %1")
+                                    .arg(QFileInfo(path).fileName()));
+        return;
+    }
+    m_switcher->setItems(switcherItems());
+    m_switcher->showMessage(QStringLiteral("Unpinned %1").arg(QFileInfo(path).fileName()));
+}
+
 QList<SwitcherItem> MainWindow::switcherItems() const
 {
     QList<SwitcherItem> items;
@@ -1217,6 +1252,22 @@ QList<SwitcherItem> MainWindow::switcherItems() const
         item.label = project.name;
         item.path = project.path;
         item.sideCommand = project.sideCommand;
+        items.append(item);
+        seen.insert(project.path);
+    }
+
+    // Pinned from the switcher (projects.toml). A path the user has since
+    // written into neobeam.toml is already in `seen`, so the config entry
+    // wins and its side_command survives.
+    for (const ProjectEntry &project : PinnedProjects::load()) {
+        if (seen.contains(project.path))
+            continue;
+        SwitcherItem item;
+        item.kind = SwitcherItem::Project;
+        item.label = project.name;
+        item.path = project.path;
+        item.sideCommand = project.sideCommand;
+        item.pinned = true;
         items.append(item);
         seen.insert(project.path);
     }
@@ -1475,11 +1526,24 @@ void MainWindow::applyWindowTitle()
 
 void MainWindow::applyProjectSideCommand(const QString &dir)
 {
+    // neobeam.toml first, then the projects pinned from the switcher: the
+    // same precedence switcherItems() lists them in, so a path declared in
+    // both runs the command the user wrote by hand.
     QString command;
+    bool found = false;
     for (const ProjectEntry &project : m_cfg.projects) {
         if (project.path == dir) {
             command = project.sideCommand;
+            found = true;
             break;
+        }
+    }
+    if (!found) {
+        for (const ProjectEntry &project : PinnedProjects::load()) {
+            if (project.path == dir) {
+                command = project.sideCommand;
+                break;
+            }
         }
     }
     // Moves the side terminal to dir and applies the command: pending shells

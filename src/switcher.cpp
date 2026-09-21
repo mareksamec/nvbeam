@@ -5,9 +5,11 @@
 #include <QEvent>
 #include <QFileInfo>
 #include <QKeyEvent>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QSignalBlocker>
+#include <QTimer>
 #include <QVBoxLayout>
 
 namespace {
@@ -67,10 +69,12 @@ SwitcherItem itemForPath(const QFileInfo &info)
     return item;
 }
 
-QChar kindGlyph(SwitcherItem::Kind kind)
+/// Row marker. A project pinned from here is hollow, a project declared in
+/// neobeam.toml is filled: only the hollow ones can be unpinned with Ctrl+P.
+QChar itemGlyph(const SwitcherItem &item)
 {
-    switch (kind) {
-    case SwitcherItem::Project: return QChar(u'◆');
+    switch (item.kind) {
+    case SwitcherItem::Project: return item.pinned ? QChar(u'◇') : QChar(u'◆');
     case SwitcherItem::Folder:  return QChar(u'▸');
     case SwitcherItem::File:    return QChar(u'·');
     }
@@ -78,6 +82,8 @@ QChar kindGlyph(SwitcherItem::Kind kind)
 }
 
 constexpr int kMaxVisibleRows = 12;
+/// How long a pin message stays in the footer before the hints return.
+constexpr int kStatusMs = 2500;
 /// Rows built per directory in path mode. Only the ones that survive the
 /// fragment match and the score sort are counted, so this caps widget work,
 /// not the directory read itself.
@@ -96,7 +102,8 @@ SwitcherWidget::SwitcherWidget(const QString &accentColor, QWidget *parent)
         "QLineEdit:focus { border-color: %1; }"
         "QListWidget { background: transparent; color: #a9b1d6; border: none; font-size: 10pt; }"
         "QListWidget::item { padding: 5px 8px; border-radius: 4px; }"
-        "QListWidget::item:selected { background: #313244; color: %1; }")
+        "QListWidget::item:selected { background: #313244; color: %1; }"
+        "QLabel#nbSwitcherStatus { color: #6c7086; font-size: 9pt; }")
             .arg(accentColor));
 
     auto *layout = new QVBoxLayout(this);
@@ -119,6 +126,20 @@ SwitcherWidget::SwitcherWidget(const QString &accentColor, QWidget *parent)
     });
     layout->addWidget(m_list);
 
+    // Footer: the keys that are not discoverable from the input line, and
+    // where a pin reports what it did.
+    m_status = new QLabel(this);
+    m_status->setObjectName(QStringLiteral("nbSwitcherStatus"));
+    layout->addWidget(m_status);
+
+    // A pin message reverts to the key hints on its own; the switcher is
+    // usually gone before it fires, which is why it is single-shot and not a
+    // state the list has to carry.
+    m_statusTimer = new QTimer(this);
+    m_statusTimer->setSingleShot(true);
+    m_statusTimer->setInterval(kStatusMs);
+    connect(m_statusTimer, &QTimer::timeout, this, [this]() { setStatus(); });
+
     connect(m_input, &QLineEdit::textChanged, this, &SwitcherWidget::refilter);
 
     parent->installEventFilter(this); // recenter on parent resizes
@@ -137,6 +158,17 @@ void SwitcherWidget::open(const QList<SwitcherItem> &items, const QString &baseD
     show();
     raise();
     m_input->setFocus();
+}
+
+void SwitcherWidget::setItems(const QList<SwitcherItem> &items)
+{
+    const int row = m_list->currentRow();
+    m_items = items;
+    // Project mode reads m_items directly; path mode's candidates come from
+    // the filesystem, so only the pinned marks its rows carry need refreshing.
+    refilter(m_input->text());
+    if (row >= 0 && row < m_list->count())
+        m_list->setCurrentRow(row);
 }
 
 void SwitcherWidget::dismiss()
@@ -162,6 +194,25 @@ void SwitcherWidget::setMode(Mode mode)
         m_input->setText(path ? collapseHome(m_baseDir) + QLatin1Char('/') : QString());
     }
     refilter(m_input->text());
+    setStatus();
+}
+
+void SwitcherWidget::showMessage(const QString &message)
+{
+    setStatus(message);
+}
+
+void SwitcherWidget::setStatus(const QString &message)
+{
+    if (!message.isEmpty()) {
+        m_status->setText(message);
+        m_statusTimer->start();
+        return;
+    }
+    m_statusTimer->stop();
+    m_status->setText(m_mode == Mode::Path
+        ? QStringLiteral("Tab completes · Ctrl+P pins this folder · Ctrl+D returns to projects")
+        : QStringLiteral("Ctrl+P pins the highlighted folder · Ctrl+D opens a path"));
 }
 
 const QList<SwitcherItem> &SwitcherWidget::source() const
@@ -304,7 +355,7 @@ void SwitcherWidget::showRows(const QList<int> &indices)
     for (int index : indices) {
         const SwitcherItem &item = src.at(index);
         auto *row = new QListWidgetItem(QStringLiteral("%1 %2   %3")
-                                            .arg(kindGlyph(item.kind))
+                                            .arg(itemGlyph(item))
                                             .arg(item.label, collapseHome(item.path)));
         row->setToolTip(item.path);
         m_list->addItem(row);
@@ -363,6 +414,57 @@ void SwitcherWidget::selectCurrent()
     emit itemSelected(item);
 }
 
+void SwitcherWidget::togglePin()
+{
+    // Path mode pins what is typed, even when the list below it highlights a
+    // child entry: the input line is what the user is looking at. Project
+    // mode pins the highlighted row.
+    QString dir;
+    bool pinned = false;
+    if (m_mode == Mode::Path) {
+        dir = QDir::cleanPath(resolvePath(m_input->text(), m_baseDir));
+        for (const SwitcherItem &item : m_items) {
+            if (item.path == dir) {
+                pinned = item.pinned;
+                // A folder already declared in neobeam.toml is a project the
+                // app must not touch, and saying so beats a silent no-op.
+                if (item.kind == SwitcherItem::Project && !item.pinned) {
+                    setStatus(QStringLiteral("Already a project in neobeam.toml"));
+                    return;
+                }
+                break;
+            }
+        }
+    } else {
+        const int row = m_list->currentRow();
+        if (row < 0 || row >= m_visible.size())
+            return;
+        const SwitcherItem &item = source().at(m_visible.at(row));
+        if (item.kind == SwitcherItem::File) {
+            setStatus(QStringLiteral("Only folders can be pinned"));
+            return;
+        }
+        if (item.kind == SwitcherItem::Project && !item.pinned) {
+            setStatus(QStringLiteral("Declared in neobeam.toml, remove it there"));
+            return;
+        }
+        dir = item.path;
+        pinned = item.pinned;
+    }
+
+    if (dir.isEmpty())
+        return;
+    if (!QFileInfo(dir).isDir()) {
+        setStatus(QStringLiteral("Only folders can be pinned"));
+        return;
+    }
+
+    if (pinned)
+        emit unpinRequested(dir);
+    else
+        emit pinRequested(dir);
+}
+
 void SwitcherWidget::recenter()
 {
     QWidget *p = parentWidget();
@@ -401,6 +503,13 @@ bool SwitcherWidget::eventFilter(QObject *watched, QEvent *event)
             // the input (focus loss dismisses the switcher).
             cycleCompletion();
             return true;
+        case Qt::Key_P:
+            // Ctrl+P pins (or unpins) the folder the switcher points at.
+            if (ke->modifiers().testFlag(Qt::ControlModifier)) {
+                togglePin();
+                return true;
+            }
+            break;
         case Qt::Key_D:
             // Ctrl+D toggles the two modes. It shadows QLineEdit's X11
             // delete-forward binding, which Del already covers.

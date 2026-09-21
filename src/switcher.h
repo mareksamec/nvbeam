@@ -4,8 +4,10 @@
 #include <QList>
 #include <QString>
 
+class QLabel;
 class QLineEdit;
 class QListWidget;
+class QTimer;
 
 /// One entry in the project switcher list.
 struct SwitcherItem {
@@ -14,6 +16,9 @@ struct SwitcherItem {
     QString label;        // display name (project name or path basename)
     QString path;         // absolute path (folder for Project/Folder, file for File)
     QString sideCommand;  // side terminal command (projects only)
+    bool pinned = false;  // a Project the app itself pinned, so Ctrl+P can
+                          // unpin it again; a project declared in neobeam.toml
+                          // is not pinned and cannot be removed from here
 };
 
 /// KRunner-style overlay picker: a search field with a fuzzy-filtered list of
@@ -37,12 +42,26 @@ public:
     /// against (nvim's cwd); empty falls back to the home directory.
     void open(const QList<SwitcherItem> &items, const QString &baseDir = QString());
 
+    /// Replace the item set of an open switcher, keeping the mode, the typed
+    /// text and the highlighted row. Used after a pin changes the list.
+    void setItems(const QList<SwitcherItem> &items);
+
     /// Hide the switcher (no selection).
     void dismiss();
+
+    /// Show a short message in the footer, replacing the key hints until it
+    /// times out. What a pin actually did is known by MainWindow, which owns
+    /// the store, so it reports the outcome here.
+    void showMessage(const QString &message);
 
 signals:
     void itemSelected(const SwitcherItem &item);
     void dismissed();
+    /// Ctrl+P on a directory that is not pinned yet (the path typed in path
+    /// mode, or the highlighted row in project mode).
+    void pinRequested(const QString &dir);
+    /// Ctrl+P on a directory this app pinned earlier.
+    void unpinRequested(const QString &dir);
 
 protected:
     /// Keeps the box centered while the parent window resizes and dismisses
@@ -83,10 +102,20 @@ private:
     const QList<SwitcherItem> &source() const;
     void moveSelection(int delta);
     void selectCurrent();
+    /// Ctrl+P: pin the directory the switcher is pointing at, or unpin it when
+    /// it is already an app-pinned project. Emits nothing for anything that
+    /// cannot be a project (a file, a path that does not exist) and for a
+    /// project declared in neobeam.toml, which only the user can remove.
+    void togglePin();
+    /// Footer text: a transient message when one is set, the mode's key hints
+    /// otherwise.
+    void setStatus(const QString &message = QString());
     void recenter();
 
     QLineEdit *m_input = nullptr;
     QListWidget *m_list = nullptr;
+    QLabel *m_status = nullptr;       // key hints, and pin feedback
+    QTimer *m_statusTimer = nullptr;  // clears a transient message
     QList<SwitcherItem> m_items;      // full item set, switcher order
     QList<SwitcherItem> m_pathItems;  // path-mode candidates, display order
     QList<int> m_visible;             // indices into source(), filtered order

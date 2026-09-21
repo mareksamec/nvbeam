@@ -108,6 +108,11 @@ public:
     /// corrupt its input).
     void adoptProject(const QString &dir, const QString &command);
 
+    /// The exec command the running shells were started with, empty for a
+    /// plain shell. This is the configured command only: a tool the user
+    /// launched by typing into the shell is not visible from here.
+    QString runningCommand() const { return m_runningCommand; }
+
     /// Open the first link found in the active split's selection. This is the
     /// fallback for links qtermwidget's own URL filter does not detect (TUI
     /// applications that wrap a URL themselves, or links written without a
