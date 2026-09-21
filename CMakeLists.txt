@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(neobeam VERSION 0.1.0 LANGUAGES CXX)
+project(neobeam VERSION 0.2.8 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -77,6 +77,10 @@ target_link_libraries(neobeam PRIVATE
     Qt6::Widgets
     toml11::toml11
 )
+
+# --version reads the same version the packages carry, so a binary can be told
+# apart from the release it came from.
+target_compile_definitions(neobeam PRIVATE NEOBEAM_VERSION="${PROJECT_VERSION}")
 
 if(NEOBEAM_TERMINAL)
     target_compile_definitions(neobeam PRIVATE NEOBEAM_HAS_TERMINAL)

@@ -55,7 +55,8 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setApplicationName("neobeam");
-    app.setApplicationVersion(QStringLiteral("0.1.0 (built with: %1)").arg(buildFeatures()));
+    app.setApplicationVersion(QStringLiteral(NEOBEAM_VERSION " (built with: %1)")
+                                  .arg(buildFeatures()));
 
     // Application icon. The build rasterizes an SVG master into a PNG size
     // ladder and embeds it as a Qt resource (no runtime Qt6::Svg dependency).
