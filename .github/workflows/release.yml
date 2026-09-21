@@ -31,7 +31,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake g++ qt6-base-dev libgl1-mesa-dev
+            cmake g++ qt6-base-dev libgl1-mesa-dev libkf6syntaxhighlighting-dev
 
       - name: Build
         run: |
@@ -56,7 +56,7 @@ jobs:
         run: |
           dnf install -y \
             git cmake gcc-c++ rpm-build \
-            qt6-qtbase-devel mesa-libGL-devel
+            qt6-qtbase-devel mesa-libGL-devel kf6-syntax-highlighting-devel
 
       - name: Build
         run: |

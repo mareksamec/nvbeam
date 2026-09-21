@@ -33,8 +33,11 @@ BUILD_DEPENDS =	x11/gnome/librsvg
 RUN_DEPENDS =	editors/neovim \
 		devel/desktop-file-utils
 
-# qtermwidget in ports is Qt5-based; the embedded terminal needs qtermwidget6
+# qtermwidget in ports is Qt5-based; the embedded terminal needs qtermwidget6.
+# KF6SyntaxHighlighting is not in ports either, so the review diffs keep their
+# own added/removed coloring instead of per-language code coloring.
 CONFIGURE_ARGS =	-DNEOBEAM_TERMINAL=OFF \
+		-DNEOBEAM_SYNTAX=OFF \
 		-DFETCHCONTENT_FULLY_DISCONNECTED=ON \
 		-DFETCHCONTENT_SOURCE_DIR_TOML11=${WRKDIR}/toml11-${TOML11_V}
 

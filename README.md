@@ -164,7 +164,11 @@ KF6SyntaxHighlighting the code inside a diff is colored by the file's own
 language, and an added or removed line carries its color as a stripe across the
 panel's full width instead of as text color, with the leading `+`/`-` keeping
 the diff color.
-Set `[review] syntax = false` for plain diff coloring. The panel draws itself in the
+Set `[review] syntax = false` for plain diff coloring: only added, removed and
+hunk lines get a color, and the code itself stays in the panel's foreground.
+The key needs a binary built with KF6SyntaxHighlighting; `neobeam --version`
+lists the optional features the build has, and with `syntax` missing there the
+setting has nothing to turn on. The panel draws itself in the
 terminal's colors: the scheme named by `[terminal] color_scheme` (and the
 `foreground`/`background` overrides there) supplies its text and, a shade
 lighter than the terminal itself, its background,
