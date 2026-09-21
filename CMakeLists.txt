@@ -161,12 +161,21 @@ set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Fast native Neovim GUI client built with 
 set(CPACK_PACKAGE_CONTACT "marek@samec.me")
 set(CPACK_PACKAGE_LICENSE "MIT")
 
+# The syntax library is only a runtime dependency when the build actually
+# linked it: Ubuntu 24.04 has no KF6 build of it, so that deb is produced
+# without code coloring and must not require a package that does not exist.
+if(NEOBEAM_SYNTAX)
+    set(_neobeam_deb_syntax "libkf6syntaxhighlighting6, ")
+    set(_neobeam_rpm_syntax "kf6-syntax-highlighting, ")
+endif()
+
 # DEB
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt6core6, libqt6gui6, libqt6widgets6, libkf6syntaxhighlighting6, neovim (>= 0.10)")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS
+    "libqt6core6, libqt6gui6, libqt6widgets6, ${_neobeam_deb_syntax}neovim (>= 0.10)")
 set(CPACK_DEBIAN_PACKAGE_SECTION "editors")
 
 # RPM
-set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, kf6-syntax-highlighting, neovim >= 0.10")
+set(CPACK_RPM_PACKAGE_REQUIRES "qt6-qtbase >= 6.0, ${_neobeam_rpm_syntax}neovim >= 0.10")
 set(CPACK_RPM_PACKAGE_LICENSE "MIT")
 
 include(CPack)

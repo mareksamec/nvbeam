@@ -30,8 +30,11 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            cmake g++ qt6-base-dev libgl1-mesa-dev libkf6syntaxhighlighting-dev
+          sudo apt-get install -y cmake g++ qt6-base-dev libgl1-mesa-dev
+          # KF6 build of the syntax library; absent before Ubuntu 25.04, and
+          # without it the deb is built without code coloring in review diffs.
+          sudo apt-get install -y libkf6syntaxhighlighting-dev || \
+          echo "libkf6syntaxhighlighting-dev not available - deb without code coloring"
 
       - name: Build
         run: |
