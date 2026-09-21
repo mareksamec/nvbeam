@@ -54,12 +54,22 @@ public:
     /// the store, so it reports the outcome here.
     void showMessage(const QString &message);
 
+    /// Turn the input line into the side command prompt for a pin, prefilled
+    /// with what the side terminal is running. Enter pins with whatever the
+    /// line holds, Esc abandons the pin and restores the list.
+    void askSideCommand(const QString &dir, const QString &suggestion);
+
 signals:
     void itemSelected(const SwitcherItem &item);
     void dismissed();
     /// Ctrl+P on a directory that is not pinned yet (the path typed in path
-    /// mode, or the highlighted row in project mode).
+    /// mode, or the highlighted row in project mode). MainWindow answers with
+    /// askSideCommand(), which is what actually opens the prompt: only it
+    /// knows what the side terminal is running.
     void pinRequested(const QString &dir);
+    /// The side command prompt was confirmed. An empty command means a plain
+    /// shell, exactly as an absent side_command does.
+    void pinConfirmed(const QString &dir, const QString &sideCommand);
     /// Ctrl+P on a directory this app pinned earlier.
     void unpinRequested(const QString &dir);
 
@@ -72,7 +82,8 @@ private:
     /// What the text in the input line means.
     enum class Mode {
         Projects,   // fuzzy query over m_items (pinned projects and recents)
-        Path        // filesystem path, completed against real directories
+        Path,       // filesystem path, completed against real directories
+        PinCommand  // side command for the folder being pinned
     };
 
     /// Switch modes (Ctrl+D). The text does not carry over - a fuzzy query and
@@ -110,6 +121,9 @@ private:
     /// Footer text: a transient message when one is set, the mode's key hints
     /// otherwise.
     void setStatus(const QString &message = QString());
+    /// Leave the side command prompt without pinning, restoring the mode and
+    /// the text the prompt interrupted.
+    void cancelPin();
     void recenter();
 
     QLineEdit *m_input = nullptr;
@@ -125,4 +139,7 @@ private:
                                       // last filter (path mode Enter rule)
     bool m_completionPending = false; // Tab filled a candidate in that Enter
                                       // has not confirmed yet
+    QString m_pinDir;                 // folder the side command prompt is for
+    Mode m_pinReturnMode = Mode::Projects; // mode the prompt interrupted
+    QString m_pinReturnText;          // input text it interrupted
 };

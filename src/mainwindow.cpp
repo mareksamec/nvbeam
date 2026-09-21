@@ -1020,7 +1020,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             &MainWindow::applySwitcherSelection);
     connect(m_switcher, &SwitcherWidget::dismissed, this,
             [this]() { m_grid->setFocus(); });
-    connect(m_switcher, &SwitcherWidget::pinRequested, this, &MainWindow::pinProject);
+    connect(m_switcher, &SwitcherWidget::pinRequested, this, &MainWindow::askPinSideCommand);
+    connect(m_switcher, &SwitcherWidget::pinConfirmed, this, &MainWindow::pinProject);
     connect(m_switcher, &SwitcherWidget::unpinRequested, this, &MainWindow::unpinProject);
 
     // Ctrl+Shift+P toggles the switcher manually.
@@ -1209,15 +1210,21 @@ void MainWindow::openSwitcher()
     m_switcher->open(switcherItems(), m_titleCwd);
 }
 
-void MainWindow::pinProject(const QString &dir)
+void MainWindow::askPinSideCommand(const QString &dir)
+{
+    // Prefilled with whatever the side terminal is running, which is the
+    // command the user would otherwise retype. Editable, because a detected
+    // command line is not always what they want written down (an alias, or a
+    // tool started through an interpreter, resolves to its real argv).
+    m_switcher->askSideCommand(dir, m_sideTerminal->runningCommand());
+}
+
+void MainWindow::pinProject(const QString &dir, const QString &sideCommand)
 {
     ProjectEntry project;
     project.path = QDir::cleanPath(dir);
     project.name = QFileInfo(project.path).fileName();
-    // Whatever the side terminal is running right now becomes the project's
-    // side command, so pinning while an agent is open reproduces that setup
-    // on the next open. A plain shell leaves it out.
-    project.sideCommand = m_sideTerminal->runningCommand();
+    project.sideCommand = sideCommand;
 
     if (!PinnedProjects::add(project)) {
         m_switcher->showMessage(QStringLiteral("Could not pin %1").arg(project.name));

@@ -202,6 +202,45 @@ void SwitcherWidget::showMessage(const QString &message)
     setStatus(message);
 }
 
+void SwitcherWidget::askSideCommand(const QString &dir, const QString &suggestion)
+{
+    m_pinDir = dir;
+    m_pinReturnMode = m_mode;
+    m_pinReturnText = m_input->text();
+    m_mode = Mode::PinCommand;
+
+    m_input->setPlaceholderText(QStringLiteral("Side command for %1 (empty = plain shell)")
+                                    .arg(QFileInfo(dir).fileName()));
+    {
+        // Blocked: the text is a command, and refilter() would read it as a
+        // query or a path. The list stays hidden for the same reason.
+        QSignalBlocker blocker(m_input);
+        m_input->setText(suggestion);
+        m_input->selectAll();
+    }
+    m_list->hide();
+    setStatus();
+    adjustSize();
+    recenter();
+}
+
+void SwitcherWidget::cancelPin()
+{
+    m_pinDir.clear();
+    m_mode = m_pinReturnMode;
+    {
+        QSignalBlocker blocker(m_input);
+        m_input->setText(m_pinReturnText);
+    }
+    // setMode() would reset the text; this restores the interrupted line and
+    // rebuilds the list under it.
+    m_input->setPlaceholderText(m_mode == Mode::Path
+        ? QStringLiteral("Path to open - Tab completes, Ctrl+D returns to projects")
+        : QStringLiteral("Search projects and recent files… (Ctrl+D: open a path)"));
+    refilter(m_input->text());
+    setStatus();
+}
+
 void SwitcherWidget::setStatus(const QString &message)
 {
     if (!message.isEmpty()) {
@@ -210,9 +249,18 @@ void SwitcherWidget::setStatus(const QString &message)
         return;
     }
     m_statusTimer->stop();
-    m_status->setText(m_mode == Mode::Path
-        ? QStringLiteral("Tab completes · Ctrl+P pins this folder · Ctrl+D returns to projects")
-        : QStringLiteral("Ctrl+P pins the highlighted folder · Ctrl+D opens a path"));
+    switch (m_mode) {
+    case Mode::PinCommand:
+        m_status->setText(QStringLiteral("Enter pins with this command · Esc cancels the pin"));
+        break;
+    case Mode::Path:
+        m_status->setText(
+            QStringLiteral("Tab completes · Ctrl+P pins this folder · Ctrl+D returns to projects"));
+        break;
+    case Mode::Projects:
+        m_status->setText(QStringLiteral("Ctrl+P pins the highlighted folder · Ctrl+D opens a path"));
+        break;
+    }
 }
 
 const QList<SwitcherItem> &SwitcherWidget::source() const
@@ -492,6 +540,27 @@ bool SwitcherWidget::eventFilter(QObject *watched, QEvent *event)
     }
     if (event->type() == QEvent::KeyPress) {
         auto *ke = static_cast<QKeyEvent *>(event);
+        // The side command prompt is a plain edit line: only Enter and Esc
+        // mean anything, everything else is ordinary text editing.
+        if (m_mode == Mode::PinCommand) {
+            switch (ke->key()) {
+            case Qt::Key_Escape:
+                cancelPin();
+                setStatus(QStringLiteral("Pin cancelled"));
+                return true;
+            case Qt::Key_Return:
+            case Qt::Key_Enter: {
+                const QString dir = m_pinDir;
+                const QString command = m_input->text().trimmed();
+                cancelPin();
+                emit pinConfirmed(dir, command);
+                return true;
+            }
+            default:
+                return QFrame::eventFilter(watched, event);
+            }
+        }
+
         switch (ke->key()) {
         case Qt::Key_Escape:
             dismiss();

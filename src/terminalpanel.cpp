@@ -372,6 +372,38 @@ void TerminalPanel::broadcastCwd(const QString &dir)
 #endif
 }
 
+QString TerminalPanel::runningCommand() const
+{
+#ifdef NEOBEAM_HAS_TERMINAL
+    // A configured command is authoritative: it is what the panel itself
+    // started, and it is written the way a user would type it.
+    if (!m_runningCommand.isEmpty())
+        return m_runningCommand;
+    if (!m_currentTerm)
+        return QString();
+
+    // Nothing but the shell in the foreground means nothing is running.
+    const int pid = m_currentTerm->getForegroundProcessId();
+    if (pid <= 0 || pid == m_currentTerm->getShellPID())
+        return QString();
+
+    // /proc/<pid>/cmdline is NUL-separated argv. Linux only; elsewhere the
+    // foreground command stays unknown and the caller falls back to empty.
+    QFile cmdline(QStringLiteral("/proc/%1/cmdline").arg(pid));
+    if (!cmdline.open(QIODevice::ReadOnly))
+        return QString();
+    const QList<QByteArray> argv = cmdline.readAll().split('\0');
+    QStringList parts;
+    for (const QByteArray &arg : argv) {
+        if (!arg.isEmpty())
+            parts << QString::fromLocal8Bit(arg);
+    }
+    return parts.join(QLatin1Char(' '));
+#else
+    return QString();
+#endif
+}
+
 void TerminalPanel::adoptProject(const QString &dir, const QString &command)
 {
 #ifdef NEOBEAM_HAS_TERMINAL
