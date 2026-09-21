@@ -108,6 +108,13 @@ public:
     /// corrupt its input).
     void adoptProject(const QString &dir, const QString &command);
 
+    /// What the active split is running: the configured exec command when the
+    /// shells were started with one, otherwise the command line of the
+    /// foreground process, so a tool the user launched by typing into a plain
+    /// shell is reported too. Empty when only the shell itself is running, and
+    /// on platforms without /proc (BSD support is still to come).
+    QString runningCommand() const;
+
     /// Open the first link found in the active split's selection. This is the
     /// fallback for links qtermwidget's own URL filter does not detect (TUI
     /// applications that wrap a URL themselves, or links written without a

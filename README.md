@@ -107,7 +107,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+- | Decrease the font size of the focused pane (terminal or nvim buffer) |
 | Ctrl+Mouse wheel | Increase/decrease the font size of the pane under the pointer |
 | Ctrl+Shift+X | Maximize the focused pane (nvim buffer, bottom terminal or side terminal); press again to restore |
-| Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode) |
+| Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode, Ctrl+P pins a folder as a project) |
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 | Ctrl+Shift+G | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
@@ -115,6 +115,12 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 ### Project switcher
 
 Starting neobeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), neobeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
+
+Ctrl+P pins the folder the switcher is pointing at as a project: the path typed in path mode, or the highlighted row in project mode. The input line then asks for the project's `side_command`, prefilled with whatever the side terminal is running at that moment, whether it was started from a `side_command` or typed into the shell by hand. Edit it, or clear it for a plain shell, and Enter writes the pin; Esc abandons it. Ctrl+P on an already pinned project (hollow ◇ marker) removes it again, with no prompt. Projects declared in `[[projects]]` (filled ◆) are yours to edit and cannot be removed from the switcher.
+
+A detected command is the foreground process's real argv, so a shell alias or a tool launched through an interpreter shows up resolved (`claude-personal` may read as the binary it runs). That is why the prompt is editable rather than silent.
+
+Pins are written to `~/.config/neobeam/projects.toml`, not to your config: `neobeam.toml` is hand-authored and a serializer would strip its comments and layout. The file uses the same `[[projects]]` schema, so moving a pin into the config for good, or giving it a different `side_command`, is a copy-paste.
 
 Ctrl+D switches the same input line to path mode, for opening anything that is neither pinned nor recent. It starts at nvim's cwd and completes what you type against the real directory tree: type `~/Proj`, press Tab and the input becomes `~/Projects/`; each further Tab cycles to the next matching entry. Enter confirms the completion (a folder's contents are then listed, so Tab/Enter walks down the tree) and the next Enter opens what the path names. Right completes and confirms in one keystroke, at the end of the line only. Relative paths resolve against nvim's cwd, and dotfiles appear once the typed name starts with `.`. Ctrl+D returns to project mode.
 
@@ -377,6 +383,8 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
 
 The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a `side_command` also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
+
+Projects pinned from the switcher with Ctrl+P are written to `~/.config/neobeam/projects.toml` in this same format, so an entry can be moved here by copying the block. A path present in both files is shown once, and this file wins, which is how a pin gets a `side_command` it was not created with.
 
 Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 

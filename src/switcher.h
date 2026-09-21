@@ -4,8 +4,10 @@
 #include <QList>
 #include <QString>
 
+class QLabel;
 class QLineEdit;
 class QListWidget;
+class QTimer;
 
 /// One entry in the project switcher list.
 struct SwitcherItem {
@@ -14,6 +16,9 @@ struct SwitcherItem {
     QString label;        // display name (project name or path basename)
     QString path;         // absolute path (folder for Project/Folder, file for File)
     QString sideCommand;  // side terminal command (projects only)
+    bool pinned = false;  // a Project the app itself pinned, so Ctrl+P can
+                          // unpin it again; a project declared in neobeam.toml
+                          // is not pinned and cannot be removed from here
 };
 
 /// KRunner-style overlay picker: a search field with a fuzzy-filtered list of
@@ -37,12 +42,36 @@ public:
     /// against (nvim's cwd); empty falls back to the home directory.
     void open(const QList<SwitcherItem> &items, const QString &baseDir = QString());
 
+    /// Replace the item set of an open switcher, keeping the mode, the typed
+    /// text and the highlighted row. Used after a pin changes the list.
+    void setItems(const QList<SwitcherItem> &items);
+
     /// Hide the switcher (no selection).
     void dismiss();
+
+    /// Show a short message in the footer, replacing the key hints until it
+    /// times out. What a pin actually did is known by MainWindow, which owns
+    /// the store, so it reports the outcome here.
+    void showMessage(const QString &message);
+
+    /// Turn the input line into the side command prompt for a pin, prefilled
+    /// with what the side terminal is running. Enter pins with whatever the
+    /// line holds, Esc abandons the pin and restores the list.
+    void askSideCommand(const QString &dir, const QString &suggestion);
 
 signals:
     void itemSelected(const SwitcherItem &item);
     void dismissed();
+    /// Ctrl+P on a directory that is not pinned yet (the path typed in path
+    /// mode, or the highlighted row in project mode). MainWindow answers with
+    /// askSideCommand(), which is what actually opens the prompt: only it
+    /// knows what the side terminal is running.
+    void pinRequested(const QString &dir);
+    /// The side command prompt was confirmed. An empty command means a plain
+    /// shell, exactly as an absent side_command does.
+    void pinConfirmed(const QString &dir, const QString &sideCommand);
+    /// Ctrl+P on a directory this app pinned earlier.
+    void unpinRequested(const QString &dir);
 
 protected:
     /// Keeps the box centered while the parent window resizes and dismisses
@@ -53,7 +82,8 @@ private:
     /// What the text in the input line means.
     enum class Mode {
         Projects,   // fuzzy query over m_items (pinned projects and recents)
-        Path        // filesystem path, completed against real directories
+        Path,       // filesystem path, completed against real directories
+        PinCommand  // side command for the folder being pinned
     };
 
     /// Switch modes (Ctrl+D). The text does not carry over - a fuzzy query and
@@ -83,10 +113,23 @@ private:
     const QList<SwitcherItem> &source() const;
     void moveSelection(int delta);
     void selectCurrent();
+    /// Ctrl+P: pin the directory the switcher is pointing at, or unpin it when
+    /// it is already an app-pinned project. Emits nothing for anything that
+    /// cannot be a project (a file, a path that does not exist) and for a
+    /// project declared in neobeam.toml, which only the user can remove.
+    void togglePin();
+    /// Footer text: a transient message when one is set, the mode's key hints
+    /// otherwise.
+    void setStatus(const QString &message = QString());
+    /// Leave the side command prompt without pinning, restoring the mode and
+    /// the text the prompt interrupted.
+    void cancelPin();
     void recenter();
 
     QLineEdit *m_input = nullptr;
     QListWidget *m_list = nullptr;
+    QLabel *m_status = nullptr;       // key hints, and pin feedback
+    QTimer *m_statusTimer = nullptr;  // clears a transient message
     QList<SwitcherItem> m_items;      // full item set, switcher order
     QList<SwitcherItem> m_pathItems;  // path-mode candidates, display order
     QList<int> m_visible;             // indices into source(), filtered order
@@ -96,4 +139,7 @@ private:
                                       // last filter (path mode Enter rule)
     bool m_completionPending = false; // Tab filled a candidate in that Enter
                                       // has not confirmed yet
+    QString m_pinDir;                 // folder the side command prompt is for
+    Mode m_pinReturnMode = Mode::Projects; // mode the prompt interrupted
+    QString m_pinReturnText;          // input text it interrupted
 };

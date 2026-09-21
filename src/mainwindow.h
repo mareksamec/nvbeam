@@ -60,9 +60,19 @@ private:
     /// Ctrl+Shift+B both land here). No-op without a git segment.
     void toggleBranchSwitcher();
 
-    /// Pinned projects followed by recent folders and files (deduplicated,
-    /// stale paths pruned).
+    /// Projects declared in neobeam.toml, then the ones pinned from the
+    /// switcher, then recent folders and files (deduplicated, stale paths
+    /// pruned).
     QList<SwitcherItem> switcherItems() const;
+
+    /// Ctrl+P in the switcher on an unpinned folder: open the switcher's side
+    /// command prompt, prefilled with what the side terminal is running.
+    void askPinSideCommand(const QString &dir);
+    /// The prompt was confirmed: write the pin, then refresh the open switcher
+    /// and report what happened in its footer. unpinProject() is the reverse,
+    /// and needs no prompt.
+    void pinProject(const QString &dir, const QString &sideCommand);
+    void unpinProject(const QString &dir);
 
     /// Point nvim, the bottom terminal splits and the side terminal at the
     /// selected project/folder/file and record it as recently used.
