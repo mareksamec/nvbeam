@@ -29,8 +29,14 @@ jobs:
             cmake \
             g++ \
             qt6-base-dev \
-            libgl1-mesa-dev \
-            libkf6syntaxhighlighting-dev
+            libgl1-mesa-dev
+
+      - name: Install KF6SyntaxHighlighting (if available)
+        run: |
+          # Absent before Ubuntu 25.04; the build then falls back to plain
+          # diff coloring, which is a supported configuration.
+          sudo apt-get install -y libkf6syntaxhighlighting-dev || \
+          echo "libkf6syntaxhighlighting-dev not available - building without code coloring"
 
       - name: Install qtermwidget6 (if available)
         if: matrix.terminal == 'ON'
