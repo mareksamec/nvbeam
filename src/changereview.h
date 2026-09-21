@@ -146,6 +146,7 @@ private:
     QWidget *m_gutter = nullptr;
     QList<int> m_numbers;
     int m_digits = 1;   // widest number currently shown, in digits
+    int m_margin = -1;  // gutter width last reserved in the viewport margin
 };
 
 /// One file's row in the review panel: a header button that expands to reveal
@@ -206,6 +207,8 @@ private:
     DiffHighlighter *m_highlighter = nullptr;
     bool m_context = false;        // show unchanged context lines too
     bool m_loaded = false;         // untracked content already read from disk
+    bool m_fitting = false;        // fitBody() is on the stack
+    int m_fitted = -1;             // body height fitBody() last applied
 };
 
 /// Panel showing the changes already written to the worktree: `git diff`

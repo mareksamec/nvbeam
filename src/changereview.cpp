@@ -22,6 +22,7 @@
 #include <QFrame>
 #include <QPainter>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QScrollArea>
 #include <QScrollBar>
 #include <QAbstractTextDocumentLayout>
@@ -249,9 +250,19 @@ int DiffBody::gutterWidth() const
 
 void DiffBody::layOutGutter()
 {
-    setViewportMargins(gutterWidth(), 0, 0, 0);
+    // setViewportMargins() re-lays out the scroll area unconditionally, and
+    // that lands back here through resizeEvent(). Reserving the margin only
+    // when its width really changed ends that chain instead of recursing
+    // until the stack runs out.
+    const int width = gutterWidth();
+    if (width != m_margin) {
+        m_margin = width;
+        setViewportMargins(width, 0, 0, 0);
+    }
     const QRect area = contentsRect();
-    m_gutter->setGeometry(area.left(), area.top(), gutterWidth(), area.height());
+    const QRect place(area.left(), area.top(), width, area.height());
+    if (m_gutter->geometry() != place)
+        m_gutter->setGeometry(place);
 }
 
 void DiffBody::resizeEvent(QResizeEvent *event)
@@ -535,6 +546,13 @@ void FileCard::paintChangedLines()
 
 void FileCard::fitBody()
 {
+    // Sizing the body changes the panel's layout, which can resize this card
+    // again while the measurement is still running. Measure once per pass and
+    // apply a height only when it differs, so the two sides settle.
+    if (m_fitting)
+        return;
+    m_fitting = true;
+    const QScopeGuard done([this] { m_fitting = false; });
     // A QPlainTextEdit's document reports its height in lines, not pixels, so
     // the pixel height has to be summed from the laid-out blocks. The layout
     // wraps at the widget's own width, which the panel's layout has already
@@ -551,8 +569,11 @@ void FileCard::fitBody()
     }
     // A pixel of slack: a fractional line height would otherwise round down
     // and give the body a scrollbar for the last line alone.
-    const int height = int(content) + 1 + 2 * m_body->frameWidth();
-    m_body->setFixedHeight(qBound(kMinBodyHeight, height, cap));
+    const int height = qBound(kMinBodyHeight, int(content) + 1 + 2 * m_body->frameWidth(), cap);
+    if (height != m_fitted) {
+        m_fitted = height;
+        m_body->setFixedHeight(height);
+    }
 }
 
 void FileCard::loadUntracked()
