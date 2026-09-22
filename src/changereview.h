@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QBoxLayout>
 #include <QColor>
 #include <QElapsedTimer>
 #include <QHash>
@@ -44,6 +45,9 @@ struct ReviewConfig {
     int fileMaxHeight = 600;   // tallest an expanded file body grows before it scrolls itself
     bool showContext = false;  // expand a file straight to the full hunks instead of
                                // the changed lines only
+    bool imagePreview = true;  // show a changed image as an image instead of git's
+                               // "Binary files ... differ" line
+    qint64 imageMaxBytes = 10 * 1024 * 1024;  // larger images are not decoded
     bool syntax = true;        // color the code inside a diff line by the file's language
                                // (needs a build with KSyntaxHighlighting)
     // Palette, taken from the terminal's color scheme (see reviewPalette() in
@@ -73,7 +77,8 @@ struct FileDiff {
     int added = 0;
     int removed = 0;
     bool untracked = false;
-    QString absolutePath;  // untracked files are read from disk when expanded
+    bool binary = false;   // git could not diff it as text ("Binary files ... differ")
+    QString absolutePath;  // read from disk when expanded (untracked files, images)
     QString body;          // the file's hunks; empty for an untracked file, whose
                            // content is read from disk when it is first expanded
 };
@@ -158,6 +163,72 @@ private:
     int m_margin = -1;  // gutter width last reserved in the viewport margin
 };
 
+/// One version of an image, drawn scaled to fit over a checkerboard so a
+/// transparent PNG reads on any scheme. A painted widget rather than a QLabel
+/// with a scaled pixmap: the checkerboard has to go behind the image, and
+/// rescaling on every resize of the panel would mean rebuilding that pixmap
+/// anyway.
+class ImagePane : public QWidget
+{
+    Q_OBJECT
+
+public:
+    ImagePane(const ReviewConfig &cfg, QWidget *parent = nullptr);
+
+    /// Show `image`, or, with a null image, `note` in the dim color (a missing
+    /// side of the comparison, an undecodable file, one over image_max_bytes).
+    void setImage(const QImage &image, const QString &note = QString());
+    QSize imageSize() const { return m_image.size(); }
+    bool hasImage() const { return !m_image.isNull(); }
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
+private:
+    ReviewConfig m_cfg;
+    QImage m_image;
+    QString m_note;
+};
+
+/// A changed image, old version beside new one, each captioned with its
+/// dimensions and byte size. Used by FileCard in place of the diff editor when
+/// the file is an image git could not diff as text.
+class ImagePreview : public QWidget
+{
+    Q_OBJECT
+
+public:
+    ImagePreview(const ReviewConfig &cfg, QWidget *parent = nullptr);
+
+    /// Fill one side. `bytes` empty means that side does not exist (a new or a
+    /// deleted file), which the pane says rather than showing an empty frame.
+    /// `note` replaces the image when the bytes cannot or must not be decoded.
+    void setOld(const QByteArray &bytes, const QString &note = QString());
+    void setNew(const QByteArray &bytes, const QString &note = QString());
+
+    /// Height the two panes need, capped at ReviewConfig::fileMaxHeight.
+    int preferredHeight() const;
+
+protected:
+    /// Two panes side by side need width; below kStackWidth they stack.
+    void resizeEvent(QResizeEvent *event) override;
+
+private:
+    /// Decode into `pane` and caption it, or explain why there is no image.
+    void fill(ImagePane *pane, QLabel *caption, const QByteArray &bytes, const QString &note,
+              const QString &absent);
+    /// The line under the panes: what changed dimensionally, when anything did.
+    void updateSummary();
+
+    ReviewConfig m_cfg;
+    QBoxLayout *m_panes = nullptr;
+    ImagePane *m_oldPane = nullptr;
+    ImagePane *m_newPane = nullptr;
+    QLabel *m_oldCaption = nullptr;
+    QLabel *m_newCaption = nullptr;
+    QLabel *m_summary = nullptr;
+};
+
 /// One file's row in the review panel: a header button that expands to reveal
 /// that file's diff. Collapsed by default, the way the Claude Code review pane
 /// behaves, so a change touching twenty files is still readable at a glance.
@@ -176,10 +247,18 @@ public:
     bool isExpanded() const;
     QString path() const { return m_file.path; }
 
+    /// Hand this row the version of its image that lives in the comparison's
+    /// base revision, as fetched by the panel (empty bytes = git had none).
+    void setOldImage(const QByteArray &bytes);
+
 signals:
     /// The user opened or closed this file; the panel remembers it by path so
     /// the state outlives a rebuild of the row.
     void expandedChanged(const QString &path, bool expanded);
+
+    /// An image row was opened and needs its base-revision version. Only the
+    /// panel can fetch it: it owns the git plumbing and knows the base.
+    void oldImageRequested(const QString &path);
 
 protected:
     /// The body wraps, so its height depends on the panel's width.
@@ -205,6 +284,13 @@ private:
     void paintChangedLines();
     /// Read an untracked file from disk and turn it into added lines.
     void loadUntracked();
+    /// True when this row should show an image instead of a diff: the build can
+    /// decode the suffix, git treats the file as binary (or it is untracked),
+    /// and [review] image_preview is on.
+    bool showsImage() const;
+    /// Build the preview on first use, fill its new side from disk and ask the
+    /// panel for the old one.
+    void applyPreview();
 
     ReviewConfig m_cfg;
     FileDiff m_file;
@@ -213,6 +299,8 @@ private:
     QLabel *m_stats = nullptr;
     QToolButton *m_contextBtn = nullptr;
     DiffBody *m_body = nullptr;
+    ImagePreview *m_preview = nullptr;  // built on first use, images only
+    bool m_oldImageAsked = false;  // the panel has been asked for this version
     DiffHighlighter *m_highlighter = nullptr;
     bool m_context = false;        // show unchanged context lines too
     bool m_loaded = false;         // untracked content already read from disk
@@ -273,6 +361,16 @@ private:
     /// Answering once is what keeps m_running from being stranded.
     void runGit(const QStringList &args, std::function<void(bool ok, const QString &output)> done);
 
+    /// The same run, answered with git's bytes undecoded. `git show` of an
+    /// image blob has to come back this way: decoding it as UTF-8 would
+    /// corrupt it.
+    void runGitRaw(const QStringList &args, std::function<void(bool ok, const QByteArray &output)> done);
+
+    /// Fetch `path` as it is in the comparison's base revision and hand it to
+    /// that path's row. An untracked file (or a failing git) answers with no
+    /// bytes, which the row shows as "added".
+    void fetchOldImage(const QString &path);
+
     /// Start the diff run (and, when the comparison ends at the worktree, the
     /// untracked listing that follows it), unless one is already in flight.
     /// Branch mode resolves its base first, so one collect() can be a chain of
@@ -322,6 +420,7 @@ private:
     DiffMode m_mode = DiffMode::Unstaged;  // comparison in force (see effectiveMode)
     QString m_resolvedBranch;      // default branch found for m_dir; empty = not resolved yet
     QString m_compareLabel;        // what the current comparison is against, for the empty state
+    QString m_compareBase;         // the revision behind that label, for `git show <base>:<path>`
     QToolButton *m_modeBtn = nullptr;  // worktree/branch toggle in the toolbar
     QLabel *m_stats = nullptr;     // header summary
     QLabel *m_message = nullptr;   // shown instead of the rows when there is nothing to show

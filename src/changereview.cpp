@@ -33,6 +33,8 @@
 #include <QToolBar>
 #include <QToolButton>
 #include <QHBoxLayout>
+#include <QBuffer>
+#include <QImageReader>
 #include <QVBoxLayout>
 
 namespace {
@@ -64,6 +66,69 @@ constexpr int kMinBodyHeight = 24;
 /// Bytes of an untracked file read for its preview. Past this the file is
 /// almost certainly not something to review line by line.
 constexpr qint64 kMaxUntrackedBytes = 1 << 20;
+
+/// Side of one checkerboard square drawn behind a transparent image.
+constexpr int kCheckerSize = 8;
+
+/// Padding around an image inside its pane.
+constexpr int kPanePadding = 4;
+
+/// Shortest an image pane is made, so a 16x16 icon still has a visible frame.
+constexpr int kMinPaneHeight = 48;
+
+/// Below this width the two image panes stack instead of sitting side by side:
+/// half of a narrow panel is not enough of an image to compare.
+constexpr int kStackWidth = 420;
+
+/// A byte count as a reader would write it (git's own diff stats round the
+/// same way).
+QString formatBytes(qint64 bytes)
+{
+    if (bytes < 1024)
+        return QStringLiteral("%1 B").arg(bytes);
+    if (bytes < 1024 * 1024)
+        return QStringLiteral("%1 kB").arg(bytes / 1024.0, 0, 'f', 1);
+    return QStringLiteral("%1 MB").arg(bytes / (1024.0 * 1024.0), 0, 'f', 1);
+}
+
+/// True when this build can decode the suffix. Asked of QImageReader rather
+/// than kept as a list, so a build with extra image plugins gains them and one
+/// without WEBP does not promise it.
+bool decodableImageSuffix(const QString &path)
+{
+    const QByteArray suffix = QFileInfo(path).suffix().toLower().toUtf8();
+    if (suffix.isEmpty())
+        return false;
+    // SVG is deliberately not here: rendering it needs Qt6::Svg, a dependency
+    // the build-time icon rasterization exists to avoid, and an SVG diff reads
+    // perfectly well as the text it is.
+    if (suffix == "svg" || suffix == "svgz")
+        return false;
+    return QImageReader::supportedImageFormats().contains(suffix);
+}
+
+/// Decode `bytes`, refusing anything past `maxBytes` before the decode rather
+/// than after it: QImageReader knows the dimensions without doing the work.
+QImage decodeImage(const QByteArray &bytes, qint64 maxBytes, QString *why)
+{
+    if (bytes.isEmpty())
+        return QImage();
+    if (maxBytes > 0 && bytes.size() > maxBytes) {
+        if (why)
+            *why = QStringLiteral("%1, over [review] image_max_bytes")
+                       .arg(formatBytes(bytes.size()));
+        return QImage();
+    }
+    QBuffer buffer;
+    buffer.setData(bytes);
+    buffer.open(QIODevice::ReadOnly);
+    QImageReader reader(&buffer);
+    reader.setAutoTransform(true);
+    const QImage image = reader.read();
+    if (image.isNull() && why)
+        *why = reader.errorString();
+    return image;
+}
 
 /// The monospace font the diff bodies use.
 QFont diffFont(const ReviewConfig &cfg)
@@ -308,6 +373,174 @@ void DiffBody::paintGutter(QPaintEvent *event)
     }
 }
 
+// --- ImagePane --------------------------------------------------------------
+
+ImagePane::ImagePane(const ReviewConfig &cfg, QWidget *parent)
+    : QWidget(parent), m_cfg(cfg)
+{
+    setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    setMinimumHeight(kMinPaneHeight);
+}
+
+void ImagePane::setImage(const QImage &image, const QString &note)
+{
+    m_image = image;
+    m_note = note;
+    update();
+}
+
+void ImagePane::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    const QRect area = rect().adjusted(kPanePadding, kPanePadding, -kPanePadding, -kPanePadding);
+    painter.fillRect(rect(), m_cfg.background);
+
+    if (m_image.isNull()) {
+        painter.setPen(m_cfg.dim);
+        painter.drawText(area, Qt::AlignCenter | Qt::TextWordWrap, m_note);
+        return;
+    }
+
+    // Never scaled up: a 16x16 icon shown at 200px would be a blurry square
+    // that says less about the change than the icon itself does.
+    QSize target = m_image.size();
+    if (target.width() > area.width() || target.height() > area.height())
+        target.scale(area.size(), Qt::KeepAspectRatio);
+    const QRect place(area.x() + (area.width() - target.width()) / 2,
+                      area.y() + (area.height() - target.height()) / 2,
+                      target.width(), target.height());
+
+    // Checkerboard first, so transparency reads as transparency instead of
+    // taking the panel's background and looking like part of the image.
+    if (m_image.hasAlphaChannel()) {
+        const QColor light = m_cfg.rowHeader;
+        const QColor dark = m_cfg.rowBorder;
+        painter.save();
+        painter.setClipRect(place);
+        for (int y = place.top(); y < place.bottom() + kCheckerSize; y += kCheckerSize) {
+            for (int x = place.left(); x < place.right() + kCheckerSize; x += kCheckerSize) {
+                const bool even = ((x - place.left()) / kCheckerSize
+                                   + (y - place.top()) / kCheckerSize) % 2 == 0;
+                painter.fillRect(x, y, kCheckerSize, kCheckerSize, even ? light : dark);
+            }
+        }
+        painter.restore();
+    }
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(place, m_image);
+}
+
+// --- ImagePreview -----------------------------------------------------------
+
+ImagePreview::ImagePreview(const ReviewConfig &cfg, QWidget *parent)
+    : QWidget(parent), m_cfg(cfg)
+{
+    auto *layout = new QVBoxLayout(this);
+    layout->setContentsMargins(kPanePadding, kPanePadding, kPanePadding, kPanePadding);
+    layout->setSpacing(kPanePadding);
+
+    m_panes = new QBoxLayout(QBoxLayout::LeftToRight);
+    m_panes->setSpacing(kPanePadding * 2);
+
+    const QString captionStyle = QStringLiteral("QLabel { color: %1; }").arg(m_cfg.dim.name());
+    auto column = [&](ImagePane *&pane, QLabel *&caption) {
+        auto *box = new QVBoxLayout;
+        box->setSpacing(2);
+        pane = new ImagePane(m_cfg, this);
+        caption = new QLabel(this);
+        caption->setAlignment(Qt::AlignHCenter);
+        caption->setStyleSheet(captionStyle);
+        box->addWidget(pane, 1);
+        box->addWidget(caption);
+        m_panes->addLayout(box, 1);
+    };
+    column(m_oldPane, m_oldCaption);
+    column(m_newPane, m_newCaption);
+    layout->addLayout(m_panes, 1);
+
+    m_summary = new QLabel(this);
+    m_summary->setAlignment(Qt::AlignHCenter);
+    m_summary->setStyleSheet(captionStyle);
+    m_summary->hide();
+    layout->addWidget(m_summary);
+}
+
+void ImagePreview::setOld(const QByteArray &bytes, const QString &note)
+{
+    fill(m_oldPane, m_oldCaption, bytes, note, QStringLiteral("added"));
+    updateSummary();
+}
+
+void ImagePreview::setNew(const QByteArray &bytes, const QString &note)
+{
+    fill(m_newPane, m_newCaption, bytes, note, QStringLiteral("deleted"));
+    updateSummary();
+}
+
+void ImagePreview::fill(ImagePane *pane, QLabel *caption, const QByteArray &bytes,
+                        const QString &note, const QString &absent)
+{
+    if (bytes.isEmpty()) {
+        // No such version: one side of an added or deleted file. Saying which
+        // beats an empty frame the reader has to interpret.
+        pane->setImage(QImage(), note.isEmpty() ? absent : note);
+        caption->clear();
+        return;
+    }
+    QString why;
+    const QImage image = decodeImage(bytes, m_cfg.imageMaxBytes, &why);
+    if (image.isNull()) {
+        pane->setImage(QImage(), why.isEmpty() ? QStringLiteral("not decodable") : why);
+        caption->setText(formatBytes(bytes.size()));
+        return;
+    }
+    pane->setImage(image);
+    caption->setText(QStringLiteral("%1\u00d7%2 \u00b7 %3")
+                         .arg(image.width())
+                         .arg(image.height())
+                         .arg(formatBytes(bytes.size())));
+}
+
+void ImagePreview::updateSummary()
+{
+    if (!m_oldPane->hasImage() || !m_newPane->hasImage()
+        || m_oldPane->imageSize() == m_newPane->imageSize()) {
+        m_summary->hide();
+        return;
+    }
+    m_summary->setText(QStringLiteral("%1\u00d7%2 \u2192 %3\u00d7%4")
+                           .arg(m_oldPane->imageSize().width())
+                           .arg(m_oldPane->imageSize().height())
+                           .arg(m_newPane->imageSize().width())
+                           .arg(m_newPane->imageSize().height()));
+    m_summary->show();
+}
+
+int ImagePreview::preferredHeight() const
+{
+    // The panes never scale an image up, so their natural height is the taller
+    // image (or the sum of both once they are stacked).
+    const int oldHeight = m_oldPane->hasImage() ? m_oldPane->imageSize().height() : kMinPaneHeight;
+    const int newHeight = m_newPane->hasImage() ? m_newPane->imageSize().height() : kMinPaneHeight;
+    const bool stacked = m_panes->direction() == QBoxLayout::TopToBottom;
+    int panes = stacked ? oldHeight + newHeight + m_panes->spacing()
+                        : qMax(oldHeight, newHeight);
+    panes += 2 * kPanePadding; // the pane's own padding around the image
+    int chrome = 2 * kPanePadding + m_oldCaption->sizeHint().height() * (stacked ? 2 : 1);
+    if (m_summary->isVisible())
+        chrome += m_summary->sizeHint().height() + kPanePadding;
+    return qBound(kMinPaneHeight, panes + chrome, m_cfg.fileMaxHeight);
+}
+
+void ImagePreview::resizeEvent(QResizeEvent *event)
+{
+    QWidget::resizeEvent(event);
+    const QBoxLayout::Direction wanted =
+        width() < kStackWidth ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
+    if (m_panes->direction() != wanted)
+        m_panes->setDirection(wanted);
+}
+
 // --- FileCard ---------------------------------------------------------------
 
 FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *parent)
@@ -425,15 +658,29 @@ void FileCard::setFile(const FileDiff &file)
     if (!m_file.tag.isEmpty())
         stats += QStringLiteral("<span style='color:%1'>%2</span> ")
                      .arg(m_cfg.dim.name(), m_file.tag);
-    stats += QStringLiteral("<span style='color:%1'>+%2</span> <span style='color:%3'>-%4</span>")
-                 .arg(m_cfg.added.name()).arg(m_file.added)
-                 .arg(m_cfg.removed.name()).arg(m_file.removed);
+    if (showsImage()) {
+        // git counts no lines in a binary file, so "+0 -0" would be all the
+        // header had to say. Its size on disk is the number that means
+        // something; the panes below carry the dimensions.
+        const qint64 size = QFileInfo(m_file.absolutePath).size();
+        stats += QStringLiteral("<span style='color:%1'>%2</span>")
+                     .arg(m_cfg.dim.name(), size > 0 ? formatBytes(size) : QStringLiteral("image"));
+    } else {
+        stats += QStringLiteral("<span style='color:%1'>+%2</span> "
+                                "<span style='color:%3'>-%4</span>")
+                     .arg(m_cfg.added.name()).arg(m_file.added)
+                     .arg(m_cfg.removed.name()).arg(m_file.removed);
+    }
     m_stats->setText(stats);
 
     // An untracked file's content is read on demand, so its body has to be
     // re-read only when the row is open.
     if (m_file.untracked && bodyChanged)
         m_loaded = false;
+    // The base version is cached for as long as the diff stands still; a diff
+    // that moved means the image did, so it is fetched again.
+    if (bodyChanged || pathChanged)
+        m_oldImageAsked = false;
     if (bodyChanged && isExpanded())
         applyBody();
 }
@@ -443,7 +690,9 @@ void FileCard::setExpanded(bool expanded)
     if (expanded == isExpanded())
         return;
     m_header->setArrowType(expanded ? Qt::DownArrow : Qt::RightArrow);
-    m_body->setVisible(expanded);
+    m_body->setVisible(expanded && !showsImage());
+    if (m_preview)
+        m_preview->setVisible(expanded && showsImage());
     if (expanded)
         applyBody();
     emit expandedChanged(m_file.path, expanded);
@@ -451,14 +700,22 @@ void FileCard::setExpanded(bool expanded)
 
 bool FileCard::isExpanded() const
 {
-    return !m_body->isHidden();
+    return showsImage() && m_preview ? !m_preview->isHidden() : !m_body->isHidden();
 }
 
 void FileCard::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    if (isExpanded())
-        fitBody();
+    if (!isExpanded())
+        return;
+    if (showsImage()) {
+        // The panes may have just switched between side by side and stacked,
+        // which changes the height they need.
+        if (m_preview)
+            m_preview->setFixedHeight(m_preview->preferredHeight());
+        return;
+    }
+    fitBody();
 }
 
 FileCard::BodyText FileCard::bodyText() const
@@ -506,8 +763,70 @@ FileCard::BodyText FileCard::bodyText() const
     return out;
 }
 
+bool FileCard::showsImage() const
+{
+    // Binary as far as git is concerned (or untracked, which git never diffs),
+    // with a suffix this build can decode.
+    return m_cfg.imagePreview && (m_file.binary || m_file.untracked)
+           && decodableImageSuffix(m_file.path);
+}
+
+void FileCard::applyPreview()
+{
+    if (!m_preview) {
+        m_preview = new ImagePreview(m_cfg, this);
+        // The same slot the diff body occupies: one of the two is shown at a
+        // time, so the row keeps its shape either way.
+        auto *box = static_cast<QVBoxLayout *>(layout());
+        box->insertWidget(box->indexOf(m_body), m_preview);
+    }
+    m_body->hide();
+    m_preview->show();
+
+    // The new version is on disk, except for a deleted file, which no longer is.
+    if (m_file.tag == QLatin1String("deleted")) {
+        m_preview->setNew({});
+    } else {
+        QFile handle(m_file.absolutePath);
+        if (!handle.open(QIODevice::ReadOnly))
+            m_preview->setNew({}, QStringLiteral("not readable"));
+        else if (m_cfg.imageMaxBytes > 0 && handle.size() > m_cfg.imageMaxBytes)
+            m_preview->setNew({}, QStringLiteral("%1, over [review] image_max_bytes")
+                                      .arg(formatBytes(handle.size())));
+        else
+            m_preview->setNew(handle.readAll());
+    }
+
+    // An untracked file has no base version to fetch; a tracked one is asked
+    // for once per change, since git's answer only moves when the diff does.
+    if (m_file.untracked || m_file.tag == QLatin1String("new")) {
+        m_preview->setOld({});
+    } else if (!m_oldImageAsked) {
+        m_oldImageAsked = true;
+        m_preview->setOld({}, QStringLiteral("loading\u2026"));
+        emit oldImageRequested(m_file.path);
+    }
+    m_preview->setFixedHeight(m_preview->preferredHeight());
+}
+
+void FileCard::setOldImage(const QByteArray &bytes)
+{
+    if (!m_preview)
+        return;
+    m_preview->setOld(bytes);
+    m_preview->setFixedHeight(m_preview->preferredHeight());
+}
+
 void FileCard::applyBody()
 {
+    if (showsImage()) {
+        applyPreview();
+        return;
+    }
+    if (m_preview) {
+        m_preview->hide();
+        m_body->show();
+    }
     if (m_file.untracked && !m_loaded)
         loadUntracked();
     const BodyText body = bodyText();
@@ -779,6 +1098,14 @@ void ChangeReviewPanel::hideEvent(QHideEvent *event)
 void ChangeReviewPanel::runGit(const QStringList &args,
                                std::function<void(bool, const QString &)> done)
 {
+    runGitRaw(args, [done](bool ok, const QByteArray &output) {
+        done(ok, QString::fromUtf8(output));
+    });
+}
+
+void ChangeReviewPanel::runGitRaw(const QStringList &args,
+                                  std::function<void(bool, const QByteArray &)> done)
+{
     auto *proc = new QProcess(this);
     // The process object outlives whichever signal answered first, so it is
     // deleted by its own signals rather than by the callbacks below.
@@ -790,7 +1117,7 @@ void ChangeReviewPanel::runGit(const QStringList &args,
     // finished() fire as well, and a second answer would clear m_running for a
     // run that is no longer the one in flight.
     auto answered = std::make_shared<bool>(false);
-    auto answer = [answered, done](bool ok, const QString &output) {
+    auto answer = [answered, done](bool ok, const QByteArray &output) {
         if (*answered)
             return;
         *answered = true;
@@ -799,14 +1126,14 @@ void ChangeReviewPanel::runGit(const QStringList &args,
 
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [proc, answer](int code, QProcess::ExitStatus) {
-        answer(code == 0, QString::fromUtf8(code == 0 ? proc->readAllStandardOutput()
-                                                      : proc->readAllStandardError()));
+        answer(code == 0, code == 0 ? proc->readAllStandardOutput()
+                                    : proc->readAllStandardError());
     });
     // FailedToStart (git not installed) never reaches finished().
     connect(proc, &QProcess::errorOccurred, this,
             [answer](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
-            answer(false, QStringLiteral("git could not be started"));
+            answer(false, QByteArrayLiteral("git could not be started"));
     });
 
     // Timeout: a git that never exits (a repository on a dead network mount, a
@@ -818,7 +1145,7 @@ void ChangeReviewPanel::runGit(const QStringList &args,
                 return;
             proc->kill();
             answer(false, QStringLiteral("git took longer than %1 ms; giving up on this refresh")
-                              .arg(m_cfg.timeoutMs));
+                              .arg(m_cfg.timeoutMs).toUtf8());
         });
     }
 
@@ -888,6 +1215,9 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
                                     bool includeUntracked)
 {
     m_compareLabel = label;
+    // What `git show <base>:<path>` in fetchOldImage() asks for. Empty means
+    // the worktree comparison, whose base is HEAD.
+    m_compareBase = base.isEmpty() ? QStringLiteral("HEAD") : base;
     QStringList args{QStringLiteral("diff")};
     if (!base.isEmpty())
         args << base;
@@ -917,6 +1247,10 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
             return;
         }
         QList<FileDiff> files = parseDiff(output, m_cfg.maxLines);
+        // An image row reads the working copy from disk, so every file needs
+        // its absolute path, not only the untracked ones.
+        for (FileDiff &file : files)
+            file.absolutePath = QDir(m_dir).absoluteFilePath(file.path);
         // Untracked files never show up in `git diff`, so they are listed
         // separately. Only meaningful when the comparison ends at the
         // worktree, which an explicit [review] base is the one case that does
@@ -1007,6 +1341,17 @@ void ChangeReviewPanel::probeBranch(int index, std::function<void(bool, const QS
     });
 }
 
+void ChangeReviewPanel::fetchOldImage(const QString &path)
+{
+    // Outside the diff chain on purpose: it must not take the one-run-at-a-time
+    // guard, or opening an image row would stall the poll behind it.
+    runGitRaw({QStringLiteral("show"), m_compareBase + QLatin1Char(':') + path},
+              [this, path](bool ok, const QByteArray &bytes) {
+        if (FileCard *card = m_cards.value(path))
+            card->setOldImage(ok ? bytes : QByteArray());
+    });
+}
+
 void ChangeReviewPanel::failCollect(const QString &stats, const QString &message)
 {
     apply({});
@@ -1056,6 +1401,7 @@ void ChangeReviewPanel::apply(const QList<FileDiff> &files)
             else
                 m_expanded.remove(path);
         });
+        connect(card, &FileCard::oldImageRequested, this, &ChangeReviewPanel::fetchOldImage);
         m_cards.insert(file.path, card);
         if (m_expanded.contains(file.path)) // reopened where the user had it open
             card->setExpanded(true);
@@ -1147,6 +1493,16 @@ QList<FileDiff> ChangeReviewPanel::parseDiff(const QString &diff, int maxLines)
         }
         if (line.startsWith(QLatin1String("rename "))) {
             current.tag = QStringLiteral("renamed");
+            continue;
+        }
+        // git's own marker for a file it did not diff as text. Kept as a flag
+        // rather than as body text: a row that can show the image has no use
+        // for the sentence, and one that cannot puts it back below.
+        if (line.startsWith(QLatin1String("Binary files "))
+            || line.startsWith(QLatin1String("GIT binary patch"))) {
+            current.binary = true;
+            body << line;
+            ++kept;
             continue;
         }
         if (line.startsWith(QLatin1String("index ")) || line.startsWith(QLatin1String("--- "))

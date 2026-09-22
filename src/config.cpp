@@ -153,7 +153,8 @@ const KnownSection kKnownSections[] = {
                   "refresh_prompt_on_git_change"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"review", {"width", "refresh_ms", "timeout_ms", "base", "mode", "base_branch", "font",
-                "font_size", "max_lines", "file_max_height", "show_context", "syntax", "file_color"}},
+                "font_size", "max_lines", "file_max_height", "show_context", "syntax", "file_color", "image_preview",
+                "image_max_bytes"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
             "focus_border_color", "window_title", "branch_switcher_font",
@@ -464,6 +465,9 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             if (readInt(*review, "review", "file_max_height", cfg.reviewFileMaxHeight, issues))
                 cfg.reviewFileMaxHeight = qMax(24, cfg.reviewFileMaxHeight);
             readBool(*review, "review", "show_context", cfg.reviewShowContext, issues);
+            readBool(*review, "review", "image_preview", cfg.reviewImagePreview, issues);
+            if (readInt(*review, "review", "image_max_bytes", cfg.reviewImageMaxBytes, issues))
+                cfg.reviewImageMaxBytes = qMax(0, cfg.reviewImageMaxBytes);
             readBool(*review, "review", "syntax", cfg.reviewSyntax, issues);
             readColor(*review, "review", "file_color", cfg.reviewFileColor, issues);
         }

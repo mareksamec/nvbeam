@@ -171,6 +171,18 @@ showing an empty list, as does a shallow clone whose history does not reach the
 fork point. Setting `[review] base` pins the comparison to one revision and
 disables the toggle; `[review] mode` picks the mode the panel opens with.
 
+A changed image opens as an image rather than as git's `Binary files ... differ`
+line: the version in the comparison's base revision on the left, the working
+copy on the right, each captioned with its dimensions and byte size, and a line
+below saying how the dimensions changed. A new or deleted file shows the one
+side it has. Transparency is drawn over a checkerboard, nothing is ever scaled
+up, and in a narrow panel the two versions stack instead of shrinking. The
+formats are whatever this Qt build decodes (PNG, JPEG, GIF, BMP, WEBP, ICO);
+SVG stays a text diff, which is what it reads best as. A file over
+`[review] image_max_bytes`, one that fails to decode and a build with no
+decoder for the suffix all keep the textual row and say why, and
+`[review] image_preview = false` turns the whole thing off.
+
 Each file's diff lives in its own read-only text area, so the text is selectable
 and **Ctrl+C** copies it as the plain diff. A gutter beside it carries the line
 numbers: the new file's number for an added or unchanged line, the old file's
@@ -289,6 +301,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
 # syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
+# image_preview = true  # show a changed image as an image instead of git's "Binary files differ"
+# image_max_bytes = 10485760  # larger images are not decoded (10 MiB)
 # The panel has no colors of its own: it follows [terminal] color_scheme and
 # the foreground/background overrides there.
 
