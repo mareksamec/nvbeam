@@ -70,6 +70,9 @@ struct Config {
     int reviewRefreshMs = 2000;           // poll interval in ms; floored at 250, 0 = no poll
     int reviewTimeoutMs = 10000;          // a git run is killed after this long; 0 = no timeout
     QString reviewBase;                   // revision to diff against; empty = worktree vs HEAD
+    QString reviewMode = "unstaged";      // startup comparison: "unstaged" (worktree vs HEAD)
+                                          // or "branch" (merge base with the default branch)
+    QString reviewBaseBranch;             // branch mode's comparison branch; empty = auto-detect
     QString reviewFont;                   // empty = use terminal font
     int reviewFontSize = 0;               // 0 = use terminal font size
     int reviewMaxLines = 20000;           // cap on the diff lines kept per file

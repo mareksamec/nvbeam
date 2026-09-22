@@ -1,6 +1,7 @@
 #include "changereview.h"
 
 #include "colorscheme.h"
+#include "shortcuts.h"
 
 #include <QAction>
 #include <QDir>
@@ -604,7 +605,7 @@ void FileCard::loadUntracked()
 // --- ChangeReviewPanel ------------------------------------------------------
 
 ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
-    : QWidget(parent), m_cfg(cfg)
+    : QWidget(parent), m_cfg(cfg), m_mode(cfg.mode)
 {
     const QString bg = m_cfg.background.name();
 
@@ -631,6 +632,23 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     spacer->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
     spacer->setStyleSheet(QStringLiteral("background: transparent;"));
     toolbar->addWidget(spacer);
+
+    // Worktree/branch toggle. A button rather than two actions: it carries the
+    // active comparison as its label, which is where a reader looks to see
+    // what the rows below are a diff of.
+    m_modeBtn = new QToolButton(toolbar);
+    m_modeBtn->setAutoRaise(true);
+    m_modeBtn->setStyleSheet(QStringLiteral(
+        "QToolButton { color: %1; background: transparent; border: none; padding: 2px 6px; }"
+        "QToolButton:hover { background: %2; border-radius: 3px; }"
+        "QToolButton:disabled { color: %3; }")
+            .arg(m_cfg.dim.name(), m_cfg.hover.name(), m_cfg.rowBorder.name()));
+    connect(m_modeBtn, &QToolButton::clicked, this, &ChangeReviewPanel::toggleMode);
+    // An explicit base pins the comparison to that revision, so there is no
+    // mode left to choose.
+    m_modeBtn->setEnabled(m_cfg.base.isEmpty());
+    updateModeButton();
+    toolbar->addWidget(m_modeBtn);
 
     auto *expandAct = toolbar->addAction(QStringLiteral("⌄"), this, &ChangeReviewPanel::expandAll);
     expandAct->setToolTip(QStringLiteral("Expand all files"));
@@ -678,6 +696,7 @@ void ChangeReviewPanel::setWorkingDirectory(const QString &dir)
     if (dir.isEmpty() || dir == m_dir)
         return;
     m_dir = dir;
+    m_resolvedBranch.clear(); // another repository, another default branch
     if (isVisible())
         refresh();
 }
@@ -685,6 +704,48 @@ void ChangeReviewPanel::setWorkingDirectory(const QString &dir)
 void ChangeReviewPanel::refresh()
 {
     collect();
+}
+
+void ChangeReviewPanel::repositoryChanged()
+{
+    // A commit, a branch switch or a fetch can all change which branch is the
+    // default one (and a fetch can create origin/HEAD where there was none), so
+    // the cached answer is dropped rather than carried into the next diff.
+    m_resolvedBranch.clear();
+    refresh();
+}
+
+void ChangeReviewPanel::toggleMode()
+{
+    if (!m_cfg.base.isEmpty())
+        return;
+    m_mode = m_mode == DiffMode::Branch ? DiffMode::Unstaged : DiffMode::Branch;
+    updateModeButton();
+    // Straight away rather than on the next tick: the user asked for the other
+    // comparison, and with refresh_ms = 0 there is no next tick at all.
+    refresh();
+}
+
+DiffMode ChangeReviewPanel::effectiveMode() const
+{
+    return m_cfg.base.isEmpty() ? m_mode : DiffMode::Unstaged;
+}
+
+void ChangeReviewPanel::updateModeButton()
+{
+    if (!m_modeBtn)
+        return;
+    const bool branch = effectiveMode() == DiffMode::Branch;
+    m_modeBtn->setText(branch ? QStringLiteral("⎇ branch") : QStringLiteral("⎇ worktree"));
+    const QString what = m_cfg.base.isEmpty()
+        ? (branch ? QStringLiteral("Comparing the branch against its merge base; "
+                                   "switch to the worktree against HEAD")
+                  : QStringLiteral("Comparing the worktree against HEAD; "
+                                   "switch to the branch against its merge base"))
+        : QStringLiteral("Pinned to [review] base = \"%1\"").arg(m_cfg.base);
+    m_modeBtn->setToolTip(m_cfg.base.isEmpty()
+                              ? Shortcuts::hint(what, Shortcuts::toggleReviewDiffMode())
+                              : what);
 }
 
 void ChangeReviewPanel::expandAll()
@@ -786,12 +847,52 @@ void ChangeReviewPanel::collect()
     m_running = true;
     m_runStarted.start();
 
-    const QString base = m_cfg.base;
+    if (effectiveMode() != DiffMode::Branch) {
+        // The worktree against HEAD (or against an explicit [review] base,
+        // which is the one comparison that does not end at the worktree and so
+        // has no untracked files to add).
+        collectDiff(m_cfg.base, m_cfg.base.isEmpty() ? QStringLiteral("HEAD") : m_cfg.base,
+                    m_cfg.base.isEmpty());
+        return;
+    }
+
+    // Branch mode needs its base before it can diff, so one collect() becomes a
+    // chain of runs. m_running stays held across the whole chain: releasing it
+    // between the links would let a poll start a second chain over the first.
+    resolveBaseBranch([this](bool ok, const QString &branch) {
+        if (!ok) {
+            failCollect(QStringLiteral("No base branch"),
+                        QStringLiteral("No main or master branch to compare against. "
+                                       "Name one with [review] base_branch."));
+            return;
+        }
+        runGit({QStringLiteral("merge-base"), branch, QStringLiteral("HEAD")},
+               [this, branch](bool found, const QString &output) {
+            const QString mergeBase = output.trimmed();
+            if (!found || mergeBase.isEmpty()) {
+                // Unrelated histories, or a shallow clone whose depth does not
+                // reach the fork point. Both look like "no changes" otherwise.
+                failCollect(QStringLiteral("No common ancestor"),
+                            QStringLiteral("No common ancestor with %1. A shallow clone may "
+                                           "not reach the fork point.").arg(branch));
+                return;
+            }
+            // Against the worktree rather than HEAD, so uncommitted work stays
+            // visible when the mode is switched.
+            collectDiff(mergeBase, branch, true);
+        });
+    });
+}
+
+void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
+                                    bool includeUntracked)
+{
+    m_compareLabel = label;
     QStringList args{QStringLiteral("diff")};
     if (!base.isEmpty())
         args << base;
 
-    runGit(args, [this, base](bool ok, const QString &output) {
+    runGit(args, [this, includeUntracked](bool ok, const QString &output) {
         auto finish = [this] {
             m_running = false;
             if (m_rerun) {
@@ -805,9 +906,11 @@ void ChangeReviewPanel::collect()
             const QString first = output.section(QLatin1Char('\n'), 0, 0).trimmed();
             const bool noRepo = first.contains(QLatin1String("not a git repository"),
                                                Qt::CaseInsensitive);
+            // apply() writes its own summary for an empty list, so the failure
+            // summary is set after it rather than before.
+            apply({});
             m_stats->setText(noRepo ? QStringLiteral("Not a repository")
                                     : QStringLiteral("git error"));
-            apply({});
             showMessage(noRepo ? QStringLiteral("%1 is not a git repository.").arg(m_dir)
                                : (first.isEmpty() ? QStringLiteral("git failed.") : first));
             finish();
@@ -815,9 +918,10 @@ void ChangeReviewPanel::collect()
         }
         QList<FileDiff> files = parseDiff(output, m_cfg.maxLines);
         // Untracked files never show up in `git diff`, so they are listed
-        // separately. Only meaningful against the worktree: with an explicit
-        // base the comparison is between two revisions.
-        if (!base.isEmpty()) {
+        // separately. Only meaningful when the comparison ends at the
+        // worktree, which an explicit [review] base is the one case that does
+        // not: that one compares two revisions.
+        if (!includeUntracked) {
             apply(files);
             finish();
             return;
@@ -851,6 +955,68 @@ void ChangeReviewPanel::collect()
             finish();
         });
     });
+}
+
+void ChangeReviewPanel::resolveBaseBranch(std::function<void(bool, const QString &)> done)
+{
+    // Configured first: a repository whose trunk is called neither main nor
+    // master has no other way to be reviewed.
+    if (!m_cfg.baseBranch.isEmpty()) {
+        done(true, m_cfg.baseBranch);
+        return;
+    }
+    if (!m_resolvedBranch.isEmpty()) {
+        done(true, m_resolvedBranch);
+        return;
+    }
+    // What the remote itself calls its default branch, which beats guessing.
+    runGit({QStringLiteral("symbolic-ref"), QStringLiteral("--quiet"), QStringLiteral("--short"),
+            QStringLiteral("refs/remotes/origin/HEAD")},
+           [this, done](bool ok, const QString &output) {
+        const QString branch = output.trimmed();
+        if (ok && !branch.isEmpty()) {
+            m_resolvedBranch = branch;
+            done(true, branch);
+            return;
+        }
+        probeBranch(0, done);
+    });
+}
+
+void ChangeReviewPanel::probeBranch(int index, std::function<void(bool, const QString &)> done)
+{
+    // Local names first: a repository with no remote still has a trunk, and a
+    // local main is the branch the user actually merges into.
+    static const QStringList candidates{QStringLiteral("main"), QStringLiteral("master"),
+                                        QStringLiteral("origin/main"),
+                                        QStringLiteral("origin/master")};
+    if (index >= candidates.size()) {
+        done(false, QString());
+        return;
+    }
+    const QString candidate = candidates.at(index);
+    runGit({QStringLiteral("rev-parse"), QStringLiteral("--verify"), QStringLiteral("--quiet"),
+            candidate + QStringLiteral("^{commit}")},
+           [this, index, candidate, done](bool ok, const QString &output) {
+        if (ok && !output.trimmed().isEmpty()) {
+            m_resolvedBranch = candidate;
+            done(true, candidate);
+            return;
+        }
+        probeBranch(index + 1, done);
+    });
+}
+
+void ChangeReviewPanel::failCollect(const QString &stats, const QString &message)
+{
+    apply({});
+    m_stats->setText(stats);
+    showMessage(message);
+    m_running = false;
+    if (m_rerun) {
+        m_rerun = false;
+        collect();
+    }
 }
 
 void ChangeReviewPanel::apply(const QList<FileDiff> &files)
@@ -905,9 +1071,10 @@ void ChangeReviewPanel::apply(const QList<FileDiff> &files)
 
     if (files.isEmpty()) {
         m_stats->setText(QStringLiteral("No changes"));
-        showMessage(m_cfg.base.isEmpty() ? QStringLiteral("No changes against HEAD.")
-                                         : QStringLiteral("No changes against %1.")
-                                               .arg(m_cfg.base));
+        // Named after what is actually being compared, so the mode is readable
+        // from the panel without looking at the toggle.
+        showMessage(QStringLiteral("No changes against %1.")
+                        .arg(m_compareLabel.isEmpty() ? QStringLiteral("HEAD") : m_compareLabel));
         return;
     }
     m_message->hide();
