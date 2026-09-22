@@ -111,6 +111,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 | Ctrl+Shift+G | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
+| Ctrl+Shift+D | Switch the review panel between the worktree and the branch comparison |
 
 ### Project switcher
 
@@ -152,6 +153,23 @@ what keeps one expanded file apart from the next. Clicking the row (or **⌄** /
 unchanged context lines, which are hidden so an open file shows only what
 actually changed. Untracked files are listed too, with their content read from
 disk as added lines when the row is opened.
+
+The panel compares two ways, switched by the **⎇** button in its header or by
+**Ctrl+Shift+D**, and the button says which one is in force:
+
+- **worktree** — the worktree against `HEAD`: what has been written but not
+  committed, which is what an agent working in the side terminal produces.
+- **branch** — the merge base with the default branch against the worktree:
+  everything this branch adds, uncommitted work included. The merge base rather
+  than the tip of the default branch, so commits that landed there after the
+  branch started do not show up as lines this branch deletes.
+
+Branch mode finds the default branch from `[review] base_branch` when it is
+set, then from what the remote calls its own default (`origin/HEAD`), then from
+a local `main` or `master`. A repository with none of those says so instead of
+showing an empty list, as does a shallow clone whose history does not reach the
+fork point. Setting `[review] base` pins the comparison to one revision and
+disables the toggle; `[review] mode` picks the mode the panel opens with.
 
 Each file's diff lives in its own read-only text area, so the text is selectable
 and **Ctrl+C** copies it as the plain diff. A gutter beside it carries the line
@@ -261,6 +279,10 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
 # timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
 # base = ""  # revision to diff against (empty = the worktree against HEAD)
+# mode = "unstaged"  # what the panel opens on: "unstaged" (the worktree against HEAD)
+#                    # or "branch" (the merge base with the default branch against
+#                    # the worktree); Ctrl+Shift+D switches at runtime
+# base_branch = ""  # branch mode's comparison branch (empty = origin/HEAD, then main, then master)
 # font = ""  # review font (empty = use the side terminal font)
 # font_size = 0  # review font size (0 = use the side terminal font size)
 # max_lines = 20000  # cap on the diff lines kept per file

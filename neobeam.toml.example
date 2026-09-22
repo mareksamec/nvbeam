@@ -40,6 +40,10 @@
 # refresh_ms = 2000  # how often the open panel re-reads the worktree (floor 250, 0 = no poll)
 # timeout_ms = 10000 # a git run that takes longer is killed (0 = wait forever)
 # base = ""  # revision to diff against (empty = the worktree against HEAD)
+# mode = "unstaged"  # what the panel opens on: "unstaged" (the worktree against HEAD)
+#                    # or "branch" (the merge base with the default branch against
+#                    # the worktree); Ctrl+Shift+D switches at runtime
+# base_branch = ""  # branch mode's comparison branch (empty = origin/HEAD, then main, then master)
 # font = ""  # review font (empty = use the side terminal font)
 # font_size = 0  # review font size (0 = use the side terminal font size)
 # max_lines = 20000  # cap on the diff lines kept per file

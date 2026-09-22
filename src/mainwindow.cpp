@@ -307,6 +307,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.refreshMs = cfg.reviewRefreshMs;
     reviewCfg.timeoutMs = cfg.reviewTimeoutMs;
     reviewCfg.base = cfg.reviewBase;
+    reviewCfg.mode = cfg.reviewMode == QLatin1String("branch") ? DiffMode::Branch
+                                                               : DiffMode::Unstaged;
+    reviewCfg.baseBranch = cfg.reviewBaseBranch;
     // Font falls back to the side terminal's, which itself falls back to the
     // bottom terminal's: the panel sits beside them and should match.
     reviewCfg.fontFamily = !cfg.reviewFont.isEmpty() ? cfg.reviewFont : sideCfg.fontFamily;
@@ -440,6 +443,15 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     connect(reviewShortcut, &QShortcut::activated, this, &MainWindow::toggleChangeReview);
     connect(m_sideTerminal, &TerminalPanel::changeReviewRequested,
             this, &MainWindow::toggleChangeReview);
+
+    // Ctrl+Shift+D: switch the panel between the worktree and the branch
+    // comparison. Only while the panel is open, so the key stays free for the
+    // editor otherwise.
+    auto *reviewModeShortcut = new QShortcut(Shortcuts::toggleReviewDiffMode(), this);
+    connect(reviewModeShortcut, &QShortcut::activated, this, [this] {
+        if (m_review && m_review->isVisible())
+            m_review->toggleMode();
+    });
 
     // Arrow-down toolbar button: broadcast nvim's current cwd to all splits of
     // the panel whose button was clicked.
@@ -856,8 +868,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         // A commit or a branch switch changes the whole diff at once; the
         // review panel picks it up here instead of on its next poll.
         connect(m_gitStatus, &GitStatus::changed, this, [this](const GitStatusInfo &) {
+            // repositoryChanged() rather than refresh(): a branch switch can
+            // also change which branch the branch mode compares against.
             if (m_review && m_review->isVisible())
-                m_review->refresh();
+                m_review->repositoryChanged();
         });
         connect(m_nvim, &NvimProcess::notification, this,
                 [this](const QString &method, const QVariantList &) {

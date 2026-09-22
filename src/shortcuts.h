@@ -28,6 +28,10 @@ inline QKeySequence toggleSelectionMode()
 inline QKeySequence focusMessages() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M); }
 inline QKeySequence maximizePane() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X); }
 inline QKeySequence toggleChangeReview() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G); }
+inline QKeySequence toggleReviewDiffMode()
+{
+    return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D);
+}
 inline QKeySequence pasteInsert() { return QKeySequence(Qt::SHIFT | Qt::Key_Insert); }
 inline QKeySequence pasteClipboard() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V); }
 inline QKeySequence toggleProjectSwitcher()

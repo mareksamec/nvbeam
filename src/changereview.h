@@ -22,6 +22,13 @@ class QScrollArea;
 class QToolButton;
 class QVBoxLayout;
 
+/// What the panel compares the worktree against.
+enum class DiffMode {
+    Unstaged,  // the worktree against HEAD: what has been written but not committed
+    Branch     // the merge base with the default branch against the worktree: everything
+               // this branch adds, uncommitted work included
+};
+
 /// Look and behaviour of the change review panel, filled from [review] in
 /// neobeam.toml (see Config).
 struct ReviewConfig {
@@ -29,6 +36,8 @@ struct ReviewConfig {
     int refreshMs = 2000;      // poll interval; floored at kMinRefreshMs, 0 = no poll
     int timeoutMs = 10000;     // a git run is killed after this long; 0 = wait forever
     QString base;              // revision to diff against; empty = worktree vs HEAD
+    DiffMode mode = DiffMode::Unstaged;  // comparison the panel opens with
+    QString baseBranch;        // branch mode's comparison branch; empty = auto-detect
     QString fontFamily = "Monospace";
     int fontSize = 10;         // points
     int maxLines = 20000;      // cap on the diff lines kept for one file
@@ -234,6 +243,15 @@ public slots:
     /// still running is remembered and served by a single extra run.
     void refresh();
 
+    /// Refresh after the repository itself moved (a commit, a branch switch, a
+    /// fetch). Unlike refresh() this also forgets the resolved default branch,
+    /// which any of those can change.
+    void repositoryChanged();
+
+    /// Switch between the worktree and the branch comparison and refresh at
+    /// once. Does nothing while an explicit [review] base pins the comparison.
+    void toggleMode();
+
     /// Open or close every file row at once (the header's ⌄/⌃ buttons).
     void expandAll();
     void collapseAll();
@@ -255,9 +273,37 @@ private:
     /// Answering once is what keeps m_running from being stranded.
     void runGit(const QStringList &args, std::function<void(bool ok, const QString &output)> done);
 
-    /// Start the diff run (and, with an empty base, the untracked listing that
-    /// follows it), unless one is already in flight.
+    /// Start the diff run (and, when the comparison ends at the worktree, the
+    /// untracked listing that follows it), unless one is already in flight.
+    /// Branch mode resolves its base first, so one collect() can be a chain of
+    /// git runs; m_running covers the whole chain, not each link.
     void collect();
+
+    /// Run `git diff <base>` and show the result. `label` is what the empty
+    /// state calls the other side of the comparison ("HEAD", a branch name).
+    /// Untracked files are listed only when the diff ends at the worktree,
+    /// which an explicit [review] base is the one case that does not.
+    void collectDiff(const QString &base, const QString &label, bool includeUntracked);
+
+    /// Answer with the branch to compare against in branch mode: [review]
+    /// base_branch when set, then what the remote calls its default branch,
+    /// then main/master. Cached per working directory.
+    void resolveBaseBranch(std::function<void(bool ok, const QString &branch)> done);
+
+    /// Walk the branch candidates from `index` on, answering with the first
+    /// that names a commit.
+    void probeBranch(int index, std::function<void(bool ok, const QString &branch)> done);
+
+    /// End a collect() that cannot produce a diff: shows `message`, clears the
+    /// rows and releases the one-run-at-a-time guard.
+    void failCollect(const QString &stats, const QString &message);
+
+    /// The comparison actually in force. An explicit [review] base pins it to
+    /// the worktree path, since the mode has nothing left to choose.
+    DiffMode effectiveMode() const;
+
+    /// Label the mode button with the active comparison.
+    void updateModeButton();
 
     /// Reconcile the rows on screen with a fresh file list: rows are created,
     /// updated in place or dropped, so an untouched file's row (and any
@@ -273,6 +319,10 @@ private:
 
     ReviewConfig m_cfg;
     QString m_dir;                 // working directory the diff is taken in
+    DiffMode m_mode = DiffMode::Unstaged;  // comparison in force (see effectiveMode)
+    QString m_resolvedBranch;      // default branch found for m_dir; empty = not resolved yet
+    QString m_compareLabel;        // what the current comparison is against, for the empty state
+    QToolButton *m_modeBtn = nullptr;  // worktree/branch toggle in the toolbar
     QLabel *m_stats = nullptr;     // header summary
     QLabel *m_message = nullptr;   // shown instead of the rows when there is nothing to show
     QScrollArea *m_scroll = nullptr;

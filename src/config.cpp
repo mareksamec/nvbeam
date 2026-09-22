@@ -152,8 +152,8 @@ const KnownSection kKnownSections[] = {
                   "word_characters", "antialiasing", "hinting", "scrollback",
                   "refresh_prompt_on_git_change"}},
     {"side_terminal", {"width", "font", "font_size"}},
-    {"review", {"width", "refresh_ms", "timeout_ms", "base", "font", "font_size", "max_lines",
-                "file_max_height", "show_context", "syntax"}},
+    {"review", {"width", "refresh_ms", "timeout_ms", "base", "mode", "base_branch", "font",
+                "font_size", "max_lines", "file_max_height", "show_context", "syntax", "file_color"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
             "focus_border_color", "window_title", "branch_switcher_font",
@@ -446,6 +446,17 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 cfg.reviewTimeoutMs = 0;
             }
             readString(*review, "review", "base", cfg.reviewBase, issues);
+            if (readString(*review, "review", "mode", cfg.reviewMode, issues)
+                && cfg.reviewMode != QLatin1String("unstaged")
+                && cfg.reviewMode != QLatin1String("branch")) {
+                // A warning rather than an error: the panel still has to open,
+                // and the worktree diff is the mode that always works.
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[review] mode: expected \"unstaged\" or \"branch\" "
+                                      "(using \"unstaged\")"));
+                cfg.reviewMode = QStringLiteral("unstaged");
+            }
+            readString(*review, "review", "base_branch", cfg.reviewBaseBranch, issues);
             readString(*review, "review", "font", cfg.reviewFont, issues);
             readInt(*review, "review", "font_size", cfg.reviewFontSize, issues);
             if (readInt(*review, "review", "max_lines", cfg.reviewMaxLines, issues))
