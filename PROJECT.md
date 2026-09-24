@@ -249,7 +249,10 @@
       `git for-each-ref --sort=-committerdate refs/heads refs/remotes` per open (not cached: a
       fetch or a branch made in the terminal would make a cached list wrong), asked for on open
       only, so the segment's own refresh path is untouched.
-    - Remote-only branches are listed after the locals, and checking one out drops the remote
+    - Remote-only branches lead the list and the locals follow, ranked by the later of their tip
+      commit and their last checkout in the HEAD reflog (a bounded `git reflog show -n 300 HEAD`
+      read before the listing; a repository without one just ranks by commit date). Checking a
+      remote-only entry out drops the remote
       prefix (`origin/feature-x` -> `feature-x`), which is what makes git create a local tracking
       branch instead of detaching HEAD. A remote whose stripped name already exists locally is not
       listed twice. `refs/remotes/*/HEAD` is skipped by matching the full refname: git shortens
