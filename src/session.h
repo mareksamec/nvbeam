@@ -42,6 +42,10 @@ public:
     // --- Side terminal ---
     bool sideTerminalVisible() const;       // whether the side terminal was visible
     void setSideTerminalVisible(bool visible);
+    // Width of a single side terminal split in pixels (the panel runs one per
+    // configured side command), 0 when nothing was saved yet.
+    int sideTerminalSplitWidth() const;
+    void setSideTerminalSplitWidth(int width);
 
     // --- Recently opened files/folders (project switcher) ---
     // Most-recent-first, deduplicated, capped at maxEntries on insert.

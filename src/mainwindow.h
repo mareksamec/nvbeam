@@ -113,6 +113,14 @@ private:
     /// the others; pressing it again restores exactly the ones that were
     /// actually visible before (a panel the user had already closed stays
     /// closed) along with the splitter proportions they had.
+    /// Store the width one side terminal split currently has (after a drag of
+    /// the handle, and on close), so a later layout can hand each split the
+    /// same width again.
+    void rememberSideTerminalWidth();
+    /// Lay the horizontal splitter out so the side terminal gets that width
+    /// once per split it runs, taking the space from the editor area.
+    void applySideTerminalWidth();
+
     void toggleMaximizedMode();
     void enterMaximized(MaximizedPane pane);
     void leaveMaximized();
@@ -148,6 +156,8 @@ private:
     bool m_quitting = false;          // window closing; don't restart nvim on exit
     bool m_sideTerminalSuppressed = false; // side terminal kept collapsed at startup (no side
                                            // command); its saved state is not overwritten on close
+    int m_sideSplitWidth = 0;         // remembered width of one side terminal split, in
+                                      // pixels; 0 = fall back to [side_terminal] width
     bool m_showSwitcherOnReady = false; // open the switcher once nvim attaches
     MaximizedPane m_maximized = MaximizedPane::None; // Ctrl+Shift+X: pane filling the window
     bool m_maxEditorWasVisible = false;       // pane state captured when m_maximized was entered,

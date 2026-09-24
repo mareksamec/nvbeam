@@ -38,6 +38,15 @@
 
 namespace {
 
+/// The editor area never shrinks below this, however wide the side terminal
+/// wants to be: a panel sized for several agents must not push the buffer off
+/// screen on a small window.
+constexpr int kMinEditorWidth = 200;
+
+/// Floor for one side terminal split's remembered width, so a split dragged
+/// almost shut is not what every later project inherits.
+constexpr int kMinSideSplitWidth = 120;
+
 /// How far the hover background is nudged from the panel background towards
 /// the foreground.
 constexpr qreal kHoverBlend = 0.18;
@@ -354,17 +363,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         sizes[2] = width;
         hsplitter->setSizes(sizes);
     });
-    // Seed the side terminal with its configured startup width on its first
-    // show; setting sizes while the panel is hidden has no effect (hidden
-    // widgets get no splitter space).
-    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this,
-            [this, hsplitter, seeded = false](bool visible) mutable {
-        if (!visible || seeded)
-            return;
-        seeded = true;
-        const int w = qMax(1, hsplitter->width());
-        hsplitter->setSizes({ qMax(1, w - m_cfg.sideTerminalWidth), m_cfg.sideTerminalWidth });
+    // Side terminal width: sized per split rather than per panel, so a project
+    // whose [[projects]] entry declares side_command_2/_3 opens two or three
+    // full-width agents instead of halving or thirding one panel's worth of
+    // columns. Setting sizes while the panel is hidden has no effect (hidden
+    // widgets get no splitter space), so the layout is applied on every show.
+    connect(m_sideTerminal, &TerminalPanel::visibilityChanged, this, [this](bool visible) {
+        if (visible)
+            applySideTerminalWidth();
     });
+    // A drag of the handle is what redefines the width to come back to.
+    connect(hsplitter, &QSplitter::splitterMoved, this, &MainWindow::rememberSideTerminalWidth);
 
     // Assemble the vertical splitter: editor row on top, terminal below.
     m_vsplitter->addWidget(hsplitter);
@@ -615,6 +624,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // the button: the button handler queries nvim's cwd, but m_nvim does not
     // exist yet. At startup the shell's default cwd matches nvim's anyway.
     // showEvent syncs the button and seeds the panel width.
+    // Side terminal width per split, remembered across runs; falls back to
+    // [side_terminal] width from the config when there is nothing saved.
+    if (cfg.sessionRestoreWindow)
+        m_sideSplitWidth = m_session->sideTerminalSplitWidth();
     const bool restoreSide = restoreTerm && m_session->sideTerminalVisible();
     m_sideTerminalSuppressed = restoreSide && !haveSideCommand;
     if (restoreSide && haveSideCommand)
@@ -1102,6 +1115,9 @@ void MainWindow::closeEvent(QCloseEvent *event)
         // for the next launch that does have a command.
         if (m_sideTerminal && !(m_sideTerminalSuppressed && !m_sideTerminal->isVisible()))
             m_session->setSideTerminalVisible(m_sideTerminal->isVisible());
+        rememberSideTerminalWidth();
+        if (m_sideSplitWidth > 0)
+            m_session->setSideTerminalSplitWidth(m_sideSplitWidth);
         m_session->sync();
     }
     QMainWindow::closeEvent(event);
@@ -1553,6 +1569,37 @@ void MainWindow::applyWindowTitle()
     }
 }
 
+void MainWindow::rememberSideTerminalWidth()
+{
+    if (!m_hsplitter || !m_sideTerminal || !m_sideTerminal->isVisible())
+        return;
+    const QList<int> sizes = m_hsplitter->sizes();
+    if (sizes.size() < 2 || sizes[1] <= 0)
+        return;
+    // Stored per split: the panel's width only means something together with
+    // the number of agents sharing it.
+    m_sideSplitWidth = qMax(kMinSideSplitWidth,
+                            sizes[1] / qMax(1, m_sideTerminal->splitCount()));
+}
+
+void MainWindow::applySideTerminalWidth()
+{
+    if (!m_hsplitter || !m_sideTerminal || !m_sideTerminal->isVisible())
+        return;
+    QList<int> sizes = m_hsplitter->sizes();
+    if (sizes.size() < 2)
+        return;
+    const int perSplit = m_sideSplitWidth > 0 ? m_sideSplitWidth : m_cfg.sideTerminalWidth;
+    const int total = qMax(1, m_hsplitter->width());
+    const int review = sizes.size() > 2 ? sizes[2] : 0;
+    // The panel takes its space from the editor area, which keeps a floor.
+    const int room = qMax(1, total - review - kMinEditorWidth);
+    const int want = qMin(perSplit * qMax(1, m_sideTerminal->splitCount()), room);
+    sizes[0] = qMax(1, total - review - want);
+    sizes[1] = want;
+    m_hsplitter->setSizes(sizes);
+}
+
 void MainWindow::applyProjectSideCommand(const QString &dir)
 {
     // neobeam.toml first, then the projects pinned from the switcher: the
@@ -1590,6 +1637,10 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     // user opened for a plain shell is kept.
     if (!commands.isEmpty() && !m_sideTerminal->isVisible())
         m_sideTerminal->show();
+    else
+        // Already open: showing it is what normally lays it out, so a project
+        // that changed the number of splits has to ask for that here.
+        applySideTerminalWidth();
 }
 
 TerminalPanel *MainWindow::terminalPanelFor(QWidget *widget) const

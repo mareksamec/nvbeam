@@ -282,7 +282,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 #   keystroke into a live shell.
 
 # [side_terminal]
-# width = 400  # startup width in pixels
+# width = 400  # startup width of one side terminal split, in pixels (per side command)
 # font = ""  # side terminal font (empty = use terminal font)
 # font_size = 0  # side terminal font size (0 = use terminal font size)
 
@@ -384,7 +384,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `refresh_prompt_on_git_change` — **Warning: sends Enter to the bottom terminal's command line** after a branch switch (checkout/switch made in nvim or typed into the terminal itself), so a branch-aware shell prompt (e.g. zsh `vcs_info`) picks up the new branch name. Only sent to splits with nothing currently typed into them — a split mid-command is left alone — but it is still a keystroke injected into a live shell, so this is off by default. Not applied to the side terminal (default: `false`)
 
 **`[side_terminal]`**
-- `width` — Side terminal startup width in pixels (default: `400`)
+- `width` — Startup width of one side terminal split, in pixels. The panel gets this much per split, so a project with `side_command_2`/`side_command_3` opens twice or three times as wide (capped so the editor area keeps at least 200 px). Dragging the handle redefines the per-split width, and `[session] restore_window` brings it back on the next launch (default: `400`)
 - `font` — Side terminal font family; empty uses the `[terminal]` font (default: `""`)
 - `font_size` — Side terminal font size in points; `0` uses the `[terminal]` font size (default: `0`)
 
@@ -412,7 +412,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `selection_color` — Selection highlight color (default: `"#44475a"`)
 
 **`[session]`**
-- `restore_window` — Restore the window size and the editor/terminal panel proportions. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
+- `restore_window` — Restore the window size, the editor/terminal panel proportions and the side terminal's per-split width. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)
 - `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`). The side terminal is only restored when the launch has a `side_command` (a pinned project opened as a folder); opening a single file starts with it collapsed, without forgetting the remembered state. Starting with no arguments has no project yet, so the side terminal opens when a project with a `side_command` is picked in the switcher
 
 **`[switcher]`**
