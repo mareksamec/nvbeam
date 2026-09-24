@@ -129,7 +129,7 @@ Ctrl+D switches the same input line to path mode, for opening anything that is n
 
 The git segment is led by a branch glyph, painted with the segment's own foreground colour rather than loaded from an icon file, so it follows the statusline palette instead of needing a recoloured asset per theme.
 
-Clicking the git segment of the statusline, or pressing **Ctrl+Shift+B** (which works wherever focus happens to be, the embedded terminals included, and closes the popup again), opens a branch picker anchored to that segment, the way VSCode's branch indicator does. It lists the repository's local branches, most recently committed to first, followed by the remote-only ones; the checked-out branch is marked with `◆`. Typing fuzzy-filters the list, Up/Down move, Enter checks the highlighted branch out, Esc or clicking elsewhere closes it.
+Clicking the git segment of the statusline, or pressing **Ctrl+Shift+B** (which works wherever focus happens to be, the embedded terminals included, and closes the popup again), opens a branch picker anchored to that segment, the way VSCode's branch indicator does. It lists the remote-only branches first - one just pushed from another machine has no local row to be found under - and then the local ones, most recently used first, where "used" is the later of the branch's tip commit and its last checkout in the HEAD reflog, so a branch created off an old base does not sink to that base's date; the checked-out branch is marked with `◆`. Typing fuzzy-filters the list, Up/Down move, Enter checks the highlighted branch out, Esc or clicking elsewhere closes it.
 
 Checking out a remote-only entry (`origin/some-branch`) checks out the plain name, so git creates a local branch tracking the remote one instead of detaching HEAD.
 

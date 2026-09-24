@@ -1,4 +1,5 @@
 #include "gitstatus.h"
+#include <algorithm>
 #include <utility>
 #include <QFile>
 #include <QProcess>
@@ -222,7 +223,18 @@ GitStatusInfo GitStatus::parseStatus(const QString &output)
 /// short name shown in the list, and the tip commit's relative date. Tabs
 /// cannot appear in a refname, so splitting on them is unambiguous.
 static const QString kBranchFormat =
-    QStringLiteral("%(HEAD)%09%(refname)%09%(refname:short)%09%(committerdate:relative)");
+    QStringLiteral("%(HEAD)%09%(refname)%09%(refname:short)%09%(committerdate:relative)"
+                   "%09%(committerdate:unix)");
+
+/// How far back the HEAD reflog is read for branch activity. Only the most
+/// recent entry per branch matters, so this only has to be deep enough to
+/// cover the branches a switcher list can hold; reading the whole reflog of a
+/// long-lived repository would cost far more for nothing.
+constexpr int kReflogScanEntries = 300;
+
+/// Fields per reflog entry: the entry's own timestamp (`--date=unix` renders
+/// the selector as "HEAD@{<unix>}") and the message it was written with.
+static const QString kReflogFormat = QStringLiteral("%gd%x09%gs");
 
 void GitStatus::requestBranches()
 {
@@ -230,15 +242,45 @@ void GitStatus::requestBranches()
         emit branchesReady({}, QStringLiteral("Not a git repository"));
         return;
     }
+    // The HEAD reflog comes first because the listing is ranked with it. It is
+    // read from the same dir as the listing and is cheap (a bounded tail of one
+    // file), and a repository that has none yet - an unborn HEAD - simply
+    // ranks by commit date, so its failure is not passed on.
     auto *proc = new QProcess(this);
     const QString dir = m_dir;
     connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
             this, [this, proc, dir](int code, QProcess::ExitStatus) {
         proc->deleteLater();
+        if (dir != m_dir) // cwd moved on while reading the reflog
+            return;
+        const QHash<QString, qint64> activity = code == 0
+            ? parseReflogActivity(QString::fromUtf8(proc->readAllStandardOutput()))
+            : QHash<QString, qint64>();
+        runBranchList(dir, activity);
+    });
+    connect(proc, &QProcess::errorOccurred, this, [this, proc, dir](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart)
+            return;
+        proc->deleteLater();
+        // git missing is reported by the listing run, which says so once.
+        runBranchList(dir, {});
+    });
+    proc->start("git", {"-C", dir, "reflog", "show", "--date=unix",
+                        "--format=" + kReflogFormat,
+                        "-n", QString::number(kReflogScanEntries), "HEAD"});
+}
+
+void GitStatus::runBranchList(const QString &dir, const QHash<QString, qint64> &activity)
+{
+    auto *proc = new QProcess(this);
+    connect(proc, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+            this, [this, proc, dir, activity](int code, QProcess::ExitStatus) {
+        proc->deleteLater();
         if (dir != m_dir) // cwd moved on while listing
             return;
         if (code == 0) {
-            emit branchesReady(parseBranches(QString::fromUtf8(proc->readAllStandardOutput())),
+            emit branchesReady(parseBranches(QString::fromUtf8(proc->readAllStandardOutput()),
+                                             activity),
                                QString());
         } else {
             emit branchesReady({}, QString::fromUtf8(proc->readAllStandardError()).trimmed());
@@ -299,16 +341,66 @@ void GitStatus::checkoutBranch(const QString &branch, bool create)
     proc->start("git", args);
 }
 
-QList<GitBranch> GitStatus::parseBranches(const QString &output)
+QHash<QString, qint64> GitStatus::parseReflogActivity(const QString &output)
 {
-    QList<GitBranch> locals;
+    // "checkout: moving from <old> to <new>" is the one entry that names a
+    // branch other than the one HEAD already pointed at, and it covers both
+    // switching to an existing branch and creating one with `checkout -b`.
+    // Both sides count as activity: leaving a branch is as good a sign that it
+    // was worked on as arriving at one.
+    static const QString kMovePrefix = QStringLiteral("checkout: moving from ");
+    static const QString kMoveJoin = QStringLiteral(" to ");
+
+    QHash<QString, qint64> activity;
+    const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+    for (const QString &line : lines) {
+        const int tab = line.indexOf(QLatin1Char('\t'));
+        if (tab < 0)
+            continue;
+        const QString message = line.mid(tab + 1);
+        if (!message.startsWith(kMovePrefix))
+            continue;
+        // "HEAD@{<unix>}" - the entry's own time, not the commit's.
+        const int open = line.indexOf(QLatin1Char('{'));
+        const int close = line.indexOf(QLatin1Char('}'), open + 1);
+        if (open < 0 || close < 0)
+            continue;
+        bool ok = false;
+        const qint64 when = QStringView(line).mid(open + 1, close - open - 1).toLongLong(&ok);
+        if (!ok)
+            continue;
+        // Last " to ", so a branch name that itself contains " to " still
+        // splits at the separator git wrote.
+        const QString move = message.mid(kMovePrefix.size());
+        const int join = move.lastIndexOf(kMoveJoin);
+        if (join < 0)
+            continue;
+        // Entries come newest first, so the first time a name is seen is its
+        // latest use; a detached checkout names a commit here, which simply
+        // matches no branch.
+        for (const QString &name : {move.left(join), move.mid(join + kMoveJoin.size())}) {
+            if (!name.isEmpty() && !activity.contains(name))
+                activity.insert(name, when);
+        }
+    }
+    return activity;
+}
+
+QList<GitBranch> GitStatus::parseBranches(const QString &output,
+                                          const QHash<QString, qint64> &activity)
+{
+    struct Local {
+        GitBranch branch;
+        qint64 rank;   // unix time the branch was last committed to or checked out
+    };
+    QList<Local> locals;
     QList<GitBranch> remotes;
     QSet<QString> localNames;
 
     const QStringList lines = output.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
     for (const QString &line : lines) {
         const QStringList fields = line.split(QLatin1Char('\t'));
-        if (fields.size() < 4)
+        if (fields.size() < 5)
             continue;
         GitBranch branch;
         branch.current = fields.at(0).trimmed() == QLatin1String("*");
@@ -316,6 +408,7 @@ QList<GitBranch> GitStatus::parseBranches(const QString &output)
         branch.remote = refName.startsWith(QLatin1String("refs/remotes/"));
         branch.name = fields.at(2);
         branch.detail = fields.at(3);
+        const qint64 committed = fields.at(4).toLongLong();
         if (branch.remote) {
             // "refs/remotes/origin/HEAD" is a symref standing for the remote's
             // default branch, which is listed under its own name anyway.
@@ -333,14 +426,21 @@ QList<GitBranch> GitStatus::parseBranches(const QString &output)
         } else {
             branch.target = branch.name;
             localNames.insert(branch.name);
-            locals.append(branch);
+            // A branch created off an old base carries that base's commit date
+            // until it has a commit of its own, which would sink a brand new
+            // branch to wherever its base sits. Its checkout time is the more
+            // honest answer, so the later of the two ranks it.
+            locals.append({branch, qMax(committed, activity.value(branch.name, 0))});
         }
     }
+
+    // Stable, so branches that share a rank keep git's commit-date order.
+    std::stable_sort(locals.begin(), locals.end(),
+                     [](const Local &a, const Local &b) { return a.rank > b.rank; });
 
     // Remote-only branches lead the list: one that has just appeared - pushed
     // from another machine or made in the forge's web UI - is what the user is
     // most likely reaching for, and it has no local row to be found under.
-    // Within each group git's own commit-date order is kept.
     //
     // A remote branch that already has a local counterpart would check out the
     // very same local branch, so only the local row is offered.
@@ -350,6 +450,7 @@ QList<GitBranch> GitStatus::parseBranches(const QString &output)
         if (!localNames.contains(branch.target))
             result.append(branch);
     }
-    result.append(locals);
+    for (const Local &local : std::as_const(locals))
+        result.append(local.branch);
     return result;
 }
