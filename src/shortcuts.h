@@ -27,7 +27,11 @@ inline QKeySequence toggleSelectionMode()
 }
 inline QKeySequence focusMessages() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M); }
 inline QKeySequence maximizePane() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_X); }
-inline QKeySequence toggleChangeReview() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_G); }
+// Ctrl+Shift+G is deliberately free: G belongs to the CLI agents running in
+// the side terminal (Claude Code opens the current query in an editor with
+// Ctrl+G), and a window-level QShortcut would swallow it before the terminal
+// ever sees it.
+inline QKeySequence toggleChangeReview() { return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_R); }
 inline QKeySequence toggleReviewDiffMode()
 {
     return QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_D);

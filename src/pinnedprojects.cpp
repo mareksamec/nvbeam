@@ -19,8 +19,11 @@ toml::value tableFor(const ProjectEntry &project)
     table["path"] = project.path.toStdString();
     if (!project.name.isEmpty())
         table["name"] = project.name.toStdString();
-    if (!project.sideCommand.isEmpty())
-        table["side_command"] = project.sideCommand.toStdString();
+    // One key per command, in the same order and under the same names the
+    // main config uses (side_command, side_command_2, side_command_3).
+    const QStringList &keys = sideCommandKeys();
+    for (int i = 0; i < project.sideCommands.size() && i < keys.size(); ++i)
+        table[keys.at(i).toStdString()] = project.sideCommands.at(i).toStdString();
     return table;
 }
 
@@ -103,7 +106,11 @@ QList<ProjectEntry> PinnedProjects::load()
         project.name = stringAt(entry, "name");
         if (project.name.isEmpty())
             project.name = QFileInfo(project.path).fileName();
-        project.sideCommand = stringAt(entry, "side_command");
+        for (const QString &key : sideCommandKeys()) {
+            const QString command = stringAt(entry, key.toUtf8().constData());
+            if (!command.isEmpty())
+                project.sideCommands.append(command);
+        }
         projects.append(project);
     }
     return projects;

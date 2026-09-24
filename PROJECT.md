@@ -235,8 +235,8 @@
       so plain Ctrl+B (nvim's page-up, tmux's prefix) is untouched and only the Shift variant is
       claimed. No other neobeam binding uses it; the one wrinkle is that a terminal cannot
       normally tell Ctrl+Shift+B from Ctrl+B, so a tmux user who holds Shift over the prefix key
-      gets the switcher - Ctrl+Shift+G (VSCode's Source Control binding) is the alternative if
-      that ever bites. The click needed `SelectableLabel`
+      gets the switcher, and G is not the way out: Ctrl+Shift+G is kept free because the CLI
+      agents in the side terminal own it (see src/shortcuts.h). The click needed `SelectableLabel`
       to gain an optional click handler, which fires only on a release that selected no text, so
       selecting the statusline text still works. `StatuslineWidget::setGitSegmentClickable()` gates
       both the handler and the pointer cursor, and adds the "click to switch branches" line to the
@@ -381,7 +381,7 @@
 
 - [x] **Change review panel** (`src/changereview.cpp`, task 005) - a native Qt
   panel opening to the right of the side terminal (`◧` on its toolbar, or
-  Ctrl+Shift+G): a scrolling column of per-file rows (`FileCard`), collapsed to
+  Ctrl+Shift+R): a scrolling column of per-file rows (`FileCard`), collapsed to
   name, path and `+/-` counts and expanding to that file's diff in its own
   selectable text area, with a per-file toggle for the unchanged context lines. It reads what is on disk rather than the CLI's
   diff request, which is the agent's permission-request surface and therefore

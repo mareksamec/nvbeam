@@ -28,7 +28,10 @@ struct TerminalConfig {
     QString background;       // override scheme background color; empty = scheme default
     QString shell;            // empty = system default
     QStringList shellArgs;
-    QString execCommand;      // run after shell starts
+    // Commands to run after the shells start: the panel opens one split per
+    // entry and each split remembers its own command. Empty = a single plain
+    // shell. Splits the user opens later run nothing.
+    QStringList execCommands;
     bool rightClickPaste = false;  // PuTTY-style right-click paste
     bool copyOnSelect = true;      // copy selection to PRIMARY + CLIPBOARD as it is made
     // Non-alphanumeric characters that count as part of a word for
@@ -44,8 +47,9 @@ struct TerminalConfig {
     // connects the signal regardless.
     bool refreshPromptOnGitChange = false;
     QColor focusBorderColor = QColor("#61afef"); // 1px border around the focused split
-    // Side-panel mode (terminal docked next to the minimap): splits stack
-    // vertically and the panel enforces a minimum width instead of height.
+    // Side-panel mode (terminal docked next to the minimap): the panel
+    // enforces a minimum width instead of a minimum height, and its toolbar
+    // carries the change review toggle.
     bool sidePanel = false;
 };
 
@@ -100,18 +104,19 @@ public:
     void changeFontSize(int delta);
 
     /// Point the panel at a project: dir becomes the working directory and
-    /// command the exec command (side terminal: the per-project side_command).
+    /// commands the exec commands (side terminal: the per-project
+    /// side_command keys, one split each).
     /// Shells that haven't started yet just get their startup dir/command
     /// fixed up. Running shells are kept and cd'd when neither the old nor
     /// the new command is set; otherwise they are replaced with one fresh
-    /// shell in dir (typing "cd" into a running interactive tool would
-    /// corrupt its input).
-    void adoptProject(const QString &dir, const QString &command);
+    /// shell per command in dir (typing "cd" into a running interactive tool
+    /// would corrupt its input).
+    void adoptProject(const QString &dir, const QStringList &commands);
 
-    /// What the active split is running: the configured exec command when the
-    /// shells were started with one, otherwise the command line of the
-    /// foreground process, so a tool the user launched by typing into a plain
-    /// shell is reported too. Empty when only the shell itself is running, and
+    /// What the active split is running: the command that split was started
+    /// with when it has one, otherwise the command line of the foreground
+    /// process, so a tool the user launched by typing into a plain shell is
+    /// reported too. Empty when only the shell itself is running, and
     /// on platforms without /proc (BSD support is still to come).
     QString runningCommand() const;
 
@@ -139,6 +144,9 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 public slots:
+    /// Open a plain shell split. This is what the "+" button and its shortcut
+    /// do: no exec command is run, so splitting a panel that started an agent
+    /// does not start a second copy of it.
     void addTerminal();
     void removeCurrentTerminal();
 
@@ -156,8 +164,15 @@ private:
     /// terminal display from showing through as black bands.
     QColor panelBackgroundColor() const;
 
+    /// Add a split running `command` (empty = plain shell) and give every
+    /// split an equal share of the panel again.
+    void openSplit(const QString &command);
+
 #ifdef NEOBEAM_HAS_TERMINAL
-    QTermWidget *createTermWidget();
+    /// `command` is remembered on the widget (property "_nb_command") so a
+    /// shell started later - the panel was still hidden - runs the command
+    /// belonging to its own split, and runningCommand() can report it.
+    QTermWidget *createTermWidget(const QString &command);
     /// Build the terminal QFont from the current config (family, size,
     /// hinting, antialiasing).
     QFont terminalFont() const;
@@ -198,7 +213,6 @@ private:
     QToolBar *m_toolbar = nullptr;
     TerminalConfig m_cfg;
     QString m_cwd;
-    QString m_runningCommand; // exec command the currently running shells were started with
     QString m_schemeResolved; // cached result of effectiveColorScheme()
 
     static constexpr int kMinHeight = 80;  // minimum panel height in pixels when resizing
