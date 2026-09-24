@@ -317,6 +317,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.maxLines = cfg.reviewMaxLines;
     reviewCfg.fileMaxHeight = cfg.reviewFileMaxHeight;
     reviewCfg.showContext = cfg.reviewShowContext;
+    reviewCfg.imagePreview = cfg.reviewImagePreview;
+    reviewCfg.imageMaxBytes = cfg.reviewImageMaxBytes;
     reviewCfg.syntax = cfg.reviewSyntax;
     applyTerminalScheme(reviewCfg, cfg);
     // An explicit file color beats the scheme, the same precedence the
