@@ -21,6 +21,26 @@ it has to be confirmed that the embedded terminal really passes it through
 - Check the remaining bindings for other keys the CLI owns, and note any that
   are also worth freeing.
 
+## Audit of the remaining bindings
+
+Checked against the Claude Code interactive-mode reference
+(https://code.claude.com/docs/en/interactive-mode), which claims `Ctrl+C`,
+`Ctrl+D`, `Ctrl+E`, `Ctrl+B`, `Ctrl+G`, `Ctrl+K`, `Ctrl+L`, `Ctrl+N`, `Ctrl+O`,
+`Ctrl+P`, `Ctrl+R`, `Ctrl+S`, `Ctrl+T`, `Ctrl+U`, `Ctrl+V`, `Ctrl+W`, `Ctrl+X`,
+`Ctrl+Y`, `Ctrl+Z`, `Ctrl+_` / `Ctrl+Shift+-`, `Ctrl+Enter`, `Shift+Tab` and
+the Alt keys.
+
+Nothing else has to be freed:
+
+- Neobeam binds no plain `Ctrl+<letter>`. Its window bindings are
+  `Ctrl+\``, `Ctrl+Tab` / `Ctrl+Shift+Tab`, `Ctrl+-` / `Ctrl+=`, `Ctrl+wheel`
+  and otherwise `Ctrl+Shift+<key>`, none of which the CLI claims.
+- `Ctrl+-` is matched on `modifiers() == Qt::ControlModifier`, so the CLI's
+  `Ctrl+Shift+-` (undo input edit) carries the Shift flag and passes straight
+  through to the terminal.
+- `Ctrl+Shift+V` (neobeam paste) and the CLI's `Ctrl+V` (paste image) are
+  distinct key events to Qt, so both keep working.
+
 ## Verification
 
 With the side terminal focused and the CLI running: Ctrl+G opens the query in
