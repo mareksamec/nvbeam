@@ -198,9 +198,10 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
     layout->addWidget(m_toolbar);
 
-    // Splitter holds terminal instances side by side (bottom panel) or
-    // stacked vertically (side panel, where horizontal space is scarce).
-    m_splitter = new QSplitter(m_cfg.sidePanel ? Qt::Vertical : Qt::Horizontal, this);
+    // Splitter holds terminal instances side by side in both panels: the side
+    // panel may run several agents at once (one split per side_command), and
+    // reading them next to each other is what the layout is for.
+    m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->setStyleSheet(QStringLiteral(
         "QSplitter { background: %1; }"
         "QSplitter::handle { background: #333; width: 2px; height: 2px; }").arg(bg));
@@ -217,8 +218,14 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
         setMinimumHeight(kMinHeight);
     hide();
 
-    // Create initial terminal
-    addTerminal();
+    // One split per configured command, so a project declaring several side
+    // commands starts them all; no command means a single plain shell.
+    if (m_cfg.execCommands.isEmpty()) {
+        openSplit(QString());
+    } else {
+        for (const QString &command : std::as_const(m_cfg.execCommands))
+            openSplit(command);
+    }
 }
 
 QColor TerminalPanel::panelBackgroundColor() const
@@ -279,15 +286,14 @@ void TerminalPanel::showEvent(QShowEvent *event)
     // handlers remove the splits); reopening should present a fresh terminal
     // rather than an empty panel.
     if (m_terminals.isEmpty())
-        addTerminal();
+        openSplit(QString());
     for (auto *term : m_terminals) {
         if (term->property("_nb_pending").toBool()) {
             term->setProperty("_nb_pending", false);
             term->startShellProgram();
-            if (!m_cfg.execCommand.isEmpty()) {
-                term->sendText(m_cfg.execCommand + "\n");
-            }
-            m_runningCommand = m_cfg.execCommand;
+            const QString command = term->property("_nb_command").toString();
+            if (!command.isEmpty())
+                term->sendText(command + "\n");
         }
     }
 #endif
@@ -375,12 +381,14 @@ void TerminalPanel::broadcastCwd(const QString &dir)
 QString TerminalPanel::runningCommand() const
 {
 #ifdef NEOBEAM_HAS_TERMINAL
-    // A configured command is authoritative: it is what the panel itself
-    // started, and it is written the way a user would type it.
-    if (!m_runningCommand.isEmpty())
-        return m_runningCommand;
     if (!m_currentTerm)
         return QString();
+
+    // The split's own command is authoritative: it is what the panel started
+    // there, and it is written the way a user would type it.
+    const QString configured = m_currentTerm->property("_nb_command").toString();
+    if (!configured.isEmpty())
+        return configured;
 
     // Nothing but the shell in the foreground means nothing is running.
     const int pid = m_currentTerm->getForegroundProcessId();
@@ -404,32 +412,31 @@ QString TerminalPanel::runningCommand() const
 #endif
 }
 
-void TerminalPanel::adoptProject(const QString &dir, const QString &command)
+void TerminalPanel::adoptProject(const QString &dir, const QStringList &commands)
 {
 #ifdef NEOBEAM_HAS_TERMINAL
-    const QString previous = m_runningCommand;
-    m_cfg.execCommand = command;
-
     bool anyStarted = false;
+    bool anyCommand = false;
     for (auto *term : m_terminals) {
-        if (!term->property("_nb_pending").toBool()) {
-            anyStarted = true;
-            break;
-        }
+        if (term->property("_nb_pending").toBool())
+            continue;
+        anyStarted = true;
+        if (!term->property("_nb_command").toString().isEmpty())
+            anyCommand = true;
     }
+    m_cfg.execCommands = commands;
 
-    // Nothing running yet (panel never shown, or shells still pending):
-    // broadcastCwd fixes the pending shells' startup directory, and the new
-    // exec command is picked up when showEvent starts them.
-    // Running plain shells (no command on either side) are kept and cd'd.
-    if (!anyStarted || (previous.isEmpty() && command.isEmpty())) {
+    // Running plain shells on both sides: nothing interactive would be
+    // corrupted by a "cd", and the splits the user arranged are kept.
+    if (anyStarted && !anyCommand && commands.isEmpty()) {
         broadcastCwd(dir);
         return;
     }
 
-    // A command is involved: replace every split with one fresh shell in the
-    // project directory. addTerminal() starts it immediately when the panel
-    // is visible, or leaves it pending for the next showEvent.
+    // A command is involved (or the shells have not started yet): replace
+    // every split with one fresh shell per command of the new project.
+    // openSplit() starts it immediately when the panel is visible, or leaves
+    // it pending for the next showEvent.
     m_cwd = dir;
     for (auto *term : m_terminals) {
         // The finished-handler must not run for shells we kill ourselves (it
@@ -442,10 +449,15 @@ void TerminalPanel::adoptProject(const QString &dir, const QString &command)
     }
     m_terminals.clear();
     m_currentTerm = nullptr;
-    addTerminal();
+    if (commands.isEmpty()) {
+        openSplit(QString());
+    } else {
+        for (const QString &command : commands)
+            openSplit(command);
+    }
 #else
     Q_UNUSED(dir);
-    Q_UNUSED(command);
+    Q_UNUSED(commands);
 #endif
 }
 
@@ -470,8 +482,16 @@ bool TerminalPanel::openSelectedLink()
 
 void TerminalPanel::addTerminal()
 {
+    // The user's own split: a plain shell. Re-running the project's command
+    // here would start a second copy of an agent already working in this
+    // panel, which is what the command list at startup is for instead.
+    openSplit(QString());
+}
+
+void TerminalPanel::openSplit(const QString &command)
+{
 #ifdef NEOBEAM_HAS_TERMINAL
-    auto *term = createTermWidget();
+    auto *term = createTermWidget(command);
     m_splitter->addWidget(wrapTerminal(term));
     m_currentTerm = term;
     m_terminals.append(term);
@@ -486,6 +506,8 @@ void TerminalPanel::addTerminal()
                           ? m_splitter->width() : m_splitter->height();
     const int each = qMax(1, avail / qMax(1, count));
     m_splitter->setSizes(QList<int>(count, each));
+#else
+    Q_UNUSED(command);
 #endif
 }
 
@@ -658,7 +680,7 @@ QString TerminalPanel::effectiveColorScheme()
     return m_schemeResolved;
 }
 
-QTermWidget *TerminalPanel::createTermWidget()
+QTermWidget *TerminalPanel::createTermWidget(const QString &command)
 {
     registerNeobeamSchemeDirs();
 
@@ -707,13 +729,15 @@ QTermWidget *TerminalPanel::createTermWidget()
     if (!m_cfg.shellArgs.isEmpty())
         term->setArgs(m_cfg.shellArgs);
 
+    // Whatever this split runs stays on the widget: showEvent needs it for a
+    // shell started later, and runningCommand() reports it.
+    term->setProperty("_nb_command", command);
+
     // Defer shell start until visible so terminal gets correct size
     if (isVisible()) {
         term->startShellProgram();
-        if (!m_cfg.execCommand.isEmpty()) {
-            term->sendText(m_cfg.execCommand + "\n");
-        }
-        m_runningCommand = m_cfg.execCommand;
+        if (!command.isEmpty())
+            term->sendText(command + "\n");
     } else {
         term->setProperty("_nb_pending", true);
     }

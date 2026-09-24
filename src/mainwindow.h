@@ -102,7 +102,7 @@ private:
 
     /// Open the change review panel to the right of the side terminal, or
     /// close it when it is already up (the side terminal's review button and
-    /// Ctrl+Shift+G both land here).
+    /// Ctrl+Shift+R both land here).
     void toggleChangeReview();
 
     /// Which pane Ctrl+Shift+X is currently giving the whole window to.

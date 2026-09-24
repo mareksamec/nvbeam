@@ -257,7 +257,8 @@ void readProjects(const toml::value &data, QList<ProjectEntry> &out,
             continue;
         }
         for (const auto &kv : entry.as_table()) {
-            if (kv.first != "path" && kv.first != "name" && kv.first != "side_command")
+            if (kv.first != "path" && kv.first != "name"
+                && !sideCommandKeys().contains(QString::fromStdString(kv.first)))
                 report(issues, ConfigIssue::Warning,
                        QStringLiteral("[[projects]] entry %1: unknown option \"%2\"")
                            .arg(index).arg(QString::fromStdString(kv.first)));
@@ -275,7 +276,15 @@ void readProjects(const toml::value &data, QList<ProjectEntry> &out,
                    QStringLiteral("[[projects]] entry %1: path does not exist: %2")
                        .arg(index).arg(project.path));
         readString(entry, sec, "name", project.name, issues);
-        readString(entry, sec, "side_command", project.sideCommand, issues);
+        // side_command, side_command_2, side_command_3: one split per command,
+        // in this order. A gap (only side_command_2 set) is not an error, it
+        // just contributes one command.
+        for (const QString &key : sideCommandKeys()) {
+            QString command;
+            readString(entry, sec, key.toUtf8().constData(), command, issues);
+            if (!command.isEmpty())
+                project.sideCommands.append(command);
+        }
         if (project.name.isEmpty())
             project.name = QFileInfo(project.path).fileName();
         out.append(project);
@@ -374,6 +383,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# path = \"~/work/myproject\"\n"
                 "# name = \"myproject\"      # optional display name (default: folder name)\n"
                 "# side_command = \"claude\" # optional command for the side terminal in this project\n"
+                "# side_command_2 = \"nanocoder\" # optional second side terminal split\n"
+                "# side_command_3 = \"\"          # optional third side terminal split\n"
                 "#\n"
                 "# [[projects]]\n"
                 "# path = \"~/work/otherproject\"  # only path is required; side terminal runs a plain shell\n"

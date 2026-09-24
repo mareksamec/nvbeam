@@ -85,6 +85,8 @@ restore_terminal = true  # terminal split count, proportions, height, expanded s
 # path = "~/work/myproject"
 # name = "myproject"      # optional display name (default: folder name)
 # side_command = "claude" # optional command for the side terminal in this project
+# side_command_2 = "nanocoder" # optional second side terminal split
+# side_command_3 = ""          # optional third side terminal split
 #
 # [[projects]]
 # path = "~/work/otherproject"

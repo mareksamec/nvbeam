@@ -253,7 +253,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     termCfg.background = cfg.terminalBackground;
     termCfg.shell = cfg.terminalShell;
     termCfg.shellArgs = cfg.terminalShellArgs;
-    termCfg.execCommand = cfg.terminalExecCommand;
+    if (!cfg.terminalExecCommand.isEmpty())
+        termCfg.execCommands = {cfg.terminalExecCommand};
     termCfg.rightClickPaste = cfg.terminalRightClickPaste;
     termCfg.copyOnSelect = cfg.terminalCopyOnSelect;
     termCfg.wordCharacters = cfg.terminalWordCharacters;
@@ -271,13 +272,14 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // it receives nvim's cwd once, right before it is shown.
     TerminalConfig sideCfg = termCfg;
     sideCfg.followCwd = false;
-    // The side terminal command comes from the [[projects]] entry matching
-    // the opened folder (none = plain shell). Resolved here, before the panel
-    // exists, because session restore may start its shell in this constructor.
-    sideCfg.execCommand.clear();
+    // The side terminal commands come from the [[projects]] entry matching the
+    // opened folder (none = plain shell), one split each. Resolved here, before
+    // the panel exists, because session restore may start its shells in this
+    // constructor.
+    sideCfg.execCommands.clear();
     for (const ProjectEntry &project : cfg.projects) {
         if (!openFolder.isEmpty() && project.path == openFolder) {
-            sideCfg.execCommand = project.sideCommand;
+            sideCfg.execCommands = project.sideCommands;
             break;
         }
     }
@@ -285,7 +287,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // is no CLI tool to come back to, so the panel starts collapsed even when
     // the session says it was open - the case of opening a single file
     // ("Open with Neobeam", a file picker) rather than a pinned project.
-    const bool haveSideCommand = !sideCfg.execCommand.isEmpty();
+    const bool haveSideCommand = !sideCfg.execCommands.isEmpty();
     sideCfg.sidePanel = true;
     // Independent font: fall back to the bottom terminal's font when unset.
     if (!cfg.sideTerminalFont.isEmpty())
@@ -301,7 +303,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     m_sideTerminal = new TerminalPanel(sideCfg, hsplitter);
     // Change review panel: third child, so it opens to the right of the side
     // terminal that runs the agent whose changes it shows. Hidden until asked
-    // for (the review button or Ctrl+Shift+G).
+    // for (the review button or Ctrl+Shift+R).
     ReviewConfig reviewCfg;
     reviewCfg.width = cfg.reviewWidth;
     reviewCfg.refreshMs = cfg.reviewRefreshMs;
@@ -439,7 +441,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     auto *maximizeShortcut = new QShortcut(Shortcuts::maximizePane(), this);
     connect(maximizeShortcut, &QShortcut::activated, this, &MainWindow::toggleMaximizedMode);
 
-    // Ctrl+Shift+G: toggle the change review panel (same as the side
+    // Ctrl+Shift+R: toggle the change review panel (same as the side
     // terminal's review button).
     auto *reviewShortcut = new QShortcut(Shortcuts::toggleChangeReview(), this);
     connect(reviewShortcut, &QShortcut::activated, this, &MainWindow::toggleChangeReview);
@@ -1240,16 +1242,20 @@ void MainWindow::pinProject(const QString &dir, const QString &sideCommand)
     ProjectEntry project;
     project.path = QDir::cleanPath(dir);
     project.name = QFileInfo(project.path).fileName();
-    project.sideCommand = sideCommand;
+    // The prompt asks for one command; further splits (side_command_2/_3) are
+    // written into the project entry by hand.
+    if (!sideCommand.isEmpty())
+        project.sideCommands.append(sideCommand);
 
     if (!PinnedProjects::add(project)) {
         m_switcher->showMessage(QStringLiteral("Could not pin %1").arg(project.name));
         return;
     }
     m_switcher->setItems(switcherItems());
-    m_switcher->showMessage(project.sideCommand.isEmpty()
+    m_switcher->showMessage(project.sideCommands.isEmpty()
         ? QStringLiteral("Pinned %1").arg(project.name)
-        : QStringLiteral("Pinned %1 with \"%2\"").arg(project.name, project.sideCommand));
+        : QStringLiteral("Pinned %1 with \"%2\"").arg(project.name,
+                                                       project.sideCommands.first()));
 }
 
 void MainWindow::unpinProject(const QString &dir)
@@ -1274,7 +1280,7 @@ QList<SwitcherItem> MainWindow::switcherItems() const
         item.kind = SwitcherItem::Project;
         item.label = project.name;
         item.path = project.path;
-        item.sideCommand = project.sideCommand;
+        item.sideCommands = project.sideCommands;
         items.append(item);
         seen.insert(project.path);
     }
@@ -1289,7 +1295,7 @@ QList<SwitcherItem> MainWindow::switcherItems() const
         item.kind = SwitcherItem::Project;
         item.label = project.name;
         item.path = project.path;
-        item.sideCommand = project.sideCommand;
+        item.sideCommands = project.sideCommands;
         item.pinned = true;
         items.append(item);
         seen.insert(project.path);
@@ -1552,11 +1558,11 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     // neobeam.toml first, then the projects pinned from the switcher: the
     // same precedence switcherItems() lists them in, so a path declared in
     // both runs the command the user wrote by hand.
-    QString command;
+    QStringList commands;
     bool found = false;
     for (const ProjectEntry &project : m_cfg.projects) {
         if (project.path == dir) {
-            command = project.sideCommand;
+            commands = project.sideCommands;
             found = true;
             break;
         }
@@ -1564,15 +1570,15 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     if (!found) {
         for (const ProjectEntry &project : PinnedProjects::load()) {
             if (project.path == dir) {
-                command = project.sideCommand;
+                commands = project.sideCommands;
                 break;
             }
         }
     }
-    // Moves the side terminal to dir and applies the command: pending shells
-    // are fixed up in place, a running plain shell just cds, and anything
-    // else is respawned fresh (see TerminalPanel::adoptProject).
-    m_sideTerminal->adoptProject(dir, command);
+    // Moves the side terminal to dir and applies the commands: a running plain
+    // shell just cds, anything else is respawned as one split per command
+    // (see TerminalPanel::adoptProject).
+    m_sideTerminal->adoptProject(dir, commands);
 
     // A project that declares a side command wants its CLI tool in view, so the
     // panel is opened here rather than waiting for the toolbar button. This is
@@ -1582,7 +1588,7 @@ void MainWindow::applyProjectSideCommand(const QString &dir)
     // adoptProject, whose pending shells start on the show. Projects without a
     // command leave the panel as it is - hidden stays hidden, and a panel the
     // user opened for a plain shell is kept.
-    if (!command.isEmpty() && !m_sideTerminal->isVisible())
+    if (!commands.isEmpty() && !m_sideTerminal->isVisible())
         m_sideTerminal->show();
 }
 

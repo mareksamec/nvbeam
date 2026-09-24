@@ -10,7 +10,7 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 - **Native statusline** — mode indicator, file, git branch, diagnostics, position
 - **Git branch switcher** – VSCode-style branch picker under the statusline: click the git segment (or Ctrl+Shift+B) to switch branches or create a new one
 - **Embedded terminal** — QTermWidget-based, with splits and nvim cwd following (Ctrl+\` to toggle), resizable via a draggable divider
-- **Change review** — panel next to the side terminal listing each changed file, expandable to its colored, selectable diff (Ctrl+Shift+G), refreshing itself while an agent writes
+- **Change review** — panel next to the side terminal listing each changed file, expandable to its colored, selectable diff (Ctrl+Shift+R), refreshing itself while an agent writes
 - **Minimap** — zoomed-out buffer view with syntax highlighting, viewport indicator, click-to-scroll
 - **Configurable fonts** — family, size, hinting, antialiasing
 - **Drag & drop** — drop files onto the buffer area to open them in the window under the cursor; modifier keys choose split/tab placement. Dropping onto the terminal pastes the path
@@ -110,7 +110,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode, Ctrl+P pins a folder as a project) |
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
-| Ctrl+Shift+G | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
+| Ctrl+Shift+R | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
 | Ctrl+Shift+D | Switch the review panel between the worktree and the branch comparison |
 
 ### Project switcher
@@ -143,7 +143,7 @@ The switcher needs the statusline's git segment, so it follows `[ui] git_status`
 
 ### Change review
 
-The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+G**, opens a
+The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+R**, opens a
 review panel to the right of that terminal. It lists one row per changed file,
 each showing the file name, its directory and `+added -removed` counts, and a
 tag for a new, deleted, renamed or untracked file. A row is collapsed by
@@ -343,6 +343,8 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # path = "~/work/myproject"
 # name = "myproject"      # optional display name (default: folder name)
 # side_command = "claude" # optional command for the side terminal in this project
+# side_command_2 = "nanocoder" # optional second side terminal split
+# side_command_3 = ""          # optional third side terminal split
 #
 # [[projects]]
 # path = "~/work/otherproject"  # only path is required; side terminal runs a plain shell
@@ -421,8 +423,11 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `path` — Project folder, `~` expands to your home directory (required)
 - `name` — Display name in the switcher; empty uses the folder name (default: `""`)
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
+- `side_command_2`, `side_command_3` — Further commands, each in its own side terminal split, so several agents run next to each other (default: `""`)
 
-The side terminal command is per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching `side_command`. On a project switch the side terminal moves to the project directory and runs that command; if a command is involved (old or new), its splits are replaced with a fresh shell, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a `side_command` also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
+The side terminal commands are per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching entry and opens one split per configured command, side by side. On a project switch the side terminal moves to the project directory and runs the new project's commands; if a command is involved (old or new), its splits are replaced with a fresh shell per command, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a command also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
+
+Splits you open yourself with **+** (Ctrl+Shift+E) run a plain shell, never the project's command, so splitting a panel that is already running an agent does not start a second copy of it.
 
 Projects pinned from the switcher with Ctrl+P are written to `~/.config/neobeam/projects.toml` in this same format, so an entry can be moved here by copying the block. A path present in both files is shown once, and this file wins, which is how a pin gets a `side_command` it was not created with.
 

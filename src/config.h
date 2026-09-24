@@ -17,8 +17,23 @@ struct ConfigIssue {
 struct ProjectEntry {
     QString path;         // absolute, tilde-expanded folder path
     QString name;         // display name; empty = folder basename
-    QString sideCommand;  // side terminal command for this project; empty = plain shell
+    // Side terminal commands, in the order they were configured (side_command,
+    // side_command_2, side_command_3). The side terminal opens one split per
+    // command; an empty list means a single plain shell.
+    QStringList sideCommands;
 };
+
+/// The TOML keys a [[projects]] entry may carry side terminal commands under,
+/// in the order the side terminal opens its splits. Shared by the config
+/// parser and the switcher's own projects.toml, so both files spell the
+/// option the same way.
+inline const QStringList &sideCommandKeys()
+{
+    static const QStringList keys{QStringLiteral("side_command"),
+                                  QStringLiteral("side_command_2"),
+                                  QStringLiteral("side_command_3")};
+    return keys;
+}
 
 /// Application configuration loaded from TOML
 struct Config {
@@ -57,8 +72,8 @@ struct Config {
     bool terminalRefreshPromptOnGitChange = false;
 
     // Side terminal (docked next to the minimap, for CLI tools like claude).
-    // The command it runs comes from the matching [[projects]] entry's
-    // side_command; there is no global default.
+    // The commands it runs come from the matching [[projects]] entry's
+    // side_command/side_command_2/side_command_3; there is no global default.
     int sideTerminalWidth = 400;          // startup width in pixels
     QString sideTerminalFont;             // empty = use terminal font
     int sideTerminalFontSize = 0;         // 0 = use terminal font size

@@ -337,12 +337,19 @@ QList<GitBranch> GitStatus::parseBranches(const QString &output)
         }
     }
 
+    // Remote-only branches lead the list: one that has just appeared - pushed
+    // from another machine or made in the forge's web UI - is what the user is
+    // most likely reaching for, and it has no local row to be found under.
+    // Within each group git's own commit-date order is kept.
+    //
     // A remote branch that already has a local counterpart would check out the
     // very same local branch, so only the local row is offered.
-    QList<GitBranch> result = locals;
+    QList<GitBranch> result;
+    result.reserve(locals.size() + remotes.size());
     for (const GitBranch &branch : std::as_const(remotes)) {
         if (!localNames.contains(branch.target))
             result.append(branch);
     }
+    result.append(locals);
     return result;
 }

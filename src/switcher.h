@@ -15,7 +15,7 @@ struct SwitcherItem {
     Kind kind = Folder;
     QString label;        // display name (project name or path basename)
     QString path;         // absolute path (folder for Project/Folder, file for File)
-    QString sideCommand;  // side terminal command (projects only)
+    QStringList sideCommands;  // side terminal commands (projects only)
     bool pinned = false;  // a Project the app itself pinned, so Ctrl+P can
                           // unpin it again; a project declared in neobeam.toml
                           // is not pinned and cannot be removed from here
@@ -68,7 +68,8 @@ signals:
     /// knows what the side terminal is running.
     void pinRequested(const QString &dir);
     /// The side command prompt was confirmed. An empty command means a plain
-    /// shell, exactly as an absent side_command does.
+    /// shell, exactly as an absent side_command does. The prompt covers the
+    /// first command only; side_command_2/_3 are hand-written.
     void pinConfirmed(const QString &dir, const QString &sideCommand);
     /// Ctrl+P on a directory this app pinned earlier.
     void unpinRequested(const QString &dir);
