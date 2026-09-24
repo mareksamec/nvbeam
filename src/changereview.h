@@ -209,6 +209,11 @@ public:
     /// Height the two panes need, capped at ReviewConfig::fileMaxHeight.
     int preferredHeight() const;
 
+signals:
+    /// The panes switched between side by side and stacked, so the height they
+    /// need has changed.
+    void layoutChanged();
+
 protected:
     /// Two panes side by side need width; below kStackWidth they stack.
     void resizeEvent(QResizeEvent *event) override;
@@ -291,6 +296,8 @@ private:
     /// Build the preview on first use, fill its new side from disk and ask the
     /// panel for the old one.
     void applyPreview();
+    /// Give the preview the height its images need, once per layout pass.
+    void fitPreview();
 
     ReviewConfig m_cfg;
     FileDiff m_file;
@@ -304,8 +311,9 @@ private:
     DiffHighlighter *m_highlighter = nullptr;
     bool m_context = false;        // show unchanged context lines too
     bool m_loaded = false;         // untracked content already read from disk
-    bool m_fitting = false;        // fitBody() is on the stack
+    bool m_fitting = false;        // fitBody()/fitPreview() is on the stack
     int m_fitted = -1;             // body height fitBody() last applied
+    int m_fittedPreview = -1;      // preview height fitPreview() last applied
 };
 
 /// Panel showing the changes already written to the worktree: `git diff`

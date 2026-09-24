@@ -79,6 +79,10 @@ constexpr int kMinPaneHeight = 48;
 /// Below this width the two image panes stack instead of sitting side by side:
 /// half of a narrow panel is not enough of an image to compare.
 constexpr int kStackWidth = 420;
+// Stacking makes the preview taller, which can make the panel's scrollbar
+// appear and take the width back below kStackWidth; without a band between the
+// two decisions the layout would flip back and forth forever.
+constexpr int kStackHysteresis = 48;
 
 /// A byte count as a reader would write it (git's own diff stats round the
 /// same way).
@@ -535,10 +539,15 @@ int ImagePreview::preferredHeight() const
 void ImagePreview::resizeEvent(QResizeEvent *event)
 {
     QWidget::resizeEvent(event);
-    const QBoxLayout::Direction wanted =
-        width() < kStackWidth ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight;
-    if (m_panes->direction() != wanted)
-        m_panes->setDirection(wanted);
+    // Hysteresis: stack below kStackWidth, go back side by side only once the
+    // width is clear of it again.
+    const bool stacked = m_panes->direction() == QBoxLayout::TopToBottom;
+    const bool wantStacked = stacked ? width() < kStackWidth + kStackHysteresis
+                                     : width() < kStackWidth;
+    if (wantStacked != stacked) {
+        m_panes->setDirection(wantStacked ? QBoxLayout::TopToBottom : QBoxLayout::LeftToRight);
+        emit layoutChanged();
+    }
 }
 
 // --- FileCard ---------------------------------------------------------------
@@ -711,8 +720,7 @@ void FileCard::resizeEvent(QResizeEvent *event)
     if (showsImage()) {
         // The panes may have just switched between side by side and stacked,
         // which changes the height they need.
-        if (m_preview)
-            m_preview->setFixedHeight(m_preview->preferredHeight());
+        fitPreview();
         return;
     }
     fitBody();
@@ -775,6 +783,7 @@ void FileCard::applyPreview()
 {
     if (!m_preview) {
         m_preview = new ImagePreview(m_cfg, this);
+        connect(m_preview, &ImagePreview::layoutChanged, this, &FileCard::fitPreview);
         // The same slot the diff body occupies: one of the two is shown at a
         // time, so the row keeps its shape either way.
         auto *box = static_cast<QVBoxLayout *>(layout());
@@ -806,7 +815,7 @@ void FileCard::applyPreview()
         m_preview->setOld({}, QStringLiteral("loading\u2026"));
         emit oldImageRequested(m_file.path);
     }
-    m_preview->setFixedHeight(m_preview->preferredHeight());
+    fitPreview();
 }
 
 void FileCard::setOldImage(const QByteArray &bytes)
@@ -814,7 +823,24 @@ void FileCard::setOldImage(const QByteArray &bytes)
     if (!m_preview)
         return;
     m_preview->setOld(bytes);
-    m_preview->setFixedHeight(m_preview->preferredHeight());
+    fitPreview();
+}
+
+void FileCard::fitPreview()
+{
+    // Same shape as fitBody(): giving the preview a height re-lays the panel
+    // out, which resizes this card again while the height is still being
+    // applied. Measure once per pass and apply only a height that differs, so
+    // the card and the panel settle instead of driving each other.
+    if (!m_preview || m_fitting)
+        return;
+    m_fitting = true;
+    const QScopeGuard done([this] { m_fitting = false; });
+    const int height = m_preview->preferredHeight();
+    if (height != m_fittedPreview) {
+        m_fittedPreview = height;
+        m_preview->setFixedHeight(height);
+    }
 }
 
 void FileCard::applyBody()
