@@ -141,6 +141,16 @@
     - Starting with no arguments (switcher, also the `keep_running` restart after `:q`) resolves no
       project at startup, so `applyProjectSideCommand()` now opens the side terminal when the picked
       project defines a `side_command` - that path never showed the panel at all before.
+- [x] Side terminal width is not remembered, and a project with `side_command_2`/`side_command_3`
+      opens its agents squeezed into a few columns each.
+    - `[side_terminal] width` is now the width of one split, not of the whole panel:
+      `MainWindow::applySideTerminalWidth()` hands the panel that width times
+      `TerminalPanel::splitCount()`, capped so the editor area keeps `kMinEditorWidth`. It runs on
+      every show and after `applyProjectSideCommand()`, which is where the split count changes.
+    - `MainWindow::rememberSideTerminalWidth()` is connected to the horizontal splitter's
+      `splitterMoved`, so a drag redefines the per-split width, and `Session` persists it
+      (`side_terminal/split_width`) under `[session] restore_window`. Stored per split rather than
+      per panel: the panel's width only means something together with the number of agents in it.
 - [x] Add "maximized" mode - Ctrl + Shift + x would hide all terminals, side terminal and also messages. Pressing it again will restore it to the previous state.
     - `MainWindow::toggleMaximizedMode()` captures which of the bottom terminal, side terminal and
       messages panel are actually visible before hiding them, so a panel the user had already closed

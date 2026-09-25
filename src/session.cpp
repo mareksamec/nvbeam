@@ -10,6 +10,7 @@ constexpr auto kTermSplitCount      = "terminal/split_count";
 constexpr auto kTermSplitterState   = "terminal/splitter_state";
 constexpr auto kTermExpanded        = "terminal/expanded";
 constexpr auto kSideTermVisible     = "side_terminal/visible";
+constexpr auto kSideTermSplitWidth  = "side_terminal/split_width";
 constexpr auto kRecentFiles         = "recent/files";
 constexpr auto kRecentFolders       = "recent/folders";
 
@@ -106,6 +107,16 @@ bool Session::sideTerminalVisible() const
 void Session::setSideTerminalVisible(bool visible)
 {
     m_settings->setValue(kSideTermVisible, visible);
+}
+
+int Session::sideTerminalSplitWidth() const
+{
+    return qMax(0, m_settings->value(kSideTermSplitWidth, 0).toInt());
+}
+
+void Session::setSideTerminalSplitWidth(int width)
+{
+    m_settings->setValue(kSideTermSplitWidth, qMax(0, width));
 }
 
 QStringList Session::recentFiles() const
