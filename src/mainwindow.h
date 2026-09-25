@@ -2,6 +2,7 @@
 
 #include <QMainWindow>
 #include <QByteArray>
+#include <QVector>
 #include "config.h"
 #include "switcher.h"
 
@@ -99,6 +100,11 @@ private:
     /// fired by GridWidget's own resizeEvent right after a pre-warmed call)
     /// is a no-op.
     void resizeNvimGrid(int cols, int rows);
+
+    /// Close the given buffers via lua/bufferline.lua. Modified buffers are
+    /// kept and, unless `force` is set, the user is asked whether to discard
+    /// their changes; confirming re-runs this with `force` for those buffers.
+    void closeBuffers(const QVector<int> &bufIds, bool force = false);
 
     /// Open the change review panel to the right of the side terminal, or
     /// close it when it is already up (the side terminal's review button and

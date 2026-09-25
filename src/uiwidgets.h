@@ -42,8 +42,15 @@ public:
 signals:
     void tabSelected(int tabId);
     void bufferSelected(int bufId);
+    /// Buffers the user asked to close from the context menu, in bufferline
+    /// order. The widget itself performs no Neovim call.
+    void closeBuffers(const QVector<int> &bufIds);
 
 private:
+    /// Right-click menu (buffer mode only): close the tab under the cursor,
+    /// the others, or everything on one side of it.
+    void showContextMenu(const QPoint &pos);
+
     QVector<int> m_tabIds;
     bool m_bufferMode = false;
 };
