@@ -19,4 +19,22 @@ function neobeam.bufferline()
     return {bufs = bufs, current = cur}
 end
 
+-- Close a list of buffers in one round trip. Modified buffers are only
+-- deleted when `force` is set; otherwise they are left open and their names
+-- are returned so the GUI can ask before discarding the changes.
+function neobeam.close_buffers(ids, force)
+    local skipped = {}
+    for _, b in ipairs(ids) do
+        if vim.api.nvim_buf_is_valid(b) then
+            if vim.bo[b].modified and not force then
+                local name = vim.api.nvim_buf_get_name(b)
+                table.insert(skipped, {id = b, name = name ~= "" and name or "[No Name]"})
+            else
+                pcall(vim.api.nvim_buf_delete, b, {force = force == true})
+            end
+        end
+    end
+    return skipped
+end
+
 return true

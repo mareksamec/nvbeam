@@ -5,6 +5,7 @@
 #include <QHBoxLayout>
 #include <QFontMetricsF>
 #include <QPainterPath>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QGuiApplication>
 #include <QClipboard>
@@ -98,6 +99,11 @@ TablineWidget::TablineWidget(const QString &accent, QWidget *parent)
     setExpanding(false);
     setVisible(false);
 
+    // Right-click menu for closing buffers; only acts in buffer mode.
+    setContextMenuPolicy(Qt::CustomContextMenu);
+    connect(this, &QWidget::customContextMenuRequested, this,
+            [this](const QPoint &pos) { showContextMenu(pos); });
+
     connect(this, &QTabBar::currentChanged, this, [this](int idx) {
         if (idx >= 0 && idx < m_tabIds.size()) {
             if (m_bufferMode)
@@ -157,6 +163,48 @@ void TablineWidget::updateBuffers(const QVariantList &buffers, int currentBuf)
     setCurrentIndex(currentIdx);
     setVisible(m_tabIds.size() > 0);
     blockSignals(false);
+}
+
+void TablineWidget::showContextMenu(const QPoint &pos)
+{
+    if (!m_bufferMode) return; // closing tabpages is not offered here
+    const int idx = tabAt(pos);
+    if (idx < 0 || idx >= m_tabIds.size()) return; // empty tabbar space
+
+    QMenu menu(this);
+    menu.setStyleSheet(QStringLiteral(
+        "QMenu { background: #1a1b26; color: #cdd6f4; border: 1px solid #333; }"
+        "QMenu::item { padding: 4px 16px; }"
+        "QMenu::item:selected { background: #333; }"
+        "QMenu::item:disabled { color: #555; }"));
+
+    // One entry per buffer set; an empty set stays visible but disabled so the
+    // menu keeps a stable shape.
+    struct Entry { const char *text; QVector<int> bufIds; };
+    QVector<int> others, toRight, toLeft;
+    for (int i = 0; i < m_tabIds.size(); i++) {
+        if (i == idx) continue;
+        others.append(m_tabIds[i]);
+        if (i > idx) toRight.append(m_tabIds[i]);
+        else toLeft.append(m_tabIds[i]);
+    }
+    const QVector<Entry> entries = {
+        {"Close buffer", {m_tabIds[idx]}},
+        {"Close others", others},
+        {"Close all to the right", toRight},
+        {"Close all to the left", toLeft},
+    };
+
+    QHash<QAction *, QVector<int>> actions;
+    for (const Entry &e : entries) {
+        QAction *act = menu.addAction(QString::fromLatin1(e.text));
+        act->setEnabled(!e.bufIds.isEmpty());
+        actions.insert(act, e.bufIds);
+    }
+
+    QAction *chosen = menu.exec(mapToGlobal(pos));
+    if (chosen && !actions.value(chosen).isEmpty())
+        emit closeBuffers(actions.value(chosen));
 }
 
 // --- CmdlineWidget ---

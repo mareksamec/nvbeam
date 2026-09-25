@@ -19,6 +19,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QKeyEvent>
+#include <QMessageBox>
 #include <QFile>
 #include <QFileInfo>
 #include <QFontMetrics>
@@ -803,6 +804,9 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         m_nvim->request("nvim_set_current_buf", {bufId});
     });
 
+    connect(m_tabline, &TablineWidget::closeBuffers, this,
+            [this](const QVector<int> &bufIds) { closeBuffers(bufIds); });
+
     // Minimap click scrolls to line
     connect(m_minimap, &MinimapWidget::lineClicked, this, [this](int line) {
         m_nvim->request("nvim_win_set_cursor", {0, QVariantList{line + 1, 0}});
@@ -1437,6 +1441,50 @@ void MainWindow::toggleMaximizedMode()
         enterMaximized(MaximizedPane::SideTerminal);
     else
         enterMaximized(MaximizedPane::Editor);
+}
+
+void MainWindow::closeBuffers(const QVector<int> &bufIds, bool force)
+{
+    if (bufIds.isEmpty() || !m_nvim) return;
+
+    QVariantList ids;
+    ids.reserve(bufIds.size());
+    for (int id : bufIds) ids.append(id);
+
+    // One round trip for the whole group; the helper returns the buffers it
+    // refused to discard (modified, and not forced).
+    m_nvim->request("nvim_exec_lua",
+        {QStringLiteral("local ids, force = ...\nreturn neobeam and neobeam.close_buffers(ids, force)"),
+         QVariantList{ids, force}},
+        [this, force](const QVariant &result) {
+        if (force) return; // already the discard pass, nothing left to ask
+        const QVariantList skipped = result.toList();
+        if (skipped.isEmpty()) return;
+
+        QVector<int> modifiedIds;
+        QStringList names;
+        for (const QVariant &v : skipped) {
+            const QVariantMap buf = v.toMap();
+            modifiedIds.append(buf.value("id").toInt());
+            QString name = buf.value("name").toString();
+            const int slash = name.lastIndexOf('/');
+            if (slash >= 0) name = name.mid(slash + 1);
+            names.append(name);
+        }
+
+        QMessageBox box(this);
+        box.setIcon(QMessageBox::Warning);
+        box.setWindowTitle(QStringLiteral("Unsaved changes"));
+        box.setText(names.size() == 1
+            ? QStringLiteral("%1 has unsaved changes.").arg(names.first())
+            : QStringLiteral("%1 buffers have unsaved changes:").arg(names.size()));
+        if (names.size() > 1) box.setInformativeText(names.join(QStringLiteral("\n")));
+        QPushButton *discard = box.addButton(QStringLiteral("Discard"), QMessageBox::DestructiveRole);
+        box.addButton(QStringLiteral("Keep open"), QMessageBox::RejectRole);
+        box.exec();
+        if (box.clickedButton() == discard)
+            closeBuffers(modifiedIds, /*force=*/true);
+    });
 }
 
 void MainWindow::toggleChangeReview()
