@@ -690,8 +690,18 @@ void FileCard::setFile(const FileDiff &file)
     // that moved means the image did, so it is fetched again.
     if (bodyChanged || pathChanged)
         m_oldImageAsked = false;
+    // Rebuilding the body is the expensive half of a refresh (the text goes
+    // through the document layout and the highlighter), so it waits until the
+    // panel asks for it - which it only does for rows on screen.
     if (bodyChanged && isExpanded())
-        applyBody();
+        m_pendingBody = true;
+}
+
+void FileCard::renderPending()
+{
+    if (!m_pendingBody)
+        return;
+    applyBody();
 }
 
 void FileCard::setExpanded(bool expanded)
@@ -702,8 +712,10 @@ void FileCard::setExpanded(bool expanded)
     m_body->setVisible(expanded && !showsImage());
     if (m_preview)
         m_preview->setVisible(expanded && showsImage());
+    // Same deferral as a refresh: expandAll() on a large diff would otherwise
+    // build every body in one go and stall the event loop.
     if (expanded)
-        applyBody();
+        m_pendingBody = true;
     emit expandedChanged(m_file.path, expanded);
 }
 
@@ -845,6 +857,7 @@ void FileCard::fitPreview()
 
 void FileCard::applyBody()
 {
+    m_pendingBody = false;
     if (showsImage()) {
         applyPreview();
         return;
@@ -1027,6 +1040,9 @@ ChangeReviewPanel::ChangeReviewPanel(const ReviewConfig &cfg, QWidget *parent)
     m_listLayout->addStretch(1);
 
     m_scroll->setWidget(m_list);
+    // A row whose content changed off screen is rebuilt when it scrolls in.
+    connect(m_scroll->verticalScrollBar(), &QAbstractSlider::valueChanged, this,
+            [this] { renderVisibleRows(); });
     layout->addWidget(m_scroll, 1);
 
     // The poll is what keeps the view current while an agent writes files:
@@ -1426,6 +1442,7 @@ void ChangeReviewPanel::apply(const QList<FileDiff> &files)
                 m_expanded.insert(path);
             else
                 m_expanded.remove(path);
+            renderVisibleRows(); // a row just opened may need its body built
         });
         connect(card, &FileCard::oldImageRequested, this, &ChangeReviewPanel::fetchOldImage);
         m_cards.insert(file.path, card);
@@ -1440,6 +1457,11 @@ void ChangeReviewPanel::apply(const QList<FileDiff> &files)
         for (int i = 0; i < order.size(); ++i)
             m_listLayout->insertWidget(i + 1, m_cards.value(order.at(i))); // after m_message
     }
+
+    // Now, and once more after the layout has placed the rows: a row created
+    // by this very refresh still has no geometry to test against the viewport.
+    renderVisibleRows();
+    QTimer::singleShot(0, this, &ChangeReviewPanel::renderVisibleRows);
 
     if (files.isEmpty()) {
         m_stats->setText(QStringLiteral("No changes"));
@@ -1458,6 +1480,35 @@ void ChangeReviewPanel::apply(const QList<FileDiff> &files)
                          .arg(added)
                          .arg(m_cfg.removed.name())
                          .arg(removed));
+}
+
+void ChangeReviewPanel::renderVisibleRows()
+{
+    // Rebuilding a body changes its height, which re-lays the column out and
+    // can scroll the viewport - which calls back in here. One pass at a time.
+    if (m_rendering || !isVisible())
+        return;
+    m_rendering = true;
+    const QScopeGuard done([this] { m_rendering = false; });
+
+    // A screenful of margin on each side, so a row is ready by the time a
+    // short scroll brings it in.
+    const QRect viewport = m_scroll->viewport()->rect();
+    const int margin = viewport.height();
+    QRect wanted(m_list->mapFrom(m_scroll->viewport(), viewport.topLeft()), viewport.size());
+    wanted.adjust(0, -margin, 0, margin);
+
+    // One row per pass: several tall rows rebuilt back to back would block the
+    // event loop long enough for the compositor to call the window dead, so
+    // the rest are picked up on the next turn, after the loop has run.
+    for (const QString &path : std::as_const(m_order)) {
+        FileCard *card = m_cards.value(path);
+        if (!card || !card->needsRender() || !card->geometry().intersects(wanted))
+            continue;
+        card->renderPending();
+        QTimer::singleShot(0, this, &ChangeReviewPanel::renderVisibleRows);
+        return;
+    }
 }
 
 void ChangeReviewPanel::showMessage(const QString &text)

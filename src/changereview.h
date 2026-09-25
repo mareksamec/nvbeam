@@ -250,6 +250,15 @@ public:
 
     void setExpanded(bool expanded);
     bool isExpanded() const;
+
+    /// True when a refresh brought new content for an open row whose body has
+    /// not been rebuilt yet. Rebuilding costs time proportional to the diff, so
+    /// the panel only spends it on rows the user can actually see.
+    bool needsRender() const { return m_pendingBody; }
+
+    /// Rebuild the body queued by the last setFile(). No-op when nothing is
+    /// pending.
+    void renderPending();
     QString path() const { return m_file.path; }
 
     /// Hand this row the version of its image that lives in the comparison's
@@ -311,6 +320,7 @@ private:
     DiffHighlighter *m_highlighter = nullptr;
     bool m_context = false;        // show unchanged context lines too
     bool m_loaded = false;         // untracked content already read from disk
+    bool m_pendingBody = false;    // new content waiting for renderPending()
     bool m_fitting = false;        // fitBody()/fitPreview() is on the stack
     int m_fitted = -1;             // body height fitBody() last applied
     int m_fittedPreview = -1;      // preview height fitPreview() last applied
@@ -423,6 +433,11 @@ private:
     /// Split `git diff` output into one FileDiff per file.
     static QList<FileDiff> parseDiff(const QString &diff, int maxLines);
 
+    /// Rebuild the bodies of the open rows that the viewport shows (plus a
+    /// screenful of margin), and leave the rest pending until they scroll in.
+    /// Called after every refresh, on scrolling and when a row is opened.
+    void renderVisibleRows();
+
     ReviewConfig m_cfg;
     QString m_dir;                 // working directory the diff is taken in
     DiffMode m_mode = DiffMode::Unstaged;  // comparison in force (see effectiveMode)
@@ -440,6 +455,7 @@ private:
     QSet<QString> m_expanded;      // paths the user opened, remembered across refreshes
     QTimer m_poll;
     QElapsedTimer m_runStarted;    // when the in-flight run began, for the watchdog
+    bool m_rendering = false;      // renderVisibleRows() is on the stack
     bool m_running = false;        // a git run is in flight
     bool m_rerun = false;          // a refresh arrived during that run
 };
