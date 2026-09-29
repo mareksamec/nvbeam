@@ -112,10 +112,10 @@ static QString loadLua(const QString &name)
     const auto cached = cache.constFind(name);
     if (cached != cache.constEnd())
         return *cached;
-    // Try the installed share dir first (/usr/bin/neobeam -> /usr/share/neobeam/lua),
+    // Try the installed share dir first (/usr/bin/nvbeam -> /usr/share/nvbeam/lua),
     // then the source-tree layout used when running from the build directory.
     QStringList searchPaths = {
-        QCoreApplication::applicationDirPath() + "/../share/neobeam/lua/" + name,
+        QCoreApplication::applicationDirPath() + "/../share/nvbeam/lua/" + name,
         QCoreApplication::applicationDirPath() + "/../lua/" + name,
         QCoreApplication::applicationDirPath() + "/lua/" + name,
     };
@@ -135,11 +135,11 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     : QMainWindow(parent)
     , m_cfg(cfg)
 {
-    setWindowTitle("Neobeam");
+    setWindowTitle("Nvbeam");
     resize(800, 600);
 
     // A single positional argument that is an existing directory means the
-    // user opened a folder (e.g. `neobeam .`). Window geometry and terminal
+    // user opened a folder (e.g. `nvbeam .`). Window geometry and terminal
     // split layout still restore normally; only the nvim/terminal cwd is
     // overridden to point at the folder (handled once nvim is ready, below).
     QString openFolder;
@@ -231,7 +231,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Highlight the whole editor column (tabline/grid/minimap/statusline) with
     // a 1px border while the grid holds keyboard focus.
     m_editorArea->setStyleSheet(QStringLiteral("QFrame#nbEditorArea { border: 1px solid transparent; }"));
-    // Neobeam has no TTY, so nvim never gets the terminal focus-report
+    // Nvbeam has no TTY, so nvim never gets the terminal focus-report
     // escape sequences that normally fire FocusGained/FocusLost. Emit the
     // same autocmd events ourselves so nvim behaves as it would in a real
     // terminal. Firing the event alone isn't enough to reload external file
@@ -296,7 +296,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Whether this launch has a side terminal command at all. Without one there
     // is no CLI tool to come back to, so the panel starts collapsed even when
     // the session says it was open - the case of opening a single file
-    // ("Open with Neobeam", a file picker) rather than a pinned project.
+    // ("Open with Nvbeam", a file picker) rather than a pinned project.
     const bool haveSideCommand = !sideCfg.execCommands.isEmpty();
     sideCfg.sidePanel = true;
     // Independent font: fall back to the bottom terminal's font when unset.
@@ -677,7 +677,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         resizeNvimGrid(cols, rows);
     });
     connect(m_nvim, &NvimProcess::ready, this, [this]() {
-        // Folder open (e.g. `neobeam .`): point both nvim's cwd and every
+        // Folder open (e.g. `nvbeam .`): point both nvim's cwd and every
         // terminal split (including any restored from the session) at the
         // folder, overriding whatever cwd nvim/the terminals started with.
         // Applies only to the first instance; keep_running restarts start
@@ -709,8 +709,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
             }
 
             // Register the bundled Lua helpers once per nvim instance: they
-            // define functions in a `neobeam` table, and the poll timers call
-            // tiny `return neobeam.*()` chunks instead of resending and
+            // define functions in a `nvbeam` table, and the poll timers call
+            // tiny `return nvbeam.*()` chunks instead of resending and
             // recompiling whole files on every fire.
             for (const char *script : {"statusline.lua", "bufferline.lua", "minimap.lua"}) {
                 const QString lua = loadLua(QString::fromLatin1(script));
@@ -841,10 +841,10 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         bufTimer->setSingleShot(true);
         bufTimer->setInterval(100);
         connect(bufTimer, &QTimer::timeout, this, [this]() {
-            // `neobeam and ...` guards the window between attach and helper
+            // `nvbeam and ...` guards the window between attach and helper
             // registration (both run in the ready handler).
             m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return neobeam and neobeam.bufferline()"), QVariantList{}},
+                {QStringLiteral("return nvbeam and nvbeam.bufferline()"), QVariantList{}},
                 [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
                 if (data.isEmpty()) return;
@@ -865,7 +865,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         statusTimer->setInterval(100);
         connect(statusTimer, &QTimer::timeout, this, [this]() {
             m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return neobeam and neobeam.statusline()"), QVariantList{}},
+                {QStringLiteral("return nvbeam and nvbeam.statusline()"), QVariantList{}},
                 [this](const QVariant &result) {
                 const QVariantMap data = result.toMap();
                 if (!data.isEmpty())
@@ -896,7 +896,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         });
         connect(m_nvim, &NvimProcess::notification, this,
                 [this](const QString &method, const QVariantList &) {
-            if (method == QLatin1String("neobeam_git_event"))
+            if (method == QLatin1String("nvbeam_git_event"))
                 m_gitStatus->refresh();
         });
 
@@ -953,7 +953,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         connect(m_minimapScanTimer, &QTimer::timeout, this, [this]() {
             if (!m_minimap->isVisible()) return;
             m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return neobeam and neobeam.minimap_scan()"), QVariantList{}},
+                {QStringLiteral("return nvbeam and nvbeam.minimap_scan()"), QVariantList{}},
                 [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
                 qCDebug(nbMinimap) << "scan: empty" << data.isEmpty()
@@ -994,7 +994,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         connect(m_minimapViewTimer, &QTimer::timeout, this, [this]() {
             if (!m_minimap->isVisible()) return;
             m_nvim->request("nvim_exec_lua",
-                {QStringLiteral("return neobeam and neobeam.minimap_view()"), QVariantList{}},
+                {QStringLiteral("return nvbeam and nvbeam.minimap_view()"), QVariantList{}},
                 [this](const QVariant &result) {
                 QVariantMap data = result.toMap();
                 qCDebug(nbMinimap) << "view: empty" << data.isEmpty()
@@ -1022,7 +1022,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // follow-cwd, the window title and the switcher's recently-used list.
     connect(m_nvim, &NvimProcess::notification, this,
             [this](const QString &method, const QVariantList &args) {
-        if (method == QLatin1String("neobeam_cwd")) {
+        if (method == QLatin1String("nvbeam_cwd")) {
             const QString cwd = args.value(0).toString();
             if (cwd.isEmpty()) return;
             if (m_cfg.terminalFollowCwd)
@@ -1034,7 +1034,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
                 m_lastMruCwd = cwd;
                 m_session->addRecentFolder(cwd, m_cfg.switcherMaxRecent);
             }
-        } else if (method == QLatin1String("neobeam_file")) {
+        } else if (method == QLatin1String("nvbeam_file")) {
             const QString file = args.value(0).toString();
             // %f/%F in [ui] window_title: unnamed and non-file buffers
             // (term://, ...) show as empty rather than a raw buffer name.
@@ -1242,7 +1242,7 @@ void MainWindow::toggleBranchSwitcher()
 
 void MainWindow::openSwitcher()
 {
-    // m_titleCwd is nvim's cwd as of the last neobeam_cwd notification: it
+    // m_titleCwd is nvim's cwd as of the last nvbeam_cwd notification: it
     // anchors the switcher's path mode, so relative paths and the prefilled
     // starting directory match where the editor actually is.
     m_switcher->open(switcherItems(), m_titleCwd);
@@ -1306,7 +1306,7 @@ QList<SwitcherItem> MainWindow::switcherItems() const
     }
 
     // Pinned from the switcher (projects.toml). A path the user has since
-    // written into neobeam.toml is already in `seen`, so the config entry
+    // written into nvbeam.toml is already in `seen`, so the config entry
     // wins and its side_command survives.
     for (const ProjectEntry &project : PinnedProjects::load()) {
         if (seen.contains(project.path))
@@ -1454,7 +1454,7 @@ void MainWindow::closeBuffers(const QVector<int> &bufIds, bool force)
     // One round trip for the whole group; the helper returns the buffers it
     // refused to discard (modified, and not forced).
     m_nvim->request("nvim_exec_lua",
-        {QStringLiteral("local ids, force = ...\nreturn neobeam and neobeam.close_buffers(ids, force)"),
+        {QStringLiteral("local ids, force = ...\nreturn nvbeam and nvbeam.close_buffers(ids, force)"),
          QVariantList{ids, force}},
         [this, force](const QVariant &result) {
         if (force) return; // already the discard pass, nothing left to ask
@@ -1607,9 +1607,9 @@ void MainWindow::applyWindowTitle()
     } else if (!m_titleProject.isEmpty()) {
         title = m_titleProject + QStringLiteral(" - ") + tildify(m_titleCwd);
     } else if (m_titleCwd.isEmpty() || m_titleCwd == QDir::homePath()) {
-        title = QStringLiteral("Neobeam");
+        title = QStringLiteral("Nvbeam");
     } else {
-        title = QStringLiteral("Neobeam - ") + tildify(m_titleCwd);
+        title = QStringLiteral("Nvbeam - ") + tildify(m_titleCwd);
     }
     if (title != windowTitle()) {
         qCDebug(nbTitle) << "title:" << title;
@@ -1650,7 +1650,7 @@ void MainWindow::applySideTerminalWidth()
 
 void MainWindow::applyProjectSideCommand(const QString &dir)
 {
-    // neobeam.toml first, then the projects pinned from the switcher: the
+    // nvbeam.toml first, then the projects pinned from the switcher: the
     // same precedence switcherItems() lists them in, so a path declared in
     // both runs the command the user wrote by hand.
     QStringList commands;

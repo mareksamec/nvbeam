@@ -9,7 +9,7 @@
 #include <QStringList>
 #include <QPlainTextEdit>
 #include <QSyntaxHighlighter>
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
 #include <KSyntaxHighlighting/AbstractHighlighter>
 #include <KSyntaxHighlighting/Format>
 #endif
@@ -31,7 +31,7 @@ enum class DiffMode {
 };
 
 /// Look and behaviour of the change review panel, filled from [review] in
-/// neobeam.toml (see Config).
+/// nvbeam.toml (see Config).
 struct ReviewConfig {
     int width = 600;           // startup width of the panel, in pixels
     int refreshMs = 2000;      // poll interval; floored at kMinRefreshMs, 0 = no poll
@@ -95,7 +95,7 @@ struct FileDiff {
 /// returns are shifted back by that one character, so the document's text is
 /// still the diff, character for character.
 class DiffHighlighter : public QSyntaxHighlighter
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
                       , public KSyntaxHighlighting::AbstractHighlighter
 #endif
 {
@@ -111,7 +111,7 @@ public:
 
 protected:
     void highlightBlock(const QString &text) override;
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
     /// Called by highlightLine() for each token of the code on the line.
     void applyFormat(int offset, int length,
                      const KSyntaxHighlighting::Format &format) override;
@@ -122,7 +122,7 @@ private:
     QTextCharFormat m_added;
     QTextCharFormat m_removed;
     QTextCharFormat m_hunk;
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
     int m_offset = 0;               // width of the marker column skipped on that line
 #endif
 };

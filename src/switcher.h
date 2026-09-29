@@ -17,13 +17,13 @@ struct SwitcherItem {
     QString path;         // absolute path (folder for Project/Folder, file for File)
     QStringList sideCommands;  // side terminal commands (projects only)
     bool pinned = false;  // a Project the app itself pinned, so Ctrl+P can
-                          // unpin it again; a project declared in neobeam.toml
+                          // unpin it again; a project declared in nvbeam.toml
                           // is not pinned and cannot be removed from here
 };
 
 /// KRunner-style overlay picker: a search field with a fuzzy-filtered list of
 /// pinned projects and recently opened folders/files. Centered over the main
-/// window; shown when neobeam starts without arguments, when nvim exits (with
+/// window; shown when nvbeam starts without arguments, when nvim exits (with
 /// switcher.keep_running), or on Ctrl+Shift+P.
 ///
 /// Ctrl+D switches the same field between two modes: the project/recent search
@@ -117,7 +117,7 @@ private:
     /// Ctrl+P: pin the directory the switcher is pointing at, or unpin it when
     /// it is already an app-pinned project. Emits nothing for anything that
     /// cannot be a project (a file, a path that does not exist) and for a
-    /// project declared in neobeam.toml, which only the user can remove.
+    /// project declared in nvbeam.toml, which only the user can remove.
     void togglePin();
     /// Footer text: a transient message when one is set, the mode's key hints
     /// otherwise.

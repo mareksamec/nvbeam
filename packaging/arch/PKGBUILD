@@ -1,14 +1,14 @@
 # Maintainer: Marek Samec <marek@samec.me>
 #
-# Versioned (release) PKGBUILD. Unlike packaging/aur/neobeam-git, this builds a
+# Versioned (release) PKGBUILD. Unlike packaging/aur/nvbeam-git, this builds a
 # specific tagged release from its GitHub source archive. `pkgver` below is a
 # placeholder overwritten by the CI release workflow from the git tag.
-pkgname=neobeam
+pkgname=nvbeam
 pkgver=0.0.0
 pkgrel=1
 pkgdesc="Fast, native Neovim GUI client built with Qt6 and C++"
 arch=('x86_64')
-url="https://github.com/mareksamec/neobeam"
+url="https://github.com/mareksamec/nvbeam"
 license=('MIT')
 depends=(
     'qt6-base'
@@ -88,8 +88,8 @@ build() {
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
-        -DNEOBEAM_TERMINAL=ON \
-        -DNEOBEAM_SYNTAX=ON \
+        -DNVBEAM_TERMINAL=ON \
+        -DNVBEAM_SYNTAX=ON \
         -Wno-dev
     cmake --build build -j"$(nproc)"
 }

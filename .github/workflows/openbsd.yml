@@ -26,5 +26,5 @@ jobs:
           prepare: |
             pkg_add cmake ninja git qt6-qtbase
           run: |
-            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=OFF
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=OFF
             cmake --build build

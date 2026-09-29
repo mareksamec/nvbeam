@@ -296,7 +296,7 @@ void readProjects(const toml::value &data, QList<ProjectEntry> &out,
 QString Config::configPath()
 {
     QString configDir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    return configDir + "/neobeam.toml";
+    return configDir + "/nvbeam.toml";
 }
 
 Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
@@ -310,7 +310,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
         QFile file(path);
         if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
             file.write(
-                "# Neobeam configuration\n"
+                "# Nvbeam configuration\n"
                 "\n"
                 "# [font]\n"
                 "# family = \"Monospace\"\n"
@@ -324,7 +324,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# height = 300  # startup height in pixels\n"
                 "# font = \"\"  # terminal font (empty = use global font)\n"
                 "# font_size = 0  # terminal font size (0 = use global)\n"
-                "# color_scheme = \"Neoblue\"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)\n"
+                "# color_scheme = \"Neoblue\"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)\n"
                 "# foreground = \"\"  # override scheme text color, e.g. \"#f8f8f2\" (empty = scheme default)\n"
                 "# background = \"\"  # override scheme background color (empty = scheme default)\n"
                 "# shell = \"\"  # shell program (empty = system default)\n"
@@ -359,7 +359,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
                 "# branch_switcher_font = \"monospace\"  # git branch switcher popup font family\n"
                 "# branch_switcher_font_size = 10  # its list rows; the input line is one point larger\n"
-                "# window_title = \"\"  # custom title template (empty = default \"Neobeam - ~/path\",\n"
+                "# window_title = \"\"  # custom title template (empty = default \"Nvbeam - ~/path\",\n"
                 "#                     # or \"<project> - ~/path\" after a switcher project pick).\n"
                 "#                     # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,\n"
                 "#                     # %f file name, %F file path (~-shortened), %% literal %\n"
@@ -522,7 +522,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             }
             if (readString(*ui, "ui", "window_title", cfg.uiWindowTitle, issues)) {
                 // Unknown placeholders render literally; flag them so a typo
-                // like %P is caught by `neobeam -k` instead of shipping as-is.
+                // like %P is caught by `nvbeam -k` instead of shipping as-is.
                 const QString &tpl = cfg.uiWindowTitle;
                 for (int i = 0; i + 1 < tpl.size(); ++i) {
                     if (tpl.at(i) != QLatin1Char('%'))

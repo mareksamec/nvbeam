@@ -1,18 +1,18 @@
 -- minimap.lua
--- Registered once by neobeam (mainwindow.cpp); defines two functions the GUI
--- calls via tiny `return neobeam.*()` chunks instead of recompiling this file:
---   neobeam.minimap_view(): scroll/cursor state + changedtick. Cheap; polled
+-- Registered once by nvbeam (mainwindow.cpp); defines two functions the GUI
+-- calls via tiny `return nvbeam.*()` chunks instead of recompiling this file:
+--   nvbeam.minimap_view(): scroll/cursor state + changedtick. Cheap; polled
 --     per flush. The GUI compares the tick and debounces the scan below, so
 --     typing no longer triggers a treesitter parse per keystroke.
---   neobeam.minimap_scan(): full highlight scan of up to 2000 lines.
+--   nvbeam.minimap_scan(): full highlight scan of up to 2000 lines.
 --     Expensive; called only after edits settle.
-_G.neobeam = _G.neobeam or {}
+_G.nvbeam = _G.nvbeam or {}
 
 -- Highlight-name -> color cache. Persists across scans; only a colorscheme
 -- change can invalidate the mapping.
 local fg_cache = {}
 vim.api.nvim_create_autocmd("ColorScheme", {
-    group = vim.api.nvim_create_augroup("neobeam_minimap", { clear = true }),
+    group = vim.api.nvim_create_augroup("nvbeam_minimap", { clear = true }),
     callback = function() fg_cache = {} end,
 })
 
@@ -32,7 +32,7 @@ local function get_fg(hl_name)
     return fg
 end
 
-function neobeam.minimap_view()
+function nvbeam.minimap_view()
     local buf = vim.api.nvim_get_current_buf()
     local win = vim.api.nvim_get_current_win()
     local info = vim.fn.getwininfo(win)[1]
@@ -45,7 +45,7 @@ function neobeam.minimap_view()
     }
 end
 
-function neobeam.minimap_scan()
+function nvbeam.minimap_scan()
     local buf = vim.api.nvim_get_current_buf()
     local win = vim.api.nvim_get_current_win()
     local total = vim.api.nvim_buf_line_count(buf)

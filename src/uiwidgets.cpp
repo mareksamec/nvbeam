@@ -602,7 +602,7 @@ private:
 /// git-branch outline from ionicons v5, MIT - three rings, a trunk and a
 /// curve), and drawing it means the pen takes the segment's own foreground,
 /// instead of shipping a black SVG that would need recolouring per theme and
-/// a runtime Qt6::Svg dependency the rest of neobeam avoids.
+/// a runtime Qt6::Svg dependency the rest of nvbeam avoids.
 class BranchIcon : public QWidget
 {
 public:
@@ -875,7 +875,7 @@ void StatuslineWidget::refresh()
         static constexpr int kMaxTooltipFiles = 20;
         static const QString kChangedFileColor   = QStringLiteral("#98c379"); // OneDark green
         static const QString kUntrackedFileColor = QStringLiteral("#61afef"); // OneDark blue,
-            // same blue already used elsewhere in neobeam (e.g. the focus-border color)
+            // same blue already used elsewhere in nvbeam (e.g. the focus-border color)
 
         QString tip = QStringLiteral("<b>%1</b>").arg(branchName.toHtmlEscaped());
         if (m_git.ahead || m_git.behind) {

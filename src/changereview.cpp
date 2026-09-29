@@ -13,7 +13,7 @@
 #include <QProcess>
 #include <memory>
 
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
 #include <KSyntaxHighlighting/Definition>
 #include <KSyntaxHighlighting/Repository>
 #include <KSyntaxHighlighting/State>
@@ -144,7 +144,7 @@ QFont diffFont(const ReviewConfig &cfg)
     return font;
 }
 
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
 
 /// The lexer state a line ended in, kept so the next line continues it (a
 /// string or comment running across lines). QSyntaxHighlighter's own int state
@@ -163,7 +163,7 @@ KSyntaxHighlighting::Repository &syntaxRepository()
     return repo;
 }
 
-#endif // NEOBEAM_HAS_SYNTAX
+#endif // NVBEAM_HAS_SYNTAX
 
 } // namespace
 
@@ -173,7 +173,7 @@ DiffHighlighter::DiffHighlighter(const ReviewConfig &cfg, QTextDocument *documen
     m_added.setForeground(cfg.added);
     m_removed.setForeground(cfg.removed);
     m_hunk.setForeground(cfg.hunk);
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
     // A theme matching the panel, which is the terminal's scheme: a light
     // theme's colors would be unreadable on a dark terminal and the other way
     // round.
@@ -185,7 +185,7 @@ DiffHighlighter::DiffHighlighter(const ReviewConfig &cfg, QTextDocument *documen
 
 void DiffHighlighter::setFileName(const QString &path)
 {
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
     if (!m_cfg.syntax)
         return;
     const KSyntaxHighlighting::Definition def =
@@ -217,7 +217,7 @@ void DiffHighlighter::highlightBlock(const QString &text)
     else if (removed)
         setFormat(0, text.size(), m_removed);
 
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
     if (!m_cfg.syntax || !definition().isValid())
         return;
 
@@ -247,7 +247,7 @@ void DiffHighlighter::highlightBlock(const QString &text)
 #endif
 }
 
-#ifdef NEOBEAM_HAS_SYNTAX
+#ifdef NVBEAM_HAS_SYNTAX
 void DiffHighlighter::applyFormat(int offset, int length,
                                   const KSyntaxHighlighting::Format &format)
 {

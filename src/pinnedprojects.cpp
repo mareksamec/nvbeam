@@ -51,9 +51,9 @@ bool save(const QList<ProjectEntry> &projects)
     toml::value document(toml::table{{"projects", entries}});
 
     QByteArray out =
-        "# Projects pinned from the neobeam switcher (Ctrl+P). Written by the\n"
+        "# Projects pinned from the nvbeam switcher (Ctrl+P). Written by the\n"
         "# application: hand edits survive, but comments and layout do not.\n"
-        "# Copy an entry into neobeam.toml to make it a permanent project.\n\n";
+        "# Copy an entry into nvbeam.toml to make it a permanent project.\n\n";
     out += QByteArray::fromStdString(toml::format(document));
 
     QSaveFile file(path);

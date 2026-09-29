@@ -25,10 +25,10 @@ QColor readColorGroup(QSettings &ini, const QString &group)
 
 } // namespace
 
-QStringList neobeamSchemeDirs()
+QStringList nvbeamSchemeDirs()
 {
     return {
-        QCoreApplication::applicationDirPath() + "/../share/neobeam/color-schemes",
+        QCoreApplication::applicationDirPath() + "/../share/nvbeam/color-schemes",
         QCoreApplication::applicationDirPath() + "/../resources/color-schemes",
         QCoreApplication::applicationDirPath() + "/color-schemes",
     };
@@ -39,7 +39,7 @@ QString findColorSchemeFile(const QString &scheme)
     if (scheme.contains(QLatin1Char('/')))
         return QFile::exists(scheme) ? scheme : QString();
 
-    QStringList dirs = neobeamSchemeDirs();
+    QStringList dirs = nvbeamSchemeDirs();
     dirs << QStringLiteral("/usr/share/qtermwidget6/color-schemes")
          << QStringLiteral("/usr/local/share/qtermwidget6/color-schemes")
          << QStringLiteral("/usr/share/qtermwidget5/color-schemes");

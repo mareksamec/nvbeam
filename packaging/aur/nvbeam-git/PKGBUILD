@@ -1,11 +1,11 @@
 # Maintainer: Your Name <your.email@example.com>
-pkgname=neobeam-git
-_pkgname=neobeam
+pkgname=nvbeam-git
+_pkgname=nvbeam
 pkgver=r0.cf5f03b
 pkgrel=1
 pkgdesc="Fast, native Neovim GUI client built with Qt6 and C++ (git)"
 arch=('x86_64')
-url="https://github.com/mareksamec/neobeam"
+url="https://github.com/mareksamec/nvbeam"
 license=('MIT')
 depends=(
     'qt6-base'
@@ -93,8 +93,8 @@ build() {
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
-        -DNEOBEAM_TERMINAL=ON \
-        -DNEOBEAM_SYNTAX=ON \
+        -DNVBEAM_TERMINAL=ON \
+        -DNVBEAM_SYNTAX=ON \
         -Wno-dev
     cmake --build build -j"$(nproc)"
 }

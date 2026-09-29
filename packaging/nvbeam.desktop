@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
-Name=Neobeam
+Name=Nvbeam
 GenericName=Neovim GUI
 Comment=Fast native Neovim GUI client
-Exec=neobeam %F
-Icon=neobeam
+Exec=nvbeam %F
+Icon=nvbeam
 Terminal=false
 Categories=Utility;TextEditor;Development;
 MimeType=text/plain;
 # Must match the application's WM class so the running window groups under this
 # launcher entry instead of showing a generic icon.
-StartupWMClass=neobeam
+StartupWMClass=nvbeam

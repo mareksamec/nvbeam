@@ -12,7 +12,7 @@
 #include <QColor>
 #include <QFrame>
 
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
 #include <qtermwidget.h>
 #endif
 
@@ -168,7 +168,7 @@ private:
     /// split an equal share of the panel again.
     void openSplit(const QString &command);
 
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     /// `command` is remembered on the widget (property "_nb_command") so a
     /// shell started later - the panel was still hidden - runs the command
     /// belonging to its own split, and runningCommand() can report it.

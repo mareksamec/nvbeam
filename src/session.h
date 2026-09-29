@@ -9,7 +9,7 @@ class QSettings;
 /// Persists app-managed session state (window geometry, terminal layout) to an
 /// INI file alongside the user config, at AppConfigLocation/session.ini.
 ///
-/// This is intentionally separate from Config (neobeam.toml): the TOML file is
+/// This is intentionally separate from Config (nvbeam.toml): the TOML file is
 /// user-authored and generated with everything commented out, so writing opaque
 /// binary blobs (QSplitter/geometry state) back into it would clobber the user's
 /// formatting. Session state is machine-written and lives in its own file.

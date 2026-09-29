@@ -33,7 +33,7 @@ jobs:
 
       - name: Tag matches project() version
         run: |
-          project=$(sed -n 's/^project(neobeam VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
+          project=$(sed -n 's/^project(nvbeam VERSION \([0-9.]*\).*/\1/p' CMakeLists.txt)
           tag="${RELEASE_TAG#v}"          # "v0.2.8" -> "0.2.8"
           tag="${tag%%-*}"                # "0.2.8-rc1" -> "0.2.8"
           echo "project()=${project} tag=${tag}"
@@ -117,8 +117,8 @@ jobs:
           pkgver="${pkgver//-/_}"         # makepkg forbids hyphens in pkgver ("0.2.0-rc1" -> "0.2.0_rc1")
           sed -i "s/^pkgver=.*/pkgver=${pkgver}/" packaging/arch/PKGBUILD
           git archive --format=tar.gz \
-            --prefix="neobeam-${pkgver}/" \
-            -o "packaging/arch/neobeam-${pkgver}.tar.gz" HEAD
+            --prefix="nvbeam-${pkgver}/" \
+            -o "packaging/arch/nvbeam-${pkgver}.tar.gz" HEAD
 
       - name: Create unprivileged build user
         run: |

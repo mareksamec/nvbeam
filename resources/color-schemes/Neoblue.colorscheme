@@ -1,5 +1,5 @@
-; Neobeam's own scheme: dark blue-purple background (#1c1a2c) with a soft
-; white foreground (#eeeeec). The accent colors echo the neobeam UI defaults
+; Nvbeam's own scheme: dark blue-purple background (#1c1a2c) with a soft
+; white foreground (#eeeeec). The accent colors echo the nvbeam UI defaults
 ; (green #50fa7b, blue #61afef).
 
 [Background]
