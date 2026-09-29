@@ -7,12 +7,12 @@
 
 /// Projects pinned from the switcher, stored in AppConfigLocation/projects.toml.
 ///
-/// Deliberately not written into neobeam.toml: that file is user-authored and
+/// Deliberately not written into nvbeam.toml: that file is user-authored and
 /// ships with everything commented out, so rewriting it through a serializer
 /// would drop the comments and the hand-made layout (the same reasoning that
 /// keeps session state in its own file, see Session). This one is
 /// machine-written and uses the same [[projects]] schema, so an entry can be
-/// moved into neobeam.toml by copying the block.
+/// moved into nvbeam.toml by copying the block.
 namespace PinnedProjects {
 
 /// Absolute path to the pinned-projects file.

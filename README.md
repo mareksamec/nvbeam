@@ -1,8 +1,8 @@
-# Neobeam
+# Nvbeam
 
 A fast, native Neovim GUI client built with Qt6 and C++.
 
-Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the editor using native Qt widgets. It provides a VSCode-like experience with a native terminal panel, minimap, tabline, command line, and completion popup — all driven by Neovim's UI protocol extensions.
+Nvbeam connects to an embedded Neovim instance via msgpack-RPC and renders the editor using native Qt widgets. It provides a VSCode-like experience with a native terminal panel, minimap, tabline, command line, and completion popup — all driven by Neovim's UI protocol extensions.
 
 ## Features
 
@@ -31,8 +31,8 @@ Neobeam connects to an embedded Neovim instance via msgpack-RPC and renders the 
 ## Build
 
 ```sh
-git clone https://github.com/youruser/neobeam.git
-cd neobeam
+git clone https://github.com/youruser/nvbeam.git
+cd nvbeam
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
 ```
@@ -40,7 +40,7 @@ cmake --build build -j$(nproc)
 To enable the embedded terminal (requires qtermwidget6 installed):
 
 ```sh
-cmake -B build -DCMAKE_BUILD_TYPE=Release -DNEOBEAM_TERMINAL=ON
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=ON
 cmake --build build -j$(nproc)
 ```
 
@@ -77,7 +77,7 @@ sudo pacman -S syntax-highlighting
 ## Usage
 
 ```sh
-./build/neobeam [options] [-- nvim-args...]
+./build/nvbeam [options] [-- nvim-args...]
 ```
 
 ### Options
@@ -115,13 +115,13 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 
 ### Project switcher
 
-Starting neobeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), neobeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
+Starting nvbeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), nvbeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
 
 Ctrl+P pins the folder the switcher is pointing at as a project: the path typed in path mode, or the highlighted row in project mode. The input line then asks for the project's `side_command`, prefilled with whatever the side terminal is running at that moment, whether it was started from a `side_command` or typed into the shell by hand. Edit it, or clear it for a plain shell, and Enter writes the pin; Esc abandons it. Ctrl+P on an already pinned project (hollow ◇ marker) removes it again, with no prompt. Projects declared in `[[projects]]` (filled ◆) are yours to edit and cannot be removed from the switcher.
 
 A detected command is the foreground process's real argv, so a shell alias or a tool launched through an interpreter shows up resolved (`claude-personal` may read as the binary it runs). That is why the prompt is editable rather than silent.
 
-Pins are written to `~/.config/neobeam/projects.toml`, not to your config: `neobeam.toml` is hand-authored and a serializer would strip its comments and layout. The file uses the same `[[projects]]` schema, so moving a pin into the config for good, or giving it a different `side_command`, is a copy-paste.
+Pins are written to `~/.config/nvbeam/projects.toml`, not to your config: `nvbeam.toml` is hand-authored and a serializer would strip its comments and layout. The file uses the same `[[projects]]` schema, so moving a pin into the config for good, or giving it a different `side_command`, is a copy-paste.
 
 Ctrl+D switches the same input line to path mode, for opening anything that is neither pinned nor recent. It starts at nvim's cwd and completes what you type against the real directory tree: type `~/Proj`, press Tab and the input becomes `~/Projects/`; each further Tab cycles to the next matching entry. Enter confirms the completion (a folder's contents are then listed, so Tab/Enter walks down the tree) and the next Enter opens what the path names. Right completes and confirms in one keystroke, at the end of the line only. Relative paths resolve against nvim's cwd, and dotfiles appear once the typed name starts with `.`. Ctrl+D returns to project mode.
 
@@ -196,7 +196,7 @@ panel's full width instead of as text color, with the leading `+`/`-` keeping
 the diff color.
 Set `[review] syntax = false` for plain diff coloring: only added, removed and
 hunk lines get a color, and the code itself stays in the panel's foreground.
-The key needs a binary built with KF6SyntaxHighlighting; `neobeam --version`
+The key needs a binary built with KF6SyntaxHighlighting; `nvbeam --version`
 lists the optional features the build has, and with `syntax` missing there the
 setting has nothing to turn on. The panel draws itself in the
 terminal's colors: the scheme named by `[terminal] color_scheme` (and the
@@ -222,7 +222,7 @@ file grows before it scrolls on its own.
 
 ### Drag & drop
 
-Drop files from your file manager onto Neobeam to open them.
+Drop files from your file manager onto Nvbeam to open them.
 
 **Onto the buffer area**, the file opens in the Neovim window under the cursor. Hold a modifier while dropping to choose placement:
 
@@ -241,16 +241,16 @@ Dropping multiple files opens each one with the chosen command. Paths are passed
 
 Both terminals (bottom panel and side terminal) handle links the same way. URLs and e-mail addresses written with a scheme are underlined on hover and open in your browser on click; right-clicking one offers **Open Link** / **Copy Link**.
 
-Some links cannot be recognized that way — a URL written without a scheme (`www.example.com`, `github.com/user/repo`), or one a TUI application wrapped across lines inside its own frame. For those, select the link text and press **Ctrl+Shift+L**: neobeam takes the link from the selection, joins fragments split across lines, and completes a missing scheme. A double-click selects a whole URL in one go (see `[terminal] word_characters`).
+Some links cannot be recognized that way — a URL written without a scheme (`www.example.com`, `github.com/user/repo`), or one a TUI application wrapped across lines inside its own frame. For those, select the link text and press **Ctrl+Shift+L**: nvbeam takes the link from the selection, joins fragments split across lines, and completes a missing scheme. A double-click selects a whole URL in one go (see `[terminal] word_characters`).
 
-Links that an application only sends as an OSC 8 hyperlink (clickable text whose URL is never printed) cannot be opened at all — qtermwidget does not implement that escape sequence, so the URL never reaches neobeam.
+Links that an application only sends as an OSC 8 hyperlink (clickable text whose URL is never printed) cannot be opened at all — qtermwidget does not implement that escape sequence, so the URL never reaches nvbeam.
 
 ## Configuration
 
-Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path given with `-c`/`--config`. On first run, a default config file is generated with all options commented out:
+Nvbeam reads its config from `~/.config/nvbeam/nvbeam.toml`, or from the path given with `-c`/`--config`. On first run, a default config file is generated with all options commented out:
 
 ```toml
-# Neobeam configuration
+# Nvbeam configuration
 
 # [font]
 # family = "Monospace"
@@ -264,7 +264,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)
 # foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
 # background = ""  # override scheme background color (empty = scheme default)
 # shell = ""  # shell program (empty = system default)
@@ -319,7 +319,7 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
 # branch_switcher_font = "monospace"  # git branch switcher popup font family
 # branch_switcher_font_size = 10  # its list rows; the input line is one point larger
-# window_title = ""  # custom title template (empty = default "Neobeam - ~/path",
+# window_title = ""  # custom title template (empty = default "Nvbeam - ~/path",
 #                    # or "<project> - ~/path" after a switcher project pick).
 #                    # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,
 #                    # %f file name, %F file path (~-shortened), %% literal %
@@ -350,9 +350,9 @@ Neobeam reads its config from `~/.config/neobeam/neobeam.toml`, or from the path
 # path = "~/work/otherproject"  # only path is required; side terminal runs a plain shell
 ```
 
-A ready-to-copy `neobeam.toml.example` is also included in the project root.
+A ready-to-copy `nvbeam.toml.example` is also included in the project root.
 
-Run `neobeam -k` (optionally with `-c <path>`) to validate the config without starting the GUI. Unknown sections or options, wrong value types and invalid values (colors, enums) are reported as warnings; a value that fails validation falls back to its default instead of aborting the load.
+Run `nvbeam -k` (optionally with `-c <path>`) to validate the config without starting the GUI. Unknown sections or options, wrong value types and invalid values (colors, enums) are reported as warnings; a value that fails validation falls back to its default instead of aborting the load.
 
 ### Configuration options
 
@@ -369,7 +369,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `height` — Terminal panel startup height in pixels (default: `300`)
 - `font` — Terminal font family; empty uses the global font (default: `""`)
 - `font_size` — Terminal font size in points; `0` uses the global font size (default: `0`)
-- `color_scheme` — Color scheme name (default: `"Neoblue"`, neobeam's own dark blue scheme; `"OneDark"` — based on onedark.nvim with a slightly darker background than the editor — and `"Dracula"` also ship with neobeam). Any scheme installed with qtermwidget works too (`Linux`, `Nord`, `Solarized`, ...), as does a full path to a `.colorscheme` file
+- `color_scheme` — Color scheme name (default: `"Neoblue"`, nvbeam's own dark blue scheme; `"OneDark"` — based on onedark.nvim with a slightly darker background than the editor — and `"Dracula"` also ship with nvbeam). Any scheme installed with qtermwidget works too (`Linux`, `Nord`, `Solarized`, ...), as does a full path to a `.colorscheme` file
 - `foreground` — Override the scheme's text color, e.g. `"#f8f8f2"`; empty keeps the scheme's color (default: `""`)
 - `background` — Override the scheme's background color; empty keeps the scheme's color (default: `""`)
 - `shell` — Shell program to launch; empty uses the system default (default: `""`)
@@ -404,7 +404,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: `"#61afef"`)
 - `branch_switcher_font` — Font family of the git branch switcher popup. A monospace family is what lets its commit-date column line up; a proportional one works too, the dates just stop aligning exactly (default: `"monospace"`)
 - `branch_switcher_font_size` — Point size of the branch switcher's list rows; the input line above them renders one point larger. Accepted range 4-72, clamped with a warning outside it (default: `10`)
-- `window_title` — Custom window title template. Empty uses the default title: `Neobeam - ~/path`, plain `Neobeam` for the home directory, or `<project name> - ~/path` after picking a pinned project in the switcher. Placeholders: `%p` project name (empty when no project is active), `%d` cwd (`~`-shortened), `%D` cwd (absolute), `%f` current file name, `%F` current file path (`~`-shortened), `%%` literal `%` (default: `""`)
+- `window_title` — Custom window title template. Empty uses the default title: `Nvbeam - ~/path`, plain `Nvbeam` for the home directory, or `<project name> - ~/path` after picking a pinned project in the switcher. Placeholders: `%p` project name (empty when no project is active), `%d` cwd (`~`-shortened), `%D` cwd (absolute), `%f` current file name, `%F` current file path (`~`-shortened), `%%` literal `%` (default: `""`)
 
 **`[mouse]`**
 - `terminal_selection` — Terminal-style select/copy in nvim buffers when vim `mouse=` is empty (default: `true`)
@@ -416,7 +416,7 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `restore_terminal` — Restore the terminal split count, split proportions, and expanded state. When enabled, the remembered expanded state takes precedence over `[terminal] start_expanded` (default: `true`). The side terminal is only restored when the launch has a `side_command` (a pinned project opened as a folder); opening a single file starts with it collapsed, without forgetting the remembered state. Starting with no arguments has no project yet, so the side terminal opens when a project with a `side_command` is picked in the switcher
 
 **`[switcher]`**
-- `keep_running` — When nvim exits, keep neobeam running and show the project switcher instead of closing the window (default: `true`)
+- `keep_running` — When nvim exits, keep nvbeam running and show the project switcher instead of closing the window (default: `true`)
 - `max_recent` — How many recent files and folders (each) are remembered for the switcher; `0` disables recents tracking (default: `20`)
 
 **`[[projects]]`** (repeatable)
@@ -425,13 +425,13 @@ Run `neobeam -k` (optionally with `-c <path>`) to validate the config without st
 - `side_command` — Command run in the side terminal while this project is open, e.g. `"claude"` or `"nanocoder"`; empty runs a plain shell (default: `""`)
 - `side_command_2`, `side_command_3` — Further commands, each in its own side terminal split, so several agents run next to each other (default: `""`)
 
-The side terminal commands are per-project: opening a project (via the switcher or `neobeam <folder>`) selects the matching entry and opens one split per configured command, side by side. On a project switch the side terminal moves to the project directory and runs the new project's commands; if a command is involved (old or new), its splits are replaced with a fresh shell per command, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a command also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
+The side terminal commands are per-project: opening a project (via the switcher or `nvbeam <folder>`) selects the matching entry and opens one split per configured command, side by side. On a project switch the side terminal moves to the project directory and runs the new project's commands; if a command is involved (old or new), its splits are replaced with a fresh shell per command, while a plain shell with no command on either side is kept and just changes directory. Picking a project that defines a command also opens the side terminal if it was collapsed — projects without one leave the panel as it is.
 
 Splits you open yourself with **+** (Ctrl+Shift+E) run a plain shell, never the project's command, so splitting a panel that is already running an agent does not start a second copy of it.
 
-Projects pinned from the switcher with Ctrl+P are written to `~/.config/neobeam/projects.toml` in this same format, so an entry can be moved here by copying the block. A path present in both files is shown once, and this file wins, which is how a pin gets a `side_command` it was not created with.
+Projects pinned from the switcher with Ctrl+P are written to `~/.config/nvbeam/projects.toml` in this same format, so an entry can be moved here by copying the block. A path present in both files is shown once, and this file wins, which is how a pin gets a `side_command` it was not created with.
 
-Session state is stored separately from your config, in `~/.config/neobeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
+Session state is stored separately from your config, in `~/.config/nvbeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
 
 ## License
 

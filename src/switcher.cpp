@@ -70,7 +70,7 @@ SwitcherItem itemForPath(const QFileInfo &info)
 }
 
 /// Row marker. A project pinned from here is hollow, a project declared in
-/// neobeam.toml is filled: only the hollow ones can be unpinned with Ctrl+P.
+/// nvbeam.toml is filled: only the hollow ones can be unpinned with Ctrl+P.
 QChar itemGlyph(const SwitcherItem &item)
 {
     switch (item.kind) {
@@ -474,10 +474,10 @@ void SwitcherWidget::togglePin()
         for (const SwitcherItem &item : m_items) {
             if (item.path == dir) {
                 pinned = item.pinned;
-                // A folder already declared in neobeam.toml is a project the
+                // A folder already declared in nvbeam.toml is a project the
                 // app must not touch, and saying so beats a silent no-op.
                 if (item.kind == SwitcherItem::Project && !item.pinned) {
-                    setStatus(QStringLiteral("Already a project in neobeam.toml"));
+                    setStatus(QStringLiteral("Already a project in nvbeam.toml"));
                     return;
                 }
                 break;
@@ -493,7 +493,7 @@ void SwitcherWidget::togglePin()
             return;
         }
         if (item.kind == SwitcherItem::Project && !item.pinned) {
-            setStatus(QStringLiteral("Declared in neobeam.toml, remove it there"));
+            setStatus(QStringLiteral("Declared in nvbeam.toml, remove it there"));
             return;
         }
         dir = item.path;

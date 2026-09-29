@@ -11,18 +11,18 @@
 # the build still succeeds, just without a bundled icon.
 #
 # Usage:
-#   neobeam_generate_icons(
-#       TARGET   neobeam
-#       SVG      ${CMAKE_SOURCE_DIR}/resources/icons/neobeam.svg
+#   nvbeam_generate_icons(
+#       TARGET   nvbeam
+#       SVG      ${CMAKE_SOURCE_DIR}/resources/icons/nvbeam.svg
 #       SIZES    16 24 32 48 64 128 256
 #       OUT_DIR  ${CMAKE_BINARY_DIR}/generated-icons
 #   )
 #
 # On success it sets two variables in the caller's scope:
-#   NEOBEAM_ICON_PNGS   absolute paths of the generated PNG files
-#   NEOBEAM_ICON_SIZES  the sizes that were actually generated (parallel list)
+#   NVBEAM_ICON_PNGS   absolute paths of the generated PNG files
+#   NVBEAM_ICON_SIZES  the sizes that were actually generated (parallel list)
 
-function(neobeam_generate_icons)
+function(nvbeam_generate_icons)
     set(options "")
     set(oneValueArgs TARGET SVG OUT_DIR)
     set(multiValueArgs SIZES)
@@ -37,8 +37,8 @@ function(neobeam_generate_icons)
         message(STATUS
             "No SVG rasterizer (rsvg-convert / ImageMagick) found — "
             "application icon will not be generated.")
-        set(NEOBEAM_ICON_PNGS "" PARENT_SCOPE)
-        set(NEOBEAM_ICON_SIZES "" PARENT_SCOPE)
+        set(NVBEAM_ICON_PNGS "" PARENT_SCOPE)
+        set(NVBEAM_ICON_SIZES "" PARENT_SCOPE)
         return()
     endif()
 
@@ -47,7 +47,7 @@ function(neobeam_generate_icons)
     set(_pngs "")
     set(_sizes "")
     foreach(size IN LISTS ARG_SIZES)
-        set(_out "${ARG_OUT_DIR}/neobeam_${size}.png")
+        set(_out "${ARG_OUT_DIR}/nvbeam_${size}.png")
 
         if(RSVG_CONVERT)
             # rsvg-convert renders at exact pixel dimensions with transparency.
@@ -76,10 +76,10 @@ function(neobeam_generate_icons)
         # Generated outputs must be flagged so the resource compiler accepts
         # them as build-time dependencies rather than expecting them on disk.
         # The alias gives each PNG a stable, predictable resource path that
-        # main.cpp can load (icons/neobeam_<size>.png).
+        # main.cpp can load (icons/nvbeam_<size>.png).
         set_source_files_properties("${_out}" PROPERTIES
             GENERATED TRUE
-            QT_RESOURCE_ALIAS "icons/neobeam_${size}.png")
+            QT_RESOURCE_ALIAS "icons/nvbeam_${size}.png")
 
         list(APPEND _pngs "${_out}")
         list(APPEND _sizes "${size}")
@@ -88,10 +88,10 @@ function(neobeam_generate_icons)
     # Compile the rasterized PNGs into the target as a Qt resource. The target
     # signature of qt6_add_resources wires the custom-command outputs as proper
     # build dependencies, so the icons are generated before RCC runs.
-    qt6_add_resources(${ARG_TARGET} "neobeam_app_icons"
+    qt6_add_resources(${ARG_TARGET} "nvbeam_app_icons"
                       PREFIX "/"
                       FILES ${_pngs})
 
-    set(NEOBEAM_ICON_PNGS "${_pngs}" PARENT_SCOPE)
-    set(NEOBEAM_ICON_SIZES "${_sizes}" PARENT_SCOPE)
+    set(NVBEAM_ICON_PNGS "${_pngs}" PARENT_SCOPE)
+    set(NVBEAM_ICON_SIZES "${_sizes}" PARENT_SCOPE)
 endfunction()

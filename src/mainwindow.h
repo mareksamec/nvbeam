@@ -61,7 +61,7 @@ private:
     /// Ctrl+Shift+B both land here). No-op without a git segment.
     void toggleBranchSwitcher();
 
-    /// Projects declared in neobeam.toml, then the ones pinned from the
+    /// Projects declared in nvbeam.toml, then the ones pinned from the
     /// switcher, then recent folders and files (deduplicated, stale paths
     /// pruned).
     QList<SwitcherItem> switcherItems() const;
@@ -89,9 +89,9 @@ private:
 
     /// Compose and set the window title. With [ui] window_title set, renders
     /// that template (%p project, %d/%D cwd, %f/%F file, %% literal).
-    /// Otherwise: "Neobeam - ~/path", plain "Neobeam" for an empty/home cwd
+    /// Otherwise: "Nvbeam - ~/path", plain "Nvbeam" for an empty/home cwd
     /// (nvim's default startup cwd, not a project), or "<project> - ~/path"
-    /// with no "Neobeam" while a switcher-selected project is active (cwd
+    /// with no "Nvbeam" while a switcher-selected project is active (cwd
     /// still in its directory).
     void applyWindowTitle();
 

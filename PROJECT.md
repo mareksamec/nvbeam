@@ -1,4 +1,4 @@
-# Neobeam - Project Phases
+# Nvbeam - Project Phases
 
 ## Phase 1: Skeleton + Connection ✓
 - [x] CMake project scaffold with Qt6
@@ -17,7 +17,7 @@
 - [x] Font configuration (family, size, bold/italic, hinting, antialiasing)
 - [x] `ext_hlstate` semantic highlights
 - [x] Smooth scrolling (deferred to Phase 4 — needs per-window grids)
-- [x] TOML config loading (~/.config/neobeam/neobeam.toml)
+- [x] TOML config loading (~/.config/nvbeam/nvbeam.toml)
 
 ## Phase 4: Multi-grid + UI Chrome ✓
 - [x] `ext_multigrid` (per-window grids, floating windows, z-ordering)
@@ -34,9 +34,9 @@
 - [x] Image rendering (via `vim.ui.img` API when available)
 
 ## Phase 6: Native Image Preview
-- [ ] Custom RPC notification handler (`neobeam_image_show`, `neobeam_image_hide`)
+- [ ] Custom RPC notification handler (`nvbeam_image_show`, `nvbeam_image_hide`)
 - [ ] Signal pipeline: NvimProcess → MainWindow → ImageRenderer
-- [ ] Bundled Lua plugin (`neobeam_preview.lua`) with adapter pattern for file browsers:
+- [ ] Bundled Lua plugin (`nvbeam_preview.lua`) with adapter pattern for file browsers:
   - [ ] netrw / Lexplore
   - [ ] oil.nvim
   - [ ] neo-tree.nvim
@@ -55,42 +55,42 @@
 - [x] Ctrl + Shift + E splits the terminal
 - [x] Ctrl + Shift + W closes active split
 - [x] Instead add (arrow down button) that sends current nvim cwd to all open terminals.
-- [x] When a folder is open with neobeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
-- [x] Ctrl+Tab anywhere in the neobeam should cycle between terminals and nvim area.
+- [x] When a folder is open with nvbeam, session restore should be ignored and the folder path should be open both in nvim buffer and terminal cwd.
+- [x] Ctrl+Tab anywhere in the nvbeam should cycle between terminals and nvim area.
 - [x] Side terminal - apart from bottom terminal pane add button to open side temrinal. This will be in the space next to the minimap. It is intended for the to run things like claude or nanocoder in the cli. It should always open in the same folder as current nvim cwd:
     - [x] Add config option for default command to run with side terminal e.g. claude, nanocoder
     - [x] Side terminal is not affected by the "Send cwd to all terminals button"
 - [x] Add independent font configuration for the side terminal.
 - [x] For all terminals, add keyboard shortcuts Ctrl - to decrease the font size and Ctrl = to increase it. Holding Ctrl + mouse wheel up and down will also increase/decrease the term font.
-- [x] Add option to keep neobeam running when nvim buffer is exited
+- [x] Add option to keep nvbeam running when nvim buffer is exited
 - [x] Project switcher
-    - [x] Add project switcher - when neobeam is started without argument a project switcher with fzf search through recently opened folders and files (Like nvim Telescope)
-    - [x] Switcher can use qt gui elements with typing area and a drop down list, maybe something like k runner in the middle of open neobeam window
+    - [x] Add project switcher - when nvbeam is started without argument a project switcher with fzf search through recently opened folders and files (Like nvim Telescope)
+    - [x] Switcher can use qt gui elements with typing area and a drop down list, maybe something like k runner in the middle of open nvbeam window
     - [x] When a file is selected, cwd of nvim and all terminals (including side term) changes to the directory where the selected file is.
-    - [x] You can also projects in neobeam.toml that will be on top of the switcher list.
+    - [x] You can also projects in nvbeam.toml that will be on top of the switcher list.
     - [x] You can configure side term command for each specific folder or leave it without any command.
     - [x] We will remove the default side term command from the config
-    - [x] When a project is selected with Project switcher, Neobeam window title should change to <Project name> - <path> the word "Neobeam" Should not show. e.g.:  Myproject - ~/projects/myproject -> project name shows while nvim cwd stays in the project dir; cd elsewhere reverts to "Neobeam - ~/path". New neobeam.title debug trace category for headless checks.
-    - [x] Configurable window title: [ui] window_title template, empty = default behaviour. Placeholders %p project name, %d cwd (~), %D cwd (absolute), %f file name, %F file path (~), %% literal. Current file pushed via existing neobeam_file BufEnter notification; unknown placeholders render literally and warn in `neobeam -k`.
+    - [x] When a project is selected with Project switcher, Nvbeam window title should change to <Project name> - <path> the word "Nvbeam" Should not show. e.g.:  Myproject - ~/projects/myproject -> project name shows while nvim cwd stays in the project dir; cd elsewhere reverts to "Nvbeam - ~/path". New nvbeam.title debug trace category for headless checks.
+    - [x] Configurable window title: [ui] window_title template, empty = default behaviour. Placeholders %p project name, %d cwd (~), %D cwd (absolute), %f file name, %F file path (~), %% literal. Current file pushed via existing nvbeam_file BufEnter notification; unknown placeholders render literally and warn in `nvbeam -k`.
 - [x] Config
-    - [x] Add simple config validation e.g. `neobeam -k`
+    - [x] Add simple config validation e.g. `nvbeam -k`
     - [x] Handle non-existent or wrong options in the .toml config.
 - [x] **Term + Project improvements**
     - [x] Terminal select + copy to PRIMARY + CLIPBOARD 
         - [x] Add separate [terminal] config option for this? -> yes, [terminal] copy_on_select (default true)
         - [x] How to handle possible conflict with tools like wl-copy? -> no conflict; standard last-writer-wins selection semantics, no coordination needed
-    - [x] Neobeam window title
-        - [x] Make Neobeam uppercase
-        - [x] Append project path or cwd folder path (if no project selected) e.g. Neobeam - ~/projects/neobeam
+    - [x] Nvbeam window title
+        - [x] Make Nvbeam uppercase
+        - [x] Append project path or cwd folder path (if no project selected) e.g. Nvbeam - ~/projects/nvbeam
     - [x] Nvim buffer artifacts
-        - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Neobeam window is stretched wide.
-        - [x] Nvim terminal buffers (when you open one in the neobeam nvim buffer) also leaves the horizontal buffer separator artifact in the neobeam nvim buffer when closed.
+        - [x] Sometimes when snacks.nvim file manager or nvim-tree is opened it leaves the vertical line in the buffer. Happens mainly when Nvbeam window is stretched wide.
+        - [x] Nvim terminal buffers (when you open one in the nvbeam nvim buffer) also leaves the horizontal buffer separator artifact in the nvbeam nvim buffer when closed.
         - [x] When there is a warning or error displayed in the nvim buffer statusline it is clipped. (e.g. lua plugin error, or some vim script error etc.) -> new approach on fix/warning-error-area: ext_messages now actually passed at ui_attach (was configured but never sent, so the message grid was in use); MessageWidget reworked into a timestamped, expandable 2-line message log below the buffer ("Messages" toggle, scrollbar, selectable + auto-copy like statusline). Verified headless (msg_show kinds echomsg/lua_error arrive incl. full traceback, msg_set_pos gone); awaiting visual confirmation
-    - [x] Neobeam UI statusline:
+    - [x] Nvbeam UI statusline:
         - [x] Add git status (optimize performance avoid frequent scanning, or use push model) -> push model: nvim autocmd rpcnotify + .git HEAD/index file watcher + cwd changes, debounced async `git status`; counts in accent_color ([ui] git_status option)
 
 ## Phase 8: Text selection mode
-- [x] Implement mode where nvim buffer in neobeam behaves as if nvim is set to mouse= (mouse off)
+- [x] Implement mode where nvim buffer in nvbeam behaves as if nvim is set to mouse= (mouse off)
     - [x] The cursor is set to beam and you have a selection in the term. -> mouse pointer becomes I-beam while mode is on; nvim caret stays nvim-controlled
     - [x] Selected text is copied to Clipboard -> CLIPBOARD + PRIMARY, same targets as the terminal panels; explicit selections copy regardless of [mouse] auto_copy
     - [x] Mode can be toggled with a button or keyboard shortcut Ctrl + Shift + . -> both: checkable "⌶" button in the bottom-right strip + Ctrl+Shift+.
@@ -111,7 +111,7 @@
 ## Fixes/Adjustments
 
 ### General
-- [x] Add switch -c to start neobeam with a custom config file path
+- [x] Add switch -c to start nvbeam with a custom config file path
 - [x] Create example config file in the project root
 ### Term
 - [ ] Enable sixel support for QTermWidget (blocked: upstream has no sixel support)
@@ -119,7 +119,7 @@
 - [x] Add option to enable PuTTY-style right-click paste in the terminal to the config
 - [x] Add options to enable text anti-aliasing and hinting for terminal font
 ### Improvements 2026-08-03
-- [x] It seems something in neobeam terminals captures Shift+Tab for the terminals (e.g. Shift+Tab is used in Codex CLI)
+- [x] It seems something in nvbeam terminals captures Shift+Tab for the terminals (e.g. Shift+Tab is used in Codex CLI)
     - It was Qt's own focus navigation: `Konsole::TerminalDisplay::focusNextPrevChild()` swallows
       plain Tab but deliberately leaves Shift+Tab (`Key_Backtab`) to the window, which moved focus
       out of the panel. `MainWindow::focusNextPrevChild()` now refuses navigation while a terminal
@@ -128,13 +128,13 @@
     - Handling is identical for both panels: every split of both is created by
       `TerminalPanel::createTermWidget()`, which is the only place `urlActivated` is wired.
     - qtermwidget's `UrlFilter` only matches URLs with an explicit scheme, on a single line.
-      Added on the neobeam side: right-click on a detected link offers Open/Copy Link (it used to
+      Added on the nvbeam side: right-click on a detected link offers Open/Copy Link (it used to
       just paste with `right_click_paste`), a wider matcher behind Ctrl+Shift+L that resolves the
       link in the terminal selection (scheme-less hosts, e-mail, fragments an application wrapped
       across lines), and `[terminal] word_characters` so a double-click grabs a whole URL.
     - Still impossible: OSC 8 hyperlinks (see Upstream issues below) - the URL never reaches the
-      screen buffer, so nothing in neobeam can recover it.
-- [x] If Neobeam is opened without side terminal command e.e.g "Open file with Neobeam" or from file picker, start with side terminal collapsed)
+      screen buffer, so nothing in nvbeam can recover it.
+- [x] If Nvbeam is opened without side terminal command e.e.g "Open file with Nvbeam" or from file picker, start with side terminal collapsed)
     - The saved "side terminal was visible" state is only restored when the launch resolves a
       `side_command`, and a suppressed panel does not overwrite that saved state on close, so the
       next launch inside the project still brings it back.
@@ -175,7 +175,7 @@
     - Config-gated, off by default: `[terminal] refresh_prompt_on_git_change` (`config.h`/
       `config.cpp`, `TerminalConfig::refreshPromptOnGitChange`). It's still a keystroke
       injected into a live shell, so `refreshPromptOnBranchChange()` itself no-ops unless
-      enabled - documented with a warning in README.md and neobeam.toml.example.
+      enabled - documented with a warning in README.md and nvbeam.toml.example.
     - "Nothing typed" has no public API to check (QTermWidget exposes no way to read the
       shell's readline buffer or the current screen line), so it's tracked as a heuristic:
       an event filter on each split's internal `Konsole::TerminalDisplay` (same object
@@ -210,7 +210,7 @@
 
 
 ### Improvement segment 2026-08-31
-- [x] Advanced git stats. I'd like that when I hover my mouse over git section of neobeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
+- [x] Advanced git stats. I'd like that when I hover my mouse over git section of nvbeam statusline I'll see some more detailed git stats (hover frame with text). It would have list of changed files. Number of commits etc. Changed files would be in OneDark green. If the list of changed file is too long. show just ...and 20 more files, etc. Mind the performance for this one.
     - No new git process: `GitStatusInfo` gained `changedFiles` (`gitstatus.h`), populated in
       `parseStatus()`'s existing per-entry loop (`gitstatus.cpp`), which already read every status
       line and previously discarded the path after counting it. "Number of commits" reads as
@@ -221,7 +221,7 @@
       I/O), not gated behind a "did git status change" check.
     - Capped at 20 files total (`kMaxTooltipFiles`), then `...and {overflow} more files`. Tracked
       (staged/modified) paths colored `#98c379` (OneDark green), untracked paths `#61afef` (OneDark
-      blue, the same blue already used elsewhere in neobeam for the focus-border color) - tracked
+      blue, the same blue already used elsewhere in nvbeam for the focus-border color) - tracked
       shown first, then untracked, both literal colors regardless of the statusline's own Tokyo
       Night palette. `GitStatusInfo` splits `changedFiles`/`untrackedFiles` into separate lists so
       the two can be colored differently without re-deriving status per path in the UI layer.
@@ -243,7 +243,7 @@
       before a shortcut fires, so a `QShortcut` reached everywhere except inside the terminal -
       the same reason the Ctrl+-/Ctrl+= font keys already live there. The modifier match is exact,
       so plain Ctrl+B (nvim's page-up, tmux's prefix) is untouched and only the Shift variant is
-      claimed. No other neobeam binding uses it; the one wrinkle is that a terminal cannot
+      claimed. No other nvbeam binding uses it; the one wrinkle is that a terminal cannot
       normally tell Ctrl+Shift+B from Ctrl+B, so a tmux user who holds Shift over the prefix key
       gets the switcher, and G is not the way out: Ctrl+Shift+G is kept free because the CLI
       agents in the side terminal own it (see src/shortcuts.h). The click needed `SelectableLabel`
@@ -286,7 +286,7 @@
       ionicons' git-branch outline - three rings, a trunk and a cubic curve - instead of loaded
       from the SVG. Painting it means the pen takes the segment's own foreground colour, so it
       follows the statusline palette with no per-theme recolouring and no runtime Qt6::Svg, which
-      the rest of neobeam avoids too. The artwork's bounding box inside the 512 viewBox (the rings
+      the rest of nvbeam avoids too. The artwork's bounding box inside the 512 viewBox (the rings
       sit off-centre in it) is mapped onto the glyph, pen width included, and the icon shares the
       branch slot's colours, visibility, tooltip and click handler. Geometry checked by rendering
       the same paint code to a PNG offscreen, not by running the GUI.
@@ -303,7 +303,7 @@
       constants, so the right-hand one never took effect. The glyph's painted width is fractional,
       so the widget width ceils it; rounding down clipped the right edge at zero right padding.
     - Styled apart from the project switcher on request: highlighted with `[ui] focus_border_color`,
-      the OneDark blue neobeam already uses for the focused pane, instead of the green
+      the OneDark blue nvbeam already uses for the focused pane, instead of the green
       `accent_color`. The border and the selected row are that same colour at fixed alphas via a
       small `rgbaOf()` helper, so configuring the one colour recolours the popup coherently and no
       new config key was needed.
@@ -417,29 +417,32 @@
 
 ## Project rename
 
-Planned rename neobeam → nvbeam ("neobeam" is already used by multiple projects on GitHub).
-Since the repo is still private and no packages are published, this is a clean find-and-replace +
-file renames with no user migration or compatibility shims needed. Do it in one commit/branch —
-the Lua RPC event names exist on both the C++ and Lua side and must change together.
+Renamed neobeam -> nvbeam ("neobeam" is already used by multiple projects on GitHub). The repo was
+still private and no packages were published, so this was a plain find-and-replace plus file
+renames, with no user migration or compatibility shims. Done in one branch because the Lua RPC
+event names exist on both the C++ and Lua side and had to change together.
 
-- [ ] Verify `nvbeam` is free on GitHub and AUR before starting (note: name echoes qutebrowser, unrelated project — accept or reconsider)
-- [ ] Rename the GitHub repo
-- [ ] Build system:
-    - [ ] `CMakeLists.txt`: `project(neobeam ...)`, target name (changes installed binary to `bin/nvbeam`), `NEOBEAM_*` variables and compile definitions (`NEOBEAM_HAS_TERMINAL`, `NEOBEAM_ICON_SIZES`, `NEOBEAM_TERMINAL` option — also referenced in both workflows)
-    - [ ] Icon pipeline: rename `resources/icons/neobeam.svg` + placeholder SVG, generated `neobeam_<size>.png` names in `cmake/AppIcons.cmake` and `main.cpp`
-- [ ] Qt application identity:
-    - [ ] `main.cpp`: `setApplicationName` (determines config dir `~/.config/nvbeam/`), `setDesktopFileName`
-    - [ ] `config.cpp`: hardcoded `neobeam.toml` filename, generated config template text, default window title `"Neobeam - ~/path"`, `neobeam -k` hints
-- [ ] Desktop file + packaging:
-    - [ ] `packaging/neobeam.desktop`: filename, `Name`, `Exec`, `Icon`, `StartupWMClass` (must match `setApplicationName` for taskbar grouping)
-    - [ ] `packaging/arch/PKGBUILD` + `packaging/aur/neobeam-git/`: pkgname, dir name, `url=`, regenerate `.SRCINFO`
-    - [ ] `.github/workflows/release.yml`: tarball prefix and artifact names
-- [ ] Lua/RPC layer (rename C++ and Lua sides together):
-    - [ ] `_G.neobeam` table, augroup names, RPC event names (`neobeam_cwd`, `neobeam_file`, `neobeam_git_event`, `neobeam_image_show/hide`) — listeners in `mainwindow.cpp` match these strings exactly
-    - [ ] `lua/neobeam-plugin.lua` filename (and the `neobeam_preview.lua` install name it documents)
-    - [ ] QLoggingCategory names (`neobeam.minimap`, `neobeam.redraw`, `neobeam.title`) + verify skill references
-- [ ] Config examples + docs: `neobeam.toml`, `neobeam.toml.example`, `README.md`, `PROJECT.md`, `AGENTS.md`
-- [ ] `Neoblue.colorscheme` stays — separate name, no need to touch
+- [x] `nvbeam` is free on GitHub
+- [ ] Rename the GitHub repo (manual step, remote URL follows)
+- [x] Build system: `CMakeLists.txt` project/target name (binary is now `bin/nvbeam`), `NVBEAM_*`
+  variables and compile definitions, both workflows, icon pipeline (`resources/icons/nvbeam.svg`,
+  the placeholder SVG and the generated `nvbeam_<size>.png` names in `cmake/AppIcons.cmake` and
+  `main.cpp`)
+- [x] Qt application identity: `setApplicationName` (config dir is now `~/.config/nvbeam/`),
+  `setDesktopFileName`, the `nvbeam.toml` filename and generated config template in `config.cpp`,
+  the default window title and the `nvbeam -k` hints
+- [x] Desktop file + packaging: `packaging/nvbeam.desktop`, `packaging/arch/PKGBUILD`,
+  `packaging/aur/nvbeam-git/` (pkgname, dir, `url=`, `.SRCINFO`), `packaging/openbsd/`, and the
+  tarball prefix and artifact names in `.github/workflows/release.yml`
+- [x] Lua/RPC layer: `_G.nvbeam`, augroup names, the `nvbeam_cwd` / `nvbeam_file` /
+  `nvbeam_git_event` / `nvbeam_image_show|hide` event names, `lua/nvbeam-plugin.lua` (and the
+  `nvbeam_preview.lua` install name it documents), and the `nvbeam.*` QLoggingCategory names
+  including the verify skills that grep for them
+- [x] Config examples + docs: `nvbeam.toml`, `nvbeam.toml.example`, `README.md`, `PROJECT.md`
+- [x] `Neoblue.colorscheme` name kept; only the tool name inside it changed
+- Existing user state is not migrated: an old `~/.config/neobeam/neobeam.toml` has to be moved to
+  `~/.config/nvbeam/nvbeam.toml` by hand, and the old `neobeam` package/binary uninstalled
+- Completed task files under `tasks/completed/` keep the old name as a historical record
 
 ## Upstream issues
 
@@ -448,7 +451,7 @@ the Lua RPC event names exist on both the C++ and Lua side and must change toget
   emitter is the `TerminalDisplay::selectionChanged()` slot, but the connection from
   `ScreenWindow::selectionChanged` to it is missing in `TerminalDisplay::setScreenWindow()`,
   so there is no usable selection-change notification in the public API.
-  - Workaround in neobeam: copy-on-select (`[terminal] copy_on_select`) installs an event
+  - Workaround in nvbeam: copy-on-select (`[terminal] copy_on_select`) installs an event
     filter on the internal `Konsole::TerminalDisplay` widget and copies the selection on
     left-button release (`TerminalPanel::eventFilter`).
   - If fixed upstream, the event filter can be replaced with a plain connect to
@@ -456,7 +459,7 @@ the Lua RPC event names exist on both the C++ and Lua side and must change toget
 - No sixel image protocol support (blocks the "Enable sixel support" item above). QtermWidget issue here: [552](https://github.com/lxqt/qtermwidget/issues/552)
 - No OSC 8 hyperlink support (verified in 2.4.0: `Vt102Emulation` parses no `ESC ] 8 ; ; uri ST`
   sequence, so the URI is discarded and only the display text reaches the screen buffer). TUI
-  applications that print a label with a hidden URL are therefore unclickable in neobeam, and no
+  applications that print a label with a hidden URL are therefore unclickable in nvbeam, and no
   workaround is possible from the outside - the filter chain that produces link hotspots is not
   reachable through the public API either (`TerminalDisplay::filterChain()` needs a header
   qtermwidget does not install).

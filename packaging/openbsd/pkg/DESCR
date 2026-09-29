@@ -1,4 +1,4 @@
-Neobeam is a fast, native Neovim GUI client built with Qt6 and C++.
+Nvbeam is a fast, native Neovim GUI client built with Qt6 and C++.
 
 It connects to an embedded Neovim instance via msgpack-RPC and renders
 the editor using native Qt widgets: statusline, tabline, command line,

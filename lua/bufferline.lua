@@ -1,10 +1,10 @@
 -- bufferline.lua
--- Registered once by neobeam (mainwindow.cpp). The bufferline timer then calls
--- the tiny chunk `return neobeam.bufferline()` instead of resending and
+-- Registered once by nvbeam (mainwindow.cpp). The bufferline timer then calls
+-- the tiny chunk `return nvbeam.bufferline()` instead of resending and
 -- recompiling this file on every poll.
-_G.neobeam = _G.neobeam or {}
+_G.nvbeam = _G.nvbeam or {}
 
-function neobeam.bufferline()
+function nvbeam.bufferline()
     local bufs = {}
     local cur = vim.api.nvim_get_current_buf()
     for _, b in ipairs(vim.api.nvim_list_bufs()) do
@@ -22,7 +22,7 @@ end
 -- Close a list of buffers in one round trip. Modified buffers are only
 -- deleted when `force` is set; otherwise they are left open and their names
 -- are returned so the GUI can ask before discarding the changes.
-function neobeam.close_buffers(ids, force)
+function nvbeam.close_buffers(ids, force)
     local skipped = {}
     for _, b in ipairs(ids) do
         if vim.api.nvim_buf_is_valid(b) then

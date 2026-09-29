@@ -1,8 +1,8 @@
 -- statusline.lua
--- Registered once by neobeam (mainwindow.cpp). The statusline timer then calls
--- the tiny chunk `return neobeam.statusline()` instead of resending and
+-- Registered once by nvbeam (mainwindow.cpp). The statusline timer then calls
+-- the tiny chunk `return nvbeam.statusline()` instead of resending and
 -- recompiling this file on every poll.
-_G.neobeam = _G.neobeam or {}
+_G.nvbeam = _G.nvbeam or {}
 
 local mode_map = {
     n = "NORMAL", i = "INSERT", v = "VISUAL", V = "V-LINE",
@@ -10,7 +10,7 @@ local mode_map = {
     t = "TERMINAL", s = "SELECT", S = "S-LINE",
 }
 
-function neobeam.statusline()
+function nvbeam.statusline()
     local mode = vim.api.nvim_get_mode().mode
     local buf = vim.api.nvim_get_current_buf()
     local name = vim.api.nvim_buf_get_name(buf)

@@ -1,5 +1,5 @@
-# Neobeam configuration
-# Copy this file to ~/.config/neobeam/neobeam.toml
+# Nvbeam configuration
+# Copy this file to ~/.config/nvbeam/nvbeam.toml
 
 [font]
 # family = "Monospace"
@@ -13,7 +13,7 @@
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)
 # foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
 # background = ""  # override scheme background color (empty = scheme default)
 # shell = ""  # shell program (empty = system default)
@@ -69,7 +69,7 @@
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
 # branch_switcher_font = "monospace"  # git branch switcher popup font family
 # branch_switcher_font_size = 10  # its list rows; the input line is one point larger
-# window_title = ""  # custom title template (empty = default "Neobeam - ~/path",
+# window_title = ""  # custom title template (empty = default "Nvbeam - ~/path",
 #                    # or "<project> - ~/path" after a switcher project pick).
 #                    # Placeholders: %p project name, %d cwd (~-shortened), %D cwd,
 #                    # %f file name, %F file path (~-shortened), %% literal %

@@ -1,6 +1,6 @@
--- ~/.config/nvim/plugin/neobeam_preview.lua
+-- ~/.config/nvim/plugin/nvbeam_preview.lua
 -- Example Lua code
-local group = vim.api.nvim_create_augroup("NeobeamPreview", {})
+local group = vim.api.nvim_create_augroup("NvbeamPreview", {})
 
 vim.api.nvim_create_autocmd("CursorMoved", {
   group = group,
@@ -16,7 +16,7 @@ vim.api.nvim_create_autocmd("CursorMoved", {
       -- Show preview in the right half of the window
       local win = vim.api.nvim_get_current_win()
       local info = vim.fn.getwininfo(win)[1]
-      vim.rpcnotify(0, "neobeam_image_show", {
+      vim.rpcnotify(0, "nvbeam_image_show", {
         path = file,
         row = info.topline,
         col = math.floor(info.width / 2),
@@ -24,7 +24,7 @@ vim.api.nvim_create_autocmd("CursorMoved", {
         height = info.height,
       })
     else
-      vim.rpcnotify(0, "neobeam_image_hide")
+      vim.rpcnotify(0, "nvbeam_image_hide")
     end
   end,
 })

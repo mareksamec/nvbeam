@@ -1,12 +1,12 @@
 COMMENT =	fast native Neovim GUI client built with Qt6
 
 GH_ACCOUNT =	mareksamec
-GH_PROJECT =	neobeam
+GH_PROJECT =	nvbeam
 GH_TAGNAME =	v0.1.0
 
 CATEGORIES =	editors x11
 
-HOMEPAGE =	https://github.com/mareksamec/neobeam
+HOMEPAGE =	https://github.com/mareksamec/nvbeam
 MAINTAINER =	Marek Samec <marek@samec.me>
 
 # MIT
@@ -36,8 +36,8 @@ RUN_DEPENDS =	editors/neovim \
 # qtermwidget in ports is Qt5-based; the embedded terminal needs qtermwidget6.
 # KF6SyntaxHighlighting is not in ports either, so the review diffs keep their
 # own added/removed coloring instead of per-language code coloring.
-CONFIGURE_ARGS =	-DNEOBEAM_TERMINAL=OFF \
-		-DNEOBEAM_SYNTAX=OFF \
+CONFIGURE_ARGS =	-DNVBEAM_TERMINAL=OFF \
+		-DNVBEAM_SYNTAX=OFF \
 		-DFETCHCONTENT_FULLY_DISCONNECTED=ON \
 		-DFETCHCONTENT_SOURCE_DIR_TOML11=${WRKDIR}/toml11-${TOML11_V}
 

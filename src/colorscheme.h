@@ -4,7 +4,7 @@
 #include <QString>
 #include <QStringList>
 
-/// The colors a QTermWidget ".colorscheme" file declares. Loaded by neobeam
+/// The colors a QTermWidget ".colorscheme" file declares. Loaded by nvbeam
 /// itself rather than through QTermWidget, which has no getter for them, so
 /// that native panels (the change review panel) can be drawn in the same
 /// colors as the terminal even in a build without terminal support.
@@ -29,12 +29,12 @@ enum AnsiColor {
     AnsiWhite,
 };
 
-/// Directories neobeam ships its own schemes in, covering both the installed
-/// layout (/usr/bin/neobeam -> /usr/share/neobeam/color-schemes) and the
+/// Directories nvbeam ships its own schemes in, covering both the installed
+/// layout (/usr/bin/nvbeam -> /usr/share/nvbeam/color-schemes) and the
 /// source-tree layout used when running from the build directory.
-QStringList neobeamSchemeDirs();
+QStringList nvbeamSchemeDirs();
 
-/// Locate the .colorscheme file for a scheme name across neobeam's own dirs
+/// Locate the .colorscheme file for a scheme name across nvbeam's own dirs
 /// and the system qtermwidget dirs. A name containing a slash is taken as a
 /// path and used as-is, the same contract QTermWidget::setColorScheme() has.
 /// Returns an empty string if not found.

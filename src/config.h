@@ -12,7 +12,7 @@ struct ConfigIssue {
     QString message;
 };
 
-/// A pinned project from [[projects]] in neobeam.toml. Shown at the top of
+/// A pinned project from [[projects]] in nvbeam.toml. Shown at the top of
 /// the project switcher list.
 struct ProjectEntry {
     QString path;         // absolute, tilde-expanded folder path
@@ -49,7 +49,7 @@ struct Config {
     int terminalHeight = 300;             // startup height in pixels
     QString terminalFont;                 // empty = use global font
     int terminalFontSize = 0;             // 0 = use global fontSize
-    QString terminalColorScheme = "Neoblue"; // QTermWidget color scheme (Neoblue, OneDark, Dracula ship with neobeam)
+    QString terminalColorScheme = "Neoblue"; // QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)
     QString terminalForeground;           // override scheme text color (e.g. "#f8f8f2"); empty = scheme default
     QString terminalBackground;           // override scheme background color; empty = scheme default
     QString terminalShell;                // empty = system default shell

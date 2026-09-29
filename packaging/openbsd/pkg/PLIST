@@ -1,23 +1,23 @@
-@bin bin/neobeam
-share/applications/neobeam.desktop
+@bin bin/nvbeam
+share/applications/nvbeam.desktop
 @tag update-desktop-database
-share/icons/hicolor/128x128/apps/neobeam.png
-share/icons/hicolor/16x16/apps/neobeam.png
-share/icons/hicolor/24x24/apps/neobeam.png
-share/icons/hicolor/256x256/apps/neobeam.png
-share/icons/hicolor/32x32/apps/neobeam.png
-share/icons/hicolor/48x48/apps/neobeam.png
-share/icons/hicolor/64x64/apps/neobeam.png
-share/icons/hicolor/scalable/apps/neobeam.svg
-share/neobeam/
-share/neobeam/color-schemes/
-share/neobeam/color-schemes/Dracula.colorscheme
-share/neobeam/color-schemes/Neoblue.colorscheme
-share/neobeam/color-schemes/OneDark.colorscheme
-share/neobeam/lua/
-share/neobeam/lua/bufferline.lua
-share/neobeam/lua/events.lua
-share/neobeam/lua/gitstatus.lua
-share/neobeam/lua/minimap.lua
-share/neobeam/lua/neobeam-plugin.lua
-share/neobeam/lua/statusline.lua
+share/icons/hicolor/128x128/apps/nvbeam.png
+share/icons/hicolor/16x16/apps/nvbeam.png
+share/icons/hicolor/24x24/apps/nvbeam.png
+share/icons/hicolor/256x256/apps/nvbeam.png
+share/icons/hicolor/32x32/apps/nvbeam.png
+share/icons/hicolor/48x48/apps/nvbeam.png
+share/icons/hicolor/64x64/apps/nvbeam.png
+share/icons/hicolor/scalable/apps/nvbeam.svg
+share/nvbeam/
+share/nvbeam/color-schemes/
+share/nvbeam/color-schemes/Dracula.colorscheme
+share/nvbeam/color-schemes/Neoblue.colorscheme
+share/nvbeam/color-schemes/OneDark.colorscheme
+share/nvbeam/lua/
+share/nvbeam/lua/bufferline.lua
+share/nvbeam/lua/events.lua
+share/nvbeam/lua/gitstatus.lua
+share/nvbeam/lua/minimap.lua
+share/nvbeam/lua/nvbeam-plugin.lua
+share/nvbeam/lua/statusline.lua

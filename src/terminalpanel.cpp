@@ -22,19 +22,19 @@
 #include <QUrl>
 #include <QDebug>
 
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
 namespace {
 
-/// Make neobeam-shipped schemes (Neoblue, the default, plus OneDark and
+/// Make nvbeam-shipped schemes (Neoblue, the default, plus OneDark and
 /// Dracula) resolvable by name in setColorScheme(). Called once; QTermWidget
 /// keeps the dirs in a process-wide list.
-void registerNeobeamSchemeDirs()
+void registerNvbeamSchemeDirs()
 {
     static bool registered = false;
     if (registered)
         return;
     registered = true;
-    for (const QString &dir : neobeamSchemeDirs()) {
+    for (const QString &dir : nvbeamSchemeDirs()) {
         if (QDir(dir).exists())
             QTermWidget::addCustomColorSchemeDir(dir);
     }
@@ -230,7 +230,7 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
 
 QColor TerminalPanel::panelBackgroundColor() const
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     // Same precedence as effectiveColorScheme(): an explicit background
     // override wins over the scheme's own background.
     const QColor configured(m_cfg.background);
@@ -251,7 +251,7 @@ void TerminalPanel::toggle()
 
 int TerminalPanel::splitCount() const
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     return m_terminals.size();
 #else
     return m_splitter ? m_splitter->count() : 0;
@@ -281,7 +281,7 @@ void TerminalPanel::restoreSplits(int count, const QByteArray &splitterState)
 void TerminalPanel::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     // All shells may have exited while the panel was hidden (their finished
     // handlers remove the splits); reopening should present a fresh terminal
     // rather than an empty panel.
@@ -302,7 +302,7 @@ void TerminalPanel::showEvent(QShowEvent *event)
 
 bool TerminalPanel::eventFilter(QObject *watched, QEvent *event)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     // Unsubmitted-input tracking for refreshPromptOnBranchChange(): every key
     // reaching the display widget updates the per-split dirty heuristic.
     if (event->type() == QEvent::KeyPress) {
@@ -353,7 +353,7 @@ void TerminalPanel::setWorkingDirectory(const QString &dir)
     if (!m_cfg.followCwd || dir == m_cwd || dir.isEmpty())
         return;
     m_cwd = dir;
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (m_currentTerm)
         m_currentTerm->changeDir(dir);
 #endif
@@ -364,7 +364,7 @@ void TerminalPanel::broadcastCwd(const QString &dir)
     if (dir.isEmpty())
         return;
     m_cwd = dir;
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     for (auto *term : m_terminals) {
         // Terminals whose shell hasn't started yet (panel still hidden) have
         // no running process for changeDir()'s "cd" keystrokes to reach, so
@@ -380,7 +380,7 @@ void TerminalPanel::broadcastCwd(const QString &dir)
 
 QString TerminalPanel::runningCommand() const
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (!m_currentTerm)
         return QString();
 
@@ -414,7 +414,7 @@ QString TerminalPanel::runningCommand() const
 
 void TerminalPanel::adoptProject(const QString &dir, const QStringList &commands)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     bool anyStarted = false;
     bool anyCommand = false;
     for (auto *term : m_terminals) {
@@ -463,7 +463,7 @@ void TerminalPanel::adoptProject(const QString &dir, const QStringList &commands
 
 bool TerminalPanel::openSelectedLink()
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (!m_currentTerm)
         return false;
     // Line breaks are kept (preserveLineBreaks) because linkInSelection needs
@@ -490,7 +490,7 @@ void TerminalPanel::addTerminal()
 
 void TerminalPanel::openSplit(const QString &command)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     auto *term = createTermWidget(command);
     m_splitter->addWidget(wrapTerminal(term));
     m_currentTerm = term;
@@ -513,7 +513,7 @@ void TerminalPanel::openSplit(const QString &command)
 
 void TerminalPanel::removeCurrentTerminal()
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (!m_currentTerm || m_terminals.size() <= 1)
         return;
 
@@ -530,7 +530,7 @@ void TerminalPanel::removeCurrentTerminal()
 #endif
 }
 
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
 void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
 {
     const bool ctrl = event->modifiers() & Qt::ControlModifier;
@@ -546,7 +546,7 @@ void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
 
 void TerminalPanel::refreshPromptOnBranchChange()
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (!m_cfg.refreshPromptOnGitChange)
         return;
     for (QTermWidget *term : m_terminals) {
@@ -558,7 +558,7 @@ void TerminalPanel::refreshPromptOnBranchChange()
 
 void TerminalPanel::pasteClipboard()
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (m_currentTerm)
         m_currentTerm->pasteClipboard();
 #endif
@@ -566,7 +566,7 @@ void TerminalPanel::pasteClipboard()
 
 void TerminalPanel::focusTerminal()
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (m_currentTerm)
         m_currentTerm->setFocus();
 #endif
@@ -574,7 +574,7 @@ void TerminalPanel::focusTerminal()
 
 bool TerminalPanel::focusTerminalAt(int index)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (index < 0 || index >= m_terminals.size())
         return false;
     m_terminals[index]->setFocus();
@@ -587,7 +587,7 @@ bool TerminalPanel::focusTerminalAt(int index)
 
 int TerminalPanel::indexOfFocused(QWidget *focused) const
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     if (!focused)
         return -1;
     for (int i = 0; i < m_terminals.size(); ++i) {
@@ -600,7 +600,7 @@ int TerminalPanel::indexOfFocused(QWidget *focused) const
 
 void TerminalPanel::changeFontSize(int delta)
 {
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
     const int size = qBound(kMinFontSize, m_cfg.fontSize + delta, kMaxFontSize);
     if (size == m_cfg.fontSize)
         return;
@@ -613,7 +613,7 @@ void TerminalPanel::changeFontSize(int delta)
 #endif
 }
 
-#ifdef NEOBEAM_HAS_TERMINAL
+#ifdef NVBEAM_HAS_TERMINAL
 QFont TerminalPanel::terminalFont() const
 {
     QFont f(m_cfg.fontFamily, m_cfg.fontSize);
@@ -682,13 +682,13 @@ QString TerminalPanel::effectiveColorScheme()
 
 QTermWidget *TerminalPanel::createTermWidget(const QString &command)
 {
-    registerNeobeamSchemeDirs();
+    registerNvbeamSchemeDirs();
 
     auto *term = new QTermWidget(0, this);
 
     term->setTerminalFont(terminalFont());
 
-    // Color scheme (default "Neoblue", shipped with neobeam), with optional
+    // Color scheme (default "Neoblue", shipped with nvbeam), with optional
     // foreground/background overrides baked into a derived scheme file.
     term->setColorScheme(effectiveColorScheme());
     term->setScrollBarPosition(QTermWidgetInterface::ScrollBarRight);
@@ -743,7 +743,7 @@ QTermWidget *TerminalPanel::createTermWidget(const QString &command)
     }
 
     // Click opens URLs/emails under the cursor (QTermWidget underlines them on
-    // hover and emits this on click; neobeam just has to act on it). Every
+    // hover and emits this on click; nvbeam just has to act on it). Every
     // split of both panels is created here, so the bottom and the side terminal
     // handle links identically. Links its UrlFilter does not recognize -
     // scheme-less ones, or ones a TUI application wrapped across lines - are

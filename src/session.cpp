@@ -27,7 +27,7 @@ QStringList mruInsert(QStringList list, const QString &path, int maxEntries)
 
 QString Session::filePath()
 {
-    // Same directory as neobeam.toml (Config::configPath()), but a distinct file.
+    // Same directory as nvbeam.toml (Config::configPath()), but a distinct file.
     const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     return dir + "/session.ini";
 }
