@@ -423,7 +423,7 @@ renames, with no user migration or compatibility shims. Done in one branch becau
 event names exist on both the C++ and Lua side and had to change together.
 
 - [x] `nvbeam` is free on GitHub
-- [ ] Rename the GitHub repo (manual step, remote URL follows)
+- [x] Rename the GitHub repo (remote is now `github.com/mareksamec/nvbeam`; the local checkout directory keeps its old name)
 - [x] Build system: `CMakeLists.txt` project/target name (binary is now `bin/nvbeam`), `NVBEAM_*`
   variables and compile definitions, both workflows, icon pipeline (`resources/icons/nvbeam.svg`,
   the placeholder SVG and the generated `nvbeam_<size>.png` names in `cmake/AppIcons.cmake` and
