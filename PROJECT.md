@@ -417,18 +417,18 @@
 
 ## Project rename
 
-Planned rename neobeam → neoqute ("neobeam" is already used by multiple projects on GitHub).
+Planned rename neobeam → nvbeam ("neobeam" is already used by multiple projects on GitHub).
 Since the repo is still private and no packages are published, this is a clean find-and-replace +
 file renames with no user migration or compatibility shims needed. Do it in one commit/branch —
 the Lua RPC event names exist on both the C++ and Lua side and must change together.
 
-- [ ] Verify `neoqute` is free on GitHub and AUR before starting (note: name echoes qutebrowser, unrelated project — accept or reconsider)
+- [ ] Verify `nvbeam` is free on GitHub and AUR before starting (note: name echoes qutebrowser, unrelated project — accept or reconsider)
 - [ ] Rename the GitHub repo
 - [ ] Build system:
-    - [ ] `CMakeLists.txt`: `project(neobeam ...)`, target name (changes installed binary to `bin/neoqute`), `NEOBEAM_*` variables and compile definitions (`NEOBEAM_HAS_TERMINAL`, `NEOBEAM_ICON_SIZES`, `NEOBEAM_TERMINAL` option — also referenced in both workflows)
+    - [ ] `CMakeLists.txt`: `project(neobeam ...)`, target name (changes installed binary to `bin/nvbeam`), `NEOBEAM_*` variables and compile definitions (`NEOBEAM_HAS_TERMINAL`, `NEOBEAM_ICON_SIZES`, `NEOBEAM_TERMINAL` option — also referenced in both workflows)
     - [ ] Icon pipeline: rename `resources/icons/neobeam.svg` + placeholder SVG, generated `neobeam_<size>.png` names in `cmake/AppIcons.cmake` and `main.cpp`
 - [ ] Qt application identity:
-    - [ ] `main.cpp`: `setApplicationName` (determines config dir `~/.config/neoqute/`), `setDesktopFileName`
+    - [ ] `main.cpp`: `setApplicationName` (determines config dir `~/.config/nvbeam/`), `setDesktopFileName`
     - [ ] `config.cpp`: hardcoded `neobeam.toml` filename, generated config template text, default window title `"Neobeam - ~/path"`, `neobeam -k` hints
 - [ ] Desktop file + packaging:
     - [ ] `packaging/neobeam.desktop`: filename, `Name`, `Exec`, `Icon`, `StartupWMClass` (must match `setApplicationName` for taskbar grouping)
