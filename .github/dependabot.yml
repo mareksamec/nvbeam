@@ -8,3 +8,10 @@ updates:
       interval: "monthly"
     commit-message:
       prefix: "ci"
+    # One pull request for the lot. There are only a handful of actions here and
+    # they are updated together anyway, so a PR per action is noise - and the
+    # artifact upload/download pair in particular should move in step.
+    groups:
+      actions:
+        patterns:
+          - "*"
