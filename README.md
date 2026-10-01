@@ -31,7 +31,7 @@ Nvbeam connects to an embedded Neovim instance via msgpack-RPC and renders the e
 ## Build
 
 ```sh
-git clone https://github.com/youruser/nvbeam.git
+git clone https://github.com/mareksamec/nvbeam.git
 cd nvbeam
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j$(nproc)
@@ -432,6 +432,13 @@ Splits you open yourself with **+** (Ctrl+Shift+E) run a plain shell, never the 
 Projects pinned from the switcher with Ctrl+P are written to `~/.config/nvbeam/projects.toml` in this same format, so an entry can be moved here by copying the block. A path present in both files is shown once, and this file wins, which is how a pin gets a `side_command` it was not created with.
 
 Session state is stored separately from your config, in `~/.config/nvbeam/session.ini` (managed automatically — you don't edit it). Recently opened files/folders for the switcher live there too.
+
+## Contributing
+
+Bug reports and pull requests are welcome. `CONTRIBUTING.md` covers the build,
+how changes are verified (there is no unit test suite - the app is run), and the
+conventions the code follows. `PROJECT.md` holds the roadmap and the reasoning
+behind existing design decisions; `AGENTS.md` states the project's scope.
 
 ## License
 

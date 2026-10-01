@@ -6,6 +6,12 @@ on:
   pull_request:
     branches: [main]
 
+# A push to a pull request branch supersedes the run already going for it; the
+# matrix is several minutes of runner time per push, so cancel the stale one.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     strategy:

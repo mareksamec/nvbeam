@@ -6,3 +6,4 @@ agents.config.json
 compile_commands.json
 third_party/
 test.txt
+nvbeam.toml

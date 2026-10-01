@@ -25,20 +25,23 @@ provides=("${pkgname}=${pkgver}")
 conflicts=("${pkgname}-git")
 options=('!lto')
 
+# makepkg forbids hyphens in pkgver, so a pre-release tag is carried as
+# "0.2.0_rc1" here while the tag itself reads "v0.2.0-rc1". _tag maps it back,
+# and _srcdir is the directory name GitHub's archive unpacks to.
+_tag="v${pkgver//_/-}"
+_srcdir="${pkgname}-${_tag#v}"
+
 # Vendor toml11 v4.2.0 so the build is hermetic (no network in build()).
 # Upstream CMake uses FetchContent_Declare(toml11 ...); prepare() rewrites
 # that to point at the locally extracted source.
 _toml11_ver=4.2.0
 _toml11_sha256=9287971cd4a1a3992ef37e7b95a3972d1ae56410e7f8e3f300727ab1d6c79c2c
 
-# Our own source is a LOCAL tarball supplied by CI (git archive of the checkout,
-# with a "${pkgname}-${pkgver}/" prefix). The repo is private, so re-downloading
-# from the GitHub archive URL 404s under makepkg's unauthenticated curl; building
-# from the checkout also packages exactly the tree CI tested. SKIP because the
-# tarball is generated per build. When/if the repo goes public, this entry can
-# revert to: "${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/v${pkgver}.tar.gz"
+# The release tarball is GitHub's archive of the tag. Its checksum is not known
+# until the tag exists, so the release workflow runs `updpkgsums` to fill the
+# entry in before building; a hand build of a published tag can do the same.
 source=(
-    "${pkgname}-${pkgver}.tar.gz"
+    "${pkgname}-${pkgver}.tar.gz::${url}/archive/refs/tags/${_tag}.tar.gz"
     "toml11-${_toml11_ver}.tar.gz::https://github.com/ToruNiina/toml11/archive/refs/tags/v${_toml11_ver}.tar.gz"
 )
 sha256sums=(
@@ -47,7 +50,7 @@ sha256sums=(
 )
 
 prepare() {
-    cd "${srcdir}/${pkgname}-${pkgver}"
+    cd "${srcdir}/${_srcdir}"
 
     # Point FetchContent at the local extracted toml11 instead of cloning.
     # Replaces the GIT_REPOSITORY/GIT_TAG/GIT_SHALLOW block with SOURCE_DIR.
@@ -84,7 +87,7 @@ PY
 }
 
 build() {
-    cd "${srcdir}/${pkgname}-${pkgver}"
+    cd "${srcdir}/${_srcdir}"
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
@@ -95,7 +98,7 @@ build() {
 }
 
 package() {
-    cd "${srcdir}/${pkgname}-${pkgver}"
+    cd "${srcdir}/${_srcdir}"
     DESTDIR="${pkgdir}" cmake --install build
 
     # MIT license: AUR/namcap expects it under /usr/share/licenses/<pkg>/

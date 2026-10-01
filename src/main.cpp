@@ -96,6 +96,14 @@ int main(int argc, char *argv[])
     // Parse known options, rest goes to nvim
     parser.parse(app.arguments());
 
+    // parse() leaves unknown arguments for nvim, but unlike process() it also
+    // leaves -h/--help and -v/--version unhandled, so act on them here. Both
+    // print and exit.
+    if (parser.isSet(QStringLiteral("help")))
+        parser.showHelp(0);
+    if (parser.isSet(QStringLiteral("version")))
+        parser.showVersion();
+
     if (parser.isSet(checkOption))
         return checkConfig(parser.value(configOption));
 
