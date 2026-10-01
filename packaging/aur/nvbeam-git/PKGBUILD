@@ -1,4 +1,4 @@
-# Maintainer: Your Name <your.email@example.com>
+# Maintainer: Marek Samec <marek@samec.me>
 pkgname=nvbeam-git
 _pkgname=nvbeam
 pkgver=r0.cf5f03b

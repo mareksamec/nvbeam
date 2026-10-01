@@ -38,7 +38,7 @@ Lock file at `~/.claude/ide/<port>.lock`:
 ```json
 {
   "pid": 12345,
-  "workspaceFolders": ["/home/marek/Projects/neobeam"],
+  "workspaceFolders": ["/path/to/project"],
   "ideName": "neobeam",
   "transport": "ws",
   "authToken": "a3f1c2d4e5f60718293a4b5c6d7e8f90"

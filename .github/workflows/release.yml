@@ -102,36 +102,36 @@ jobs:
     container: archlinux:latest
     steps:
       - name: Install base tools
-        run: pacman -Syu --noconfirm --needed base-devel git sudo
+        run: pacman -Syu --noconfirm --needed base-devel git sudo pacman-contrib
 
       - uses: actions/checkout@v4
 
-      - name: Prepare source tarball from checkout
+      - name: Set pkgver from the tag
         run: |
-          # The repo is private, so makepkg cannot re-download the source from
-          # the GitHub archive URL (unauthenticated curl -> 404). Instead build
-          # from the checkout: set pkgver from the tag and pack the tree into the
-          # local tarball the PKGBUILD expects (prefix must match ${pkgname}-${pkgver}).
-          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          # The PKGBUILD downloads the tag's GitHub archive, so only the version
+          # has to be filled in. makepkg forbids hyphens in pkgver, hence the
+          # substitution ("0.2.0-rc1" -> "0.2.0_rc1"); the source URL keeps the
+          # original tag spelling via ${pkgver//_/-}.
           pkgver="${RELEASE_TAG#v}"       # "v0.1.1" -> "0.1.1"
-          pkgver="${pkgver//-/_}"         # makepkg forbids hyphens in pkgver ("0.2.0-rc1" -> "0.2.0_rc1")
+          pkgver="${pkgver//-/_}"
           sed -i "s/^pkgver=.*/pkgver=${pkgver}/" packaging/arch/PKGBUILD
-          git archive --format=tar.gz \
-            --prefix="nvbeam-${pkgver}/" \
-            -o "packaging/arch/nvbeam-${pkgver}.tar.gz" HEAD
 
       - name: Create unprivileged build user
         run: |
           # makepkg refuses to run as root; give a normal user passwordless
-          # pacman via sudo so it can install makedepends. chown AFTER the tarball
-          # exists so builder owns it and can read it / write the package alongside.
+          # pacman via sudo so it can install makedepends, and let it own the
+          # checkout so it can write the downloaded source and the package there.
           useradd -m builder
           echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
           chown -R builder:builder "$GITHUB_WORKSPACE"
 
       - name: Build package
         working-directory: packaging/arch
-        run: sudo -u builder makepkg -s --noconfirm
+        run: |
+          # updpkgsums fills in the tag archive's checksum, which cannot be known
+          # before the tag is pushed.
+          sudo -u builder updpkgsums
+          sudo -u builder makepkg -s --noconfirm
 
       - uses: actions/upload-artifact@v4
         with:
@@ -147,7 +147,7 @@ jobs:
           merge-multiple: true
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           # On manual runs the tag doesn't exist yet — create it at the
           # dispatched commit. On tag pushes the existing tag is reused

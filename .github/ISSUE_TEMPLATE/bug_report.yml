@@ -1,0 +1,49 @@
+name: Bug report
+description: Something in nvbeam misbehaves, crashes or looks wrong
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open nvbeam on a git repository
+        2. Press Ctrl+Shift+R
+        3. ...
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: nvbeam version or commit
+      description: Output of `nvbeam --version`, or the commit you built.
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: Distribution, Neovim version, Qt version, Wayland or X11, and how nvbeam was installed (built from source, Arch package, ...).
+      placeholder: "Arch, nvim 0.11.2, Qt 6.9.1, Wayland, built from source"
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or backtrace
+      description: |
+        For a crash, a backtrace helps a lot (`coredumpctl info nvbeam` on systemd
+        distributions). For a behavioral bug, the debug traces often do:
+        `QT_LOGGING_RULES="nvbeam.*.debug=true" nvbeam <file>`.
+      render: shell
