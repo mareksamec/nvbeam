@@ -436,8 +436,8 @@ Session state is stored separately from your config, in `~/.config/nvbeam/sessio
 ## Contributing
 
 Bug reports and pull requests are welcome. `CONTRIBUTING.md` covers the build,
-how changes are verified (there is no unit test suite - the app is run), and the
-conventions the code follows. `PROJECT.md` holds the roadmap and the reasoning
+how changes are verified (unit tests for the non-UI core, running the app for
+everything else), and the conventions the code follows. `PROJECT.md` holds the roadmap and the reasoning
 behind existing design decisions; `AGENTS.md` states the project's scope.
 
 ## License

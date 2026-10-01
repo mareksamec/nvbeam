@@ -30,10 +30,31 @@ builds one configuration with the terminal disabled for exactly that reason.
 
 ## Testing a change
 
-There is no unit test suite; the app is verified by running it. Build it, run it
-against a real file or directory, and say in the pull request what you exercised
-and what you saw. Claims like "should work" are the one thing that will reliably
-hold a review up.
+### The unit tests
+
+The non-UI half of the app lives in a `nvbeam_core` library: config and project
+files, git output parsing, color schemes, session state. That part has unit
+tests, and they are part of CI. They are off by default so a plain build needs
+no `Qt6::Test`:
+
+```sh
+cmake -B build -DNVBEAM_TESTS=ON
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+A change to anything in `nvbeam_core` is expected to come with a test, and a bug
+fixed there is expected to come with the case that used to fail. The tests run
+headless and touch no real config file: those that exercise
+`QStandardPaths` locations enable `QStandardPaths::setTestModeEnabled()`.
+
+### Everything else
+
+The windows, the grid, the terminal panel, the minimap and the Neovim
+connection have no unit tests: they need a display and a running `nvim`, so they
+are verified by running the app. Build it, run it against a real file or
+directory, and say in the pull request what you exercised and what you saw.
+Claims like "should work" are the one thing that will reliably hold a review up.
 
 For changes with a runtime effect that is hard to observe by hand, the app can be
 run headless (`QT_QPA_PLATFORM=offscreen`) with the category-gated debug traces:

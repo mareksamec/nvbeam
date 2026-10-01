@@ -52,10 +52,16 @@ jobs:
           echo "qtermwidget6 not available — building without terminal"
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=${{ matrix.terminal }}
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release \
+            -DNVBEAM_TERMINAL=${{ matrix.terminal }} -DNVBEAM_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
 
   build-fedora:
     runs-on: ubuntu-latest
@@ -76,10 +82,14 @@ jobs:
             qtermwidget
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=ON -DNVBEAM_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
 
   build-arch:
     runs-on: ubuntu-latest
@@ -100,7 +110,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=ON
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DNVBEAM_TERMINAL=ON -DNVBEAM_TESTS=ON
 
       - name: Build
         run: cmake --build build -j$(nproc)
+
+      - name: Test
+        working-directory: build
+        run: ctest --output-on-failure
