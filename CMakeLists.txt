@@ -47,35 +47,47 @@ if(NVBEAM_TERMINAL)
     endif()
 endif()
 
+# The parts that are plain data handling rather than UI: config and project
+# files, git plumbing output, color schemes, persisted session state. They have
+# no window and no Neovim connection, which is what makes them unit-testable,
+# so they live in a library the test binaries can link against as well.
+add_library(nvbeam_core STATIC
+    src/config.cpp
+    src/session.cpp
+    src/pinnedprojects.cpp
+    src/gitstatus.cpp
+    src/colorscheme.cpp
+    src/logging.cpp
+)
+
+target_include_directories(nvbeam_core PUBLIC
+    src
+)
+
+# Gui, not Widgets: these carry QFont/QColor but draw nothing.
+target_link_libraries(nvbeam_core PUBLIC
+    Qt6::Core
+    Qt6::Gui
+    toml11::toml11
+)
+
 add_executable(nvbeam
     src/main.cpp
     src/mainwindow.cpp
     src/nvimprocess.cpp
     src/gridwidget.cpp
-    src/config.cpp
-    src/session.cpp
-    src/pinnedprojects.cpp
     src/switcher.cpp
     src/branchswitcher.cpp
     src/uiwidgets.cpp
-    src/gitstatus.cpp
-    src/colorscheme.cpp
     src/changereview.cpp
     src/terminalpanel.cpp
     src/minimap.cpp
     src/imagerenderer.cpp
-    src/logging.cpp
-)
-
-target_include_directories(nvbeam PRIVATE
-    src
 )
 
 target_link_libraries(nvbeam PRIVATE
-    Qt6::Core
-    Qt6::Gui
+    nvbeam_core
     Qt6::Widgets
-    toml11::toml11
 )
 
 # --version reads the same version the packages carry, so a binary can be told
@@ -90,6 +102,15 @@ endif()
 if(NVBEAM_SYNTAX)
     target_compile_definitions(nvbeam PRIVATE NVBEAM_HAS_SYNTAX)
     target_link_libraries(nvbeam PRIVATE KF6::SyntaxHighlighting)
+endif()
+
+# --- Tests ---
+# Off by default so a plain build (and every package recipe) does not need
+# Qt6::Test. CI turns it on: cmake -DNVBEAM_TESTS=ON && ctest.
+option(NVBEAM_TESTS "Build the unit tests (requires Qt6::Test)" OFF)
+if(NVBEAM_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
 endif()
 
 # --- Application icon ---

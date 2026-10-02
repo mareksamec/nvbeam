@@ -62,4 +62,5 @@
 # Validation
 - First ask the user to run the binary before executing yourself
 - Don't do any "smoke tests" by trying to execute the app in a virtual display etc. - first ask user to run the binary and report back.
+- The unit tests are the exception: build with `-DNVBEAM_TESTS=ON` and run `ctest` yourself. They cover the non-UI core (config, git parsing, color schemes, session state), start no GUI and need no nvim. A change there is expected to come with a test.
 

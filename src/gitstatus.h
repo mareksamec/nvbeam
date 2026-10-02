@@ -99,6 +99,27 @@ signals:
     /// which the user has to see rather than have swallowed.
     void checkoutFinished(bool ok, const QString &branch, const QString &error);
 
+public:
+    // --- Output parsers ---
+    // Pure functions over git's own output: no process, no state, no signals.
+    // Public so the unit tests can feed them recorded output directly.
+
+    static GitStatusInfo parseStatus(const QString &output);
+
+    /// Last time each branch was checked out, from the HEAD reflog, as a unix
+    /// timestamp keyed by short branch name. A branch just created off an old
+    /// base has no commit of its own, so its tip date says nothing about how
+    /// recently it was worked on; this is what does.
+    static QHash<QString, qint64> parseReflogActivity(const QString &output);
+
+    /// Turn `git for-each-ref` output into the switcher's branch list: the
+    /// remote branches that have no local counterpart first (checking those
+    /// out is what creates the local tracking branch), left in git's own
+    /// commit-date order, then the locals, ordered by the more recent of their
+    /// tip commit and their last checkout in `activity`.
+    static QList<GitBranch> parseBranches(const QString &output,
+                                          const QHash<QString, qint64> &activity);
+
 private:
     void resolveGitDir();
     void runStatus();
@@ -113,22 +134,9 @@ private:
     /// requests a refresh.
     void rewatchAndRefresh();
     void publish(const GitStatusInfo &info);
-    static GitStatusInfo parseStatus(const QString &output);
     /// Run the branch listing itself, ranking the result with `activity`.
     /// Called once the HEAD reflog has been read (or has failed).
     void runBranchList(const QString &dir, const QHash<QString, qint64> &activity);
-    /// Last time each branch was checked out, from the HEAD reflog, as a unix
-    /// timestamp keyed by short branch name. A branch just created off an old
-    /// base has no commit of its own, so its tip date says nothing about how
-    /// recently it was worked on; this is what does.
-    static QHash<QString, qint64> parseReflogActivity(const QString &output);
-    /// Turn `git for-each-ref` output into the switcher's branch list: the
-    /// remote branches that have no local counterpart first (checking those
-    /// out is what creates the local tracking branch), left in git's own
-    /// commit-date order, then the locals, ordered by the more recent of their
-    /// tip commit and their last checkout in `activity`.
-    static QList<GitBranch> parseBranches(const QString &output,
-                                          const QHash<QString, qint64> &activity);
 
     QString m_dir;      // working directory (nvim cwd)
     QString m_gitDir;   // resolved absolute .git dir; empty = not a repo
