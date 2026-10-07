@@ -21,6 +21,12 @@ env:
   # Tag-push runs use the pushed tag; manual runs use the tag input.
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
+# Queue releases one at a time per tag. Not cancel-in-progress: killing a run
+# midway could leave a half-published release.
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   # project() in CMakeLists.txt is the single source of the version the
   # binaries and the deb/rpm artifacts carry, while the Arch package and the
@@ -28,6 +34,7 @@ jobs:
   # ships artifacts named after the wrong version, so stop before building.
   check-version:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
 
@@ -45,6 +52,7 @@ jobs:
   build-deb:
     needs: check-version
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
@@ -73,6 +81,7 @@ jobs:
   build-rpm:
     needs: check-version
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container: fedora:latest
     steps:
       - uses: actions/checkout@v7
@@ -99,6 +108,7 @@ jobs:
   build-arch:
     needs: check-version
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     container: archlinux:latest
     steps:
       - name: Install base tools
@@ -141,6 +151,7 @@ jobs:
   release:
     needs: [build-deb, build-rpm, build-arch]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/download-artifact@v8
         with:

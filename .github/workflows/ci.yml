@@ -1,10 +1,38 @@
 name: CI
 
+# Files that cannot affect the build or tests: docs, task notes, packaging
+# recipes (built by the Release workflow), sample configs and repo metadata.
+# Changes touching only these skip CI to save Actions minutes.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'tasks/**'
+      - 'packaging/**'
+      - 'LICENSE'
+      - 'nvbeam.toml'
+      - 'nvbeam.toml.example'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/CODEOWNERS'
+      - '.github/dependabot.yml'
+      - '.github/workflows/openbsd.yml'
+      - '.github/workflows/release.yml'
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'tasks/**'
+      - 'packaging/**'
+      - 'LICENSE'
+      - 'nvbeam.toml'
+      - 'nvbeam.toml.example'
+      - '.github/ISSUE_TEMPLATE/**'
+      - '.github/CODEOWNERS'
+      - '.github/dependabot.yml'
+      - '.github/workflows/openbsd.yml'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
 
 # A push to a pull request branch supersedes the run already going for it; the
 # matrix is several minutes of runner time per push, so cancel the stale one.
@@ -14,6 +42,9 @@ concurrency:
 
 jobs:
   build:
+    # Merging a PR pushes a "Merge pull request" commit to main; the PR run
+    # already built and tested that code, so skip it. Direct pushes still build.
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     strategy:
       fail-fast: false
       matrix:
@@ -24,6 +55,7 @@ jobs:
             terminal: OFF
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v7
@@ -64,7 +96,11 @@ jobs:
         run: ctest --output-on-failure
 
   build-fedora:
+    # Merging a PR pushes a "Merge pull request" commit to main; the PR run
+    # already built and tested that code, so skip it. Direct pushes still build.
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container: fedora:latest
 
     steps:
@@ -92,7 +128,11 @@ jobs:
         run: ctest --output-on-failure
 
   build-arch:
+    # Merging a PR pushes a "Merge pull request" commit to main; the PR run
+    # already built and tested that code, so skip it. Direct pushes still build.
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Merge pull request')
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     container: archlinux:latest
 
     steps:
