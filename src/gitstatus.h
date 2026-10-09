@@ -120,6 +120,15 @@ public:
     static QList<GitBranch> parseBranches(const QString &output,
                                           const QHash<QString, qint64> &activity);
 
+    /// Whether publishing `info` means the checked-out branch changed.
+    /// `lastValidBranch` is the branch of the last valid snapshot, empty when
+    /// there has not been one yet. Compared against that rather than against
+    /// the previous snapshot: a transient invalid one (a `git status` that
+    /// failed while the checkout was still running) would otherwise swallow
+    /// the transition that follows it, leaving a branch-aware shell prompt
+    /// stale with no second chance.
+    static bool isBranchSwitch(const QString &lastValidBranch, const GitStatusInfo &info);
+
 private:
     void resolveGitDir();
     void runStatus();
@@ -148,4 +157,5 @@ private:
     bool m_checkingOut = false; // a checkout is in flight; ignore further requests
     GitStatusInfo m_last;
     bool m_hasLast = false;
+    QString m_lastValidBranch;  // branch of the last valid snapshot; see isBranchSwitch()
 };

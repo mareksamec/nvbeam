@@ -154,14 +154,21 @@ void GitStatus::watchGit()
     }
 }
 
+bool GitStatus::isBranchSwitch(const QString &lastValidBranch, const GitStatusInfo &info)
+{
+    return info.valid && !info.branch.isEmpty()
+           && !lastValidBranch.isEmpty() && info.branch != lastValidBranch;
+}
+
 void GitStatus::publish(const GitStatusInfo &info)
 {
     if (m_hasLast && info == m_last)
         return;
-    const bool branchSwitched = m_hasLast && m_last.valid && info.valid
-                                 && info.branch != m_last.branch;
+    const bool branchSwitched = isBranchSwitch(m_lastValidBranch, info);
     m_last = info;
     m_hasLast = true;
+    if (info.valid && !info.branch.isEmpty())
+        m_lastValidBranch = info.branch;
     emit changed(info);
     if (branchSwitched)
         emit branchChanged(info.branch);
