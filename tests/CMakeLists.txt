@@ -11,6 +11,7 @@ set(NVBEAM_TEST_SOURCES
     tst_colorscheme.cpp
     tst_session.cpp
     tst_pinnedprojects.cpp
+    tst_terminalkeys.cpp
 )
 
 foreach(src IN LISTS NVBEAM_TEST_SOURCES)

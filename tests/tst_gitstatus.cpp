@@ -27,6 +27,12 @@ private slots:
     void branchesDropRemotesThatHaveALocal();
     void branchesRankLocalsByActivity();
     void branchesSkipRemoteHeadSymref();
+
+    void branchSwitchNeedsAPreviousValidBranch();
+    void branchSwitchIgnoresTheSameBranch();
+    void branchSwitchSeesADifferentBranch();
+    void branchSwitchIgnoresAnInvalidSnapshot();
+    void branchSwitchSurvivesAnInvalidSnapshotInBetween();
 };
 
 void TestGitStatus::statusReadsBranchAndCounts()
@@ -176,6 +182,59 @@ void TestGitStatus::branchesSkipRemoteHeadSymref()
 
     QCOMPARE(branches.size(), 1);
     QCOMPARE(branches.at(0).name, QStringLiteral("main"));
+}
+
+// --- isBranchSwitch ---
+// The gate on GitStatus::branchChanged, which is what refreshes a branch-aware
+// shell prompt in the terminal panel after a checkout.
+
+/// A snapshot on `branch`, as parseStatus() would produce it.
+static GitStatusInfo onBranch(const QString &branch)
+{
+    GitStatusInfo info;
+    info.valid = true;
+    info.branch = branch;
+    return info;
+}
+
+void TestGitStatus::branchSwitchNeedsAPreviousValidBranch()
+{
+    // The first snapshot after startup is not a switch: there is nothing to
+    // have switched away from.
+    QVERIFY(!GitStatus::isBranchSwitch(QString(), onBranch(QStringLiteral("main"))));
+}
+
+void TestGitStatus::branchSwitchIgnoresTheSameBranch()
+{
+    // A status-count-only update (a file was saved) must not look like a
+    // checkout, or every save would poke the terminal.
+    QVERIFY(!GitStatus::isBranchSwitch(QStringLiteral("main"),
+                                       onBranch(QStringLiteral("main"))));
+}
+
+void TestGitStatus::branchSwitchSeesADifferentBranch()
+{
+    QVERIFY(GitStatus::isBranchSwitch(QStringLiteral("main"),
+                                      onBranch(QStringLiteral("feature"))));
+}
+
+void TestGitStatus::branchSwitchIgnoresAnInvalidSnapshot()
+{
+    // Leaving a repository (or a failed git run) hides the segment; it is not
+    // a branch switch.
+    QVERIFY(!GitStatus::isBranchSwitch(QStringLiteral("main"), GitStatusInfo{}));
+}
+
+void TestGitStatus::branchSwitchSurvivesAnInvalidSnapshotInBetween()
+{
+    // The regression this function exists for: a git run that failed while the
+    // checkout was still in flight publishes an invalid snapshot. Comparing
+    // against that snapshot would report no switch when the new branch
+    // arrives, and the prompt refresh would be lost for good. The last *valid*
+    // branch is what is compared instead, so it is still a switch.
+    const QString lastValid = QStringLiteral("main");
+    QVERIFY(!GitStatus::isBranchSwitch(lastValid, GitStatusInfo{}));
+    QVERIFY(GitStatus::isBranchSwitch(lastValid, onBranch(QStringLiteral("feature"))));
 }
 
 QTEST_GUILESS_MAIN(TestGitStatus)

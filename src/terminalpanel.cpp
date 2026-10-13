@@ -1,5 +1,6 @@
 #include "terminalpanel.h"
 #include "shortcuts.h"
+#include "terminalkeys.h"
 
 #include "colorscheme.h"
 
@@ -533,14 +534,16 @@ void TerminalPanel::removeCurrentTerminal()
 #ifdef NVBEAM_HAS_TERMINAL
 void TerminalPanel::markLineDirty(QTermWidget *term, QKeyEvent *event)
 {
-    const bool ctrl = event->modifiers() & Qt::ControlModifier;
-    const int key = event->key();
-    if (key == Qt::Key_Return || key == Qt::Key_Enter
-        || (ctrl && (key == Qt::Key_C || key == Qt::Key_U))) {
+    switch (lineInputEffect(event->key(), event->modifiers())) {
+    case LineInputEffect::Ignore:
+        break;
+    case LineInputEffect::Clears:
         m_lineDirty[term] = false;
-        return;
+        break;
+    case LineInputEffect::Dirties:
+        m_lineDirty[term] = true;
+        break;
     }
-    m_lineDirty[term] = true;
 }
 #endif
 

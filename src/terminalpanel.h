@@ -194,13 +194,9 @@ private:
     /// PuTTY-style paste.
     void showContextMenu(QTermWidget *term, const QPoint &pos);
     /// Update the "unsubmitted input" heuristic for `term` from a key event
-    /// on its internal display widget. There is no public API to read the
-    /// shell's actual input buffer, so this tracks keystrokes instead:
-    /// Enter/Ctrl+C/Ctrl+U (line submitted/aborted/cleared) reset it to
-    /// clean, anything else marks it dirty. Conservative by design - e.g. a
-    /// Backspace back to an empty line still reads as dirty - since the cost
-    /// of skipping a prompt refresh is far lower than injecting Enter into a
-    /// line the user is mid-typing.
+    /// on its internal display widget. The classification itself lives in
+    /// lineInputEffect() (terminalkeys.h), which is where the rules and their
+    /// rationale are documented.
     void markLineDirty(QTermWidget *term, QKeyEvent *event);
 
     QTermWidget *m_currentTerm = nullptr;
