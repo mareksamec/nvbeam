@@ -8,7 +8,7 @@ I wanted nvim gui with native terminal + some simple way to run cli coding agent
 
 
 > [!NOTE]
-> This is still Alpha version - check known bugs in the bottom!
+> This is still Alpha version - check [known bugs](#known-bugs) in the bottom!
 > aa
 > Current use case:
 > - Neovim + some file manager like Snacks, Neotree, etc.
