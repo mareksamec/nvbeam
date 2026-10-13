@@ -4,6 +4,19 @@ A fast, native Neovim GUI client built with Qt6 and C++.
 
 Nvbeam connects to an embedded Neovim instance via msgpack-RPC and renders the editor using native Qt widgets. It provides a VSCode-like experience with a native terminal panel, minimap, tabline, command line, and completion popup — all driven by Neovim's UI protocol extensions.
 
+I wanted nvim gui with native terminal + some simple way to run cli coding agents so I decide to vibecode Nvbeam to fit my needs 100%.
+
+
+> [!NOTE]
+> This is still Alpha version - check known bugs in the bottom!
+> aa
+> Current use case:
+> - Neovim + some file manager like Snacks, Neotree, etc.
+> - Nvbeam projects to easily switch between your projects with Ctrl + Shift + P.
+> - Or open a directory by hitting Ctrl + Shift + P and then Ctrl + D.
+> - Configure coding agent commands per project to start in the side terminal e.g. `claude --continue`
+> - Easily switch Git branches with Ctrl + Shift + B.
+
 ## Features
 
 - **Full Neovim integration** — ext_linegrid, ext_multigrid, ext_hlstate, ext_cmdline, ext_popupmenu, ext_tabline, ext_messages
@@ -439,6 +452,12 @@ Bug reports and pull requests are welcome. `CONTRIBUTING.md` covers the build,
 how changes are verified (unit tests for the non-UI core, running the app for
 everything else), and the conventions the code follows. `PROJECT.md` holds the roadmap and the reasoning
 behind existing design decisions; `AGENTS.md` states the project's scope.
+
+
+## Known bugs
+- Minimap sometimes does not show the whole file.
+- Nvbeam freezes when the git diff view is expanded and the files are edited fast in the background e.g. by coding agent.
+- Side term scaling issues when resizing the window (e.g. during tiling)
 
 ## License
 
