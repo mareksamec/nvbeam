@@ -9,8 +9,8 @@ I wanted nvim gui with native terminal + some simple way to run cli coding agent
 
 > [!NOTE]
 > This is still Alpha version - check [known bugs](#known-bugs) in the bottom!
-> aa
-> Current use case:
+> 
+> **Current use case:**
 > - Neovim + some file manager like Snacks, Neotree, etc.
 > - Nvbeam projects to easily switch between your projects with Ctrl + Shift + P.
 > - Or open a directory by hitting Ctrl + Shift + P and then Ctrl + D.
