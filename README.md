@@ -459,6 +459,11 @@ behind existing design decisions; `AGENTS.md` states the project's scope.
 - Nvbeam freezes when the git diff view is expanded and the files are edited fast in the background e.g. by coding agent.
 - Side term scaling issues when resizing the window (e.g. during tiling)
 
+## Roadmap
+- Fix bugs (obviously 😇)
+- Add full X11/XLibre support
+- Find/Create better alternative to QTermWidget with Sixel support, better font hinting, etc.
+
 ## License
 
 MIT
