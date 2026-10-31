@@ -19,7 +19,7 @@ depends=(
 )
 makedepends=(
     'cmake'
-    'gcc'
+    'librsvg'   # rsvg-convert rasterizes the app icon; without it no PNG icons
 )
 provides=("${pkgname}=${pkgver}")
 conflicts=("${pkgname}-git")
@@ -32,8 +32,7 @@ _tag="v${pkgver//_/-}"
 _srcdir="${pkgname}-${_tag#v}"
 
 # Vendor toml11 v4.2.0 so the build is hermetic (no network in build()).
-# Upstream CMake uses FetchContent_Declare(toml11 ...); prepare() rewrites
-# that to point at the locally extracted source.
+# build() hands the extracted source to FetchContent instead of letting it clone.
 _toml11_ver=4.2.0
 _toml11_sha256=9287971cd4a1a3992ef37e7b95a3972d1ae56410e7f8e3f300727ab1d6c79c2c
 
@@ -49,48 +48,14 @@ sha256sums=(
     "${_toml11_sha256}"
 )
 
-prepare() {
-    cd "${srcdir}/${_srcdir}"
-
-    # Point FetchContent at the local extracted toml11 instead of cloning.
-    # Replaces the GIT_REPOSITORY/GIT_TAG/GIT_SHALLOW block with SOURCE_DIR.
-    local _toml11_dir="${srcdir}/toml11-${_toml11_ver}"
-    if [[ ! -d "${_toml11_dir}" ]]; then
-        echo "error: vendored toml11 not found at ${_toml11_dir}" >&2
-        return 1
-    fi
-
-    # Use a Python one-liner for a precise multi-line replacement — sed across
-    # multiple lines with mixed whitespace is fragile.
-    python3 - "$_toml11_dir" <<'PY'
-import pathlib, re, sys
-toml11_dir = sys.argv[1]
-p = pathlib.Path("CMakeLists.txt")
-text = p.read_text()
-new_block = (
-    "FetchContent_Declare(\n"
-    "    toml11\n"
-    f"    SOURCE_DIR     {toml11_dir}\n"
-    ")"
-)
-text, n = re.subn(
-    r"FetchContent_Declare\(\s*toml11.*?\)",
-    new_block,
-    text,
-    count=1,
-    flags=re.DOTALL,
-)
-if n != 1:
-    sys.exit("FetchContent_Declare(toml11 ...) block not found")
-p.write_text(text)
-PY
-}
-
 build() {
     cd "${srcdir}/${_srcdir}"
+    # FETCHCONTENT_SOURCE_DIR_TOML11 makes FetchContent use the vendored
+    # toml11 checkout instead of cloning it.
     cmake -B build -S . \
         -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_INSTALL_PREFIX=/usr \
+        -DFETCHCONTENT_SOURCE_DIR_TOML11="${srcdir}/toml11-${_toml11_ver}" \
         -DNVBEAM_TERMINAL=ON \
         -DNVBEAM_SYNTAX=ON \
         -Wno-dev
