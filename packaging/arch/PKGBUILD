@@ -19,7 +19,6 @@ depends=(
 )
 makedepends=(
     'cmake'
-    'librsvg'   # rsvg-convert rasterizes the app icon; without it no PNG icons
 )
 provides=("${pkgname}=${pkgver}")
 conflicts=("${pkgname}-git")

@@ -7,7 +7,6 @@ pkgbase = nvbeam-git
 	license = MIT
 	makedepends = git
 	makedepends = cmake
-	makedepends = librsvg
 	depends = qt6-base
 	depends = qtermwidget
 	depends = syntax-highlighting

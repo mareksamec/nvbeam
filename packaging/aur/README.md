@@ -66,9 +66,6 @@ For a build in a clean chroot, as AUR users with `devtools` get it, use
 - `toml11 v4.2.0` is vendored as a second `source=()` entry in `nvbeam-git`
   and passed to CMake via `FETCHCONTENT_SOURCE_DIR_TOML11`, so `build()`
   needs no network access.
-- `librsvg` is a make dependency because `rsvg-convert` rasterizes the app
-  icon. Without it the build still succeeds but the window has no icon and
-  no PNG icons are installed.
 - `qtermwidget` is a hard runtime dependency. To build `nvbeam-git` without
   the embedded terminal, set `-DNVBEAM_TERMINAL=OFF` in `build()` and drop
   `qtermwidget` from `depends`.
