@@ -27,9 +27,6 @@ MODULES =	devel/cmake
 
 LIB_DEPENDS =	x11/qt6/qtbase
 
-# rsvg-convert rasterizes the app icon at build time (cmake/AppIcons.cmake)
-BUILD_DEPENDS =	x11/gnome/librsvg
-
 RUN_DEPENDS =	editors/neovim \
 		devel/desktop-file-utils
 

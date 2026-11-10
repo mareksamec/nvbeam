@@ -1,0 +1,6 @@
+# makepkg build artifacts from local test builds
+*.pkg.tar.zst
+*.tar.gz
+pkg/
+src/
+nvbeam-git/nvbeam/

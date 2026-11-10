@@ -4,9 +4,7 @@ project(nvbeam VERSION 0.2.10 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTORCC ON)  # compile .qrc resources (generated app icons)
-
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+set(CMAKE_AUTORCC ON)  # compile .qrc resources (app icons)
 
 option(NVBEAM_TERMINAL "Build with embedded terminal (requires qtermwidget6)" ON)
 option(NVBEAM_SYNTAX "Color code in review diffs (requires KF6SyntaxHighlighting)" ON)
@@ -114,24 +112,26 @@ if(NVBEAM_TESTS)
 endif()
 
 # --- Application icon ---
-# Rasterize a PNG size ladder from the SVG master at build time and embed it
-# into the executable as a Qt resource (no runtime Qt6::Svg dependency). The
-# same PNGs are installed into the Linux hicolor icon theme below.
-include(AppIcons)
-set(NVBEAM_ICON_SIZES_REQUESTED 16 24 32 48 64 128 256)
-nvbeam_generate_icons(
-    TARGET  nvbeam
-    SVG     "${CMAKE_SOURCE_DIR}/resources/icons/nvbeam.svg"
-    SIZES   ${NVBEAM_ICON_SIZES_REQUESTED}
-    OUT_DIR "${CMAKE_BINARY_DIR}/generated-icons"
-)
-# Let the source know which icon sizes were actually embedded so it can build
-# the QIcon from the matching resource paths.
-if(NVBEAM_ICON_SIZES)
-    string(REPLACE ";" "," _icon_sizes_csv "${NVBEAM_ICON_SIZES}")
-    target_compile_definitions(nvbeam PRIVATE
-        NVBEAM_ICON_SIZES=${_icon_sizes_csv})
-endif()
+# PNG renderings of resources/icons/nvbeam.svg, committed to the repo so the
+# build needs no SVG rasterizer; regenerate them with
+# resources/icons/generate-pngs.sh after editing the SVG. They are embedded into
+# the executable as a Qt resource for the window icon (no runtime Qt6::Svg
+# dependency) and installed into the Linux hicolor icon theme below.
+set(NVBEAM_ICON_DIR "${CMAKE_SOURCE_DIR}/resources/icons/png")
+file(GLOB _icon_pngs "${NVBEAM_ICON_DIR}/nvbeam_*.png")
+set(NVBEAM_ICON_SIZES "")
+foreach(png IN LISTS _icon_pngs)
+    string(REGEX REPLACE "^.*/nvbeam_([0-9]+)\\.png$" "\\1" size "${png}")
+    list(APPEND NVBEAM_ICON_SIZES ${size})
+    # Stable resource path main.cpp loads: :/icons/nvbeam_<size>.png
+    set_source_files_properties("${png}" PROPERTIES
+        QT_RESOURCE_ALIAS "icons/nvbeam_${size}.png")
+endforeach()
+qt6_add_resources(nvbeam "nvbeam_app_icons" PREFIX "/" FILES ${_icon_pngs})
+# Let the source know which icon sizes were embedded so it can build the QIcon
+# from the matching resource paths.
+string(REPLACE ";" "," _icon_sizes_csv "${NVBEAM_ICON_SIZES}")
+target_compile_definitions(nvbeam PRIVATE NVBEAM_ICON_SIZES=${_icon_sizes_csv})
 
 # --- Install & packaging ---
 install(TARGETS nvbeam RUNTIME DESTINATION bin)
@@ -156,11 +156,9 @@ if(UNIX AND NOT APPLE)
     install(FILES packaging/nvbeam.desktop
             DESTINATION share/applications)
 
-    # Install each generated PNG into its matching hicolor size directory.
-    # Falls back gracefully: if no rasterizer was available NVBEAM_ICON_SIZES
-    # is empty and nothing icon-related is installed.
+    # Install each PNG into its matching hicolor size directory.
     foreach(size IN LISTS NVBEAM_ICON_SIZES)
-        install(FILES "${CMAKE_BINARY_DIR}/generated-icons/nvbeam_${size}.png"
+        install(FILES "${NVBEAM_ICON_DIR}/nvbeam_${size}.png"
                 DESTINATION "share/icons/hicolor/${size}x${size}/apps"
                 RENAME nvbeam.png)
     endforeach()
