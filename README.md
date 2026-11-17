@@ -32,6 +32,27 @@ I wanted nvim gui with native terminal + some simple way to run cli coding agent
 - **Wayland native** — via qt6-wayland
 - **Image rendering** — *(Planned)* placeholder for upcoming `vim.ui.img` API
 
+## Install
+
+### Arch Linux (AUR)
+
+```sh
+yay -S nvbeam-bin   # prebuilt, from the latest release
+yay -S nvbeam-git   # built from the latest main
+```
+
+Any AUR helper works the same way. Without one:
+
+```sh
+git clone https://aur.archlinux.org/nvbeam-bin.git
+cd nvbeam-bin
+makepkg -si
+```
+
+### Other distributions
+
+Each [GitHub release](https://github.com/mareksamec/nvbeam/releases) has a `.deb`, an `.rpm` and an Arch package. Otherwise build from source as described below.
+
 ## Requirements
 
 - Neovim 0.10+
@@ -128,116 +149,25 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 
 ### Project switcher
 
-Starting nvbeam without arguments opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal (side terminal included) at the project directory, and opens the file or folder in nvim. When nvim exits (`:q`), nvbeam stays running and shows the switcher again instead of closing (disable with `[switcher] keep_running = false`). Esc or clicking elsewhere dismisses it.
+Starting nvbeam without arguments, or pressing **Ctrl+Shift+P**, opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal at the project directory and opens it in nvim. When nvim exits (`:q`), nvbeam shows the switcher again instead of closing (`[switcher] keep_running = false` turns that off). **Ctrl+D** switches to path mode, where Tab completes the typed path against the directory tree, for opening anything that is neither pinned nor recent.
 
-Ctrl+P pins the folder the switcher is pointing at as a project: the path typed in path mode, or the highlighted row in project mode. The input line then asks for the project's `side_command`, prefilled with whatever the side terminal is running at that moment, whether it was started from a `side_command` or typed into the shell by hand. Edit it, or clear it for a plain shell, and Enter writes the pin; Esc abandons it. Ctrl+P on an already pinned project (hollow ◇ marker) removes it again, with no prompt. Projects declared in `[[projects]]` (filled ◆) are yours to edit and cannot be removed from the switcher.
-
-A detected command is the foreground process's real argv, so a shell alias or a tool launched through an interpreter shows up resolved (`claude-personal` may read as the binary it runs). That is why the prompt is editable rather than silent.
-
-Pins are written to `~/.config/nvbeam/projects.toml`, not to your config: `nvbeam.toml` is hand-authored and a serializer would strip its comments and layout. The file uses the same `[[projects]]` schema, so moving a pin into the config for good, or giving it a different `side_command`, is a copy-paste.
-
-Ctrl+D switches the same input line to path mode, for opening anything that is neither pinned nor recent. It starts at nvim's cwd and completes what you type against the real directory tree: type `~/Proj`, press Tab and the input becomes `~/Projects/`; each further Tab cycles to the next matching entry. Enter confirms the completion (a folder's contents are then listed, so Tab/Enter walks down the tree) and the next Enter opens what the path names. Right completes and confirms in one keystroke, at the end of the line only. Relative paths resolve against nvim's cwd, and dotfiles appear once the typed name starts with `.`. Ctrl+D returns to project mode.
+**Ctrl+P** pins the highlighted folder (or the typed path) as a project and asks for its `side_command`, prefilled with whatever the side terminal is running; clear it for a plain shell. Ctrl+P on a pinned project (◇) removes it again. Pins are written to `~/.config/nvbeam/projects.toml` in the same `[[projects]]` format, so moving one into `nvbeam.toml` is a copy-paste; projects declared there (◆) cannot be removed from the switcher.
 
 ### Git branch switcher
 
-The git segment is led by a branch glyph, painted with the segment's own foreground colour rather than loaded from an icon file, so it follows the statusline palette instead of needing a recoloured asset per theme.
+Clicking the statusline's git segment, or pressing **Ctrl+Shift+B** from anywhere (terminals included), opens a VSCode-style branch picker. It lists remote-only branches first, then local ones, most recently used first, with the checked-out branch marked `◆`. Typing fuzzy-filters the list, Enter checks the branch out (a remote-only entry gets a local tracking branch) and Esc closes it. Typing a name no branch has adds a **Create branch "…"** row at the end, which runs `git checkout -b <name>`.
 
-Clicking the git segment of the statusline, or pressing **Ctrl+Shift+B** (which works wherever focus happens to be, the embedded terminals included, and closes the popup again), opens a branch picker anchored to that segment, the way VSCode's branch indicator does. It lists the remote-only branches first - one just pushed from another machine has no local row to be found under - and then the local ones, most recently used first, where "used" is the later of the branch's tip commit and its last checkout in the HEAD reflog, so a branch created off an old base does not sink to that base's date; the checked-out branch is marked with `◆`. Typing fuzzy-filters the list, Up/Down move, Enter checks the highlighted branch out, Esc or clicking elsewhere closes it.
-
-Checking out a remote-only entry (`origin/some-branch`) checks out the plain name, so git creates a local branch tracking the remote one instead of detaching HEAD.
-
-Typing a name no branch has adds a **Create branch "…"** row at the end of the list; Enter there runs `git checkout -b <name>` from the current HEAD and switches to it. The row is last on purpose: switching to an existing branch is the common case, and Enter should never create a branch by surprise.
-
-When git refuses (uncommitted changes that the checkout would overwrite, a branch already checked out in another worktree, a name git rejects), the popup stays open and shows git's own message. On success it closes, the statusline's git segment updates, open buffers are rechecked against the new working tree (`checktime`), and the bottom terminal's shell prompt is refreshed so a branch-aware prompt does not go stale.
-
-The popup is monospaced (`[ui] branch_switcher_font` and `branch_switcher_font_size`), with the commit dates padded into a column that lines up, and highlighted with `[ui] focus_border_color` (OneDark blue by default) rather than the green `accent_color` the project switcher uses, so the two pickers are told apart at a glance. The name column takes whatever width is left once the widest date is reserved, so a date is never pushed off the edge; a branch name too long for it is elided in the middle and shown in full in the row's tooltip.
-
-The switcher needs the statusline's git segment, so it follows `[ui] git_status`; with that off, neither the click target nor the shortcut exists.
+When git refuses (uncommitted changes in the way, a branch checked out in another worktree), the popup stays open and shows git's message. On success the statusline updates, open buffers are rechecked against the new working tree and the bottom terminal's shell prompt is refreshed. The popup font is set with `[ui] branch_switcher_font` and `branch_switcher_font_size`, and the switcher needs `[ui] git_status` to be on.
 
 ### Change review
 
-The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+R**, opens a
-review panel to the right of that terminal. It lists one row per changed file,
-each showing the file name, its directory and `+added -removed` counts, and a
-tag for a new, deleted, renamed or untracked file. A row is collapsed by
-default; its name sits on a band running the full width of the panel, which is
-what keeps one expanded file apart from the next. Clicking the row (or **⌄** /
-**⌃** in the header, which open and close every row) reveals that file's diff, and inside a row the **⋯** button brings back the
-unchanged context lines, which are hidden so an open file shows only what
-actually changed. Untracked files are listed too, with their content read from
-disk as added lines when the row is opened.
+The **◧** button on the side terminal's toolbar, or **Ctrl+Shift+R**, opens a review panel to the right of that terminal. It lists every changed file, untracked ones included, with its `+added -removed` counts; clicking a row expands its diff, and changed images are shown as images, old and new side by side. **Ctrl+Shift+D** (or the **⎇** button) switches between **worktree** mode (the worktree against `HEAD`) and **branch** mode (the merge base with the default branch against the worktree, so everything the branch adds). The default branch comes from `[review] base_branch`, then `origin/HEAD`, then a local `main` or `master`.
 
-The panel compares two ways, switched by the **⎇** button in its header or by
-**Ctrl+Shift+D**, and the button says which one is in force:
-
-- **worktree** — the worktree against `HEAD`: what has been written but not
-  committed, which is what an agent working in the side terminal produces.
-- **branch** — the merge base with the default branch against the worktree:
-  everything this branch adds, uncommitted work included. The merge base rather
-  than the tip of the default branch, so commits that landed there after the
-  branch started do not show up as lines this branch deletes.
-
-Branch mode finds the default branch from `[review] base_branch` when it is
-set, then from what the remote calls its own default (`origin/HEAD`), then from
-a local `main` or `master`. A repository with none of those says so instead of
-showing an empty list, as does a shallow clone whose history does not reach the
-fork point. Setting `[review] base` pins the comparison to one revision and
-disables the toggle; `[review] mode` picks the mode the panel opens with.
-
-A changed image opens as an image rather than as git's `Binary files ... differ`
-line: the version in the comparison's base revision on the left, the working
-copy on the right, each captioned with its dimensions and byte size, and a line
-below saying how the dimensions changed. A new or deleted file shows the one
-side it has. Transparency is drawn over a checkerboard, nothing is ever scaled
-up, and in a narrow panel the two versions stack instead of shrinking. The
-formats are whatever this Qt build decodes (PNG, JPEG, GIF, BMP, WEBP, ICO);
-SVG stays a text diff, which is what it reads best as. A file over
-`[review] image_max_bytes`, one that fails to decode and a build with no
-decoder for the suffix all keep the textual row and say why, and
-`[review] image_preview = false` turns the whole thing off.
-
-Each file's diff lives in its own read-only text area, so the text is selectable
-and **Ctrl+C** copies it as the plain diff. A gutter beside it carries the line
-numbers: the new file's number for an added or unchanged line, the old file's
-for a removed one, counted from the hunk headers so hidden context lines do not
-throw them off. A changed line's stripe runs behind its number, which is itself
-green or red. The numbers are painted, not part of the text, so a copied
-selection is still a usable diff. In a build with
-KF6SyntaxHighlighting the code inside a diff is colored by the file's own
-language, and an added or removed line carries its color as a stripe across the
-panel's full width instead of as text color, with the leading `+`/`-` keeping
-the diff color.
-Set `[review] syntax = false` for plain diff coloring: only added, removed and
-hunk lines get a color, and the code itself stays in the panel's foreground.
-The key needs a binary built with KF6SyntaxHighlighting; `nvbeam --version`
-lists the optional features the build has, and with `syntax` missing there the
-setting has nothing to turn on. The panel draws itself in the
-terminal's colors: the scheme named by `[terminal] color_scheme` (and the
-`foreground`/`background` overrides there) supplies its text and, a shade
-lighter than the terminal itself, its background,
-green for added lines, red for removed ones, blue for hunk headers and magenta
-for the file name, so the panel and the terminal next to it match.
-
-This is a review of what is on disk, which is the point: an agent running in
-the side terminal in auto-accept mode never asks for approval, so nothing else
-shows what it wrote. While the panel is open it re-reads the worktree every
-`[review] refresh_ms` milliseconds (2000 by default, `0` disables the poll and
-leaves the **⟳** button), so changes appear as the agent writes them. A row
-whose diff did not change is left untouched, so an open file stays open and a
-selection inside it survives the refresh. A `git` that stops answering (a
-repository on a dead network mount) is killed after `[review] timeout_ms` and
-the panel says so, rather than freezing on the last diff it managed to read.
-
-Set `[review] base` to diff against a revision (`"main"`, `"HEAD~3"`) instead of
-the working tree against `HEAD`, `[review] show_context = true` to have rows
-open on the full hunks, and `[review] file_max_height` to cap how tall one open
-file grows before it scrolls on its own.
+The panel exists to show what an agent in the side terminal writes, even in auto-accept mode: while open, it re-reads the worktree every `[review] refresh_ms` (2000 ms by default) and keeps open rows and selections across refreshes. Diff text is selectable and Ctrl+C copies it as a plain diff. In a build with KF6SyntaxHighlighting the code is colored by its language (`[review] syntax`), and the panel takes its colors from the terminal's `color_scheme`. The remaining `[review]` options are listed in the config below.
 
 ### Drag & drop
 
-Drop files from your file manager onto Nvbeam to open them.
-
-**Onto the buffer area**, the file opens in the Neovim window under the cursor. Hold a modifier while dropping to choose placement:
+Drop files from your file manager onto the buffer area to open them in the Neovim window under the cursor. Hold a modifier while dropping to choose placement:
 
 | Modifier | Action |
 |----------|--------|
@@ -246,17 +176,13 @@ Drop files from your file manager onto Nvbeam to open them.
 | Ctrl | Open in a vertical split (`:vsplit`) |
 | Alt | Open in a new tab (`:tabedit`) |
 
-Dropping multiple files opens each one with the chosen command. Paths are passed to Neovim with proper escaping, so spaces and special characters are handled correctly.
-
-**Onto the terminal**, the file path is pasted into the active shell (single-quoted) instead of being opened.
+Dropping onto a terminal pastes the file path (single-quoted) into the shell instead of opening it.
 
 ### Terminal links
 
-Both terminals (bottom panel and side terminal) handle links the same way. URLs and e-mail addresses written with a scheme are underlined on hover and open in your browser on click; right-clicking one offers **Open Link** / **Copy Link**.
+In both terminals, URLs and e-mail addresses written with a scheme are underlined on hover and open in your browser on click; right-clicking one offers **Open Link** / **Copy Link**.
 
-Some links cannot be recognized that way — a URL written without a scheme (`www.example.com`, `github.com/user/repo`), or one a TUI application wrapped across lines inside its own frame. For those, select the link text and press **Ctrl+Shift+L**: nvbeam takes the link from the selection, joins fragments split across lines, and completes a missing scheme. A double-click selects a whole URL in one go (see `[terminal] word_characters`).
-
-Links that an application only sends as an OSC 8 hyperlink (clickable text whose URL is never printed) cannot be opened at all — qtermwidget does not implement that escape sequence, so the URL never reaches nvbeam.
+For a URL without a scheme (`github.com/user/repo`) or one a TUI wrapped across lines, select it and press **Ctrl+Shift+L**: nvbeam joins the fragments and completes the scheme. Links sent only as OSC 8 hyperlinks (the URL is never printed) cannot be opened, because qtermwidget does not implement that escape sequence.
 
 ## Configuration
 
