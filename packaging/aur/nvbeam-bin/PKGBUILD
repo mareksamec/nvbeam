@@ -2,8 +2,9 @@
 #
 # Prebuilt package: repackages the Arch package that the release workflow
 # (.github/workflows/release.yml, build-arch job) attaches to each GitHub
-# release, so nothing is compiled here. To follow a new release, bump pkgver,
-# reset pkgrel to 1, then run `updpkgsums` and regenerate .SRCINFO.
+# release, so nothing is compiled here. The release workflow's publish-aur-bin
+# job sets pkgver and the checksum for each stable release and pushes the
+# result to the AUR; see packaging/aur/README.md.
 pkgname=nvbeam-bin
 _pkgname=nvbeam
 pkgver=0.2.10

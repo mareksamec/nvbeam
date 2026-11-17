@@ -38,8 +38,23 @@ makepkg --printsrcinfo > .SRCINFO
 from `git describe` on every build. Push a new commit only when the recipe
 itself changes (dependencies, build flags) and bump `pkgrel` then.
 
-`nvbeam-bin` must be bumped after each stable release, once the release
-workflow has uploaded the Arch package:
+`nvbeam-bin` is bumped by the `publish-aur-bin` job in
+`.github/workflows/release.yml` after each stable release (not for `-rc`
+tags or pre-releases). It takes the `PKGBUILD` from this directory, sets
+`pkgver` to the tag, pins the release asset's checksum, test-builds the
+package, regenerates `.SRCINFO` and pushes both to the AUR. The copy here
+keeps the version of the last manual update; edit it only to change the
+recipe itself.
+
+One-time setup for the job:
+
+1. Generate a key used only for this: `ssh-keygen -t ed25519 -N '' -f aur_ci`.
+2. Add `aur_ci.pub` to your AUR account under *My Account* → *SSH Public Key*
+   (one key per line, next to your own).
+3. Store the private key as the `AUR_SSH_PRIVATE_KEY` repository secret:
+   `gh secret set AUR_SSH_PRIVATE_KEY < aur_ci`, then delete both files.
+
+To bump by hand instead (e.g. to fix the recipe without a release):
 
 ```sh
 cd packaging/aur/nvbeam-bin
@@ -48,7 +63,8 @@ updpkgsums                         # pacman-contrib; downloads the asset
 makepkg --printsrcinfo > .SRCINFO
 ```
 
-Commit that here, then copy both files into the AUR clone and push.
+Then copy both files into the AUR clone and push. When only the recipe
+changes, bump `pkgrel` instead of `pkgver`.
 
 ## Local test build
 
