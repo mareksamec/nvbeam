@@ -171,3 +171,83 @@ jobs:
             *.deb
             *.rpm
             *.pkg.tar.zst
+
+  # Bump the nvbeam-bin AUR package to the release just published. The package
+  # repackages the Arch package attached to the release, so this runs after the
+  # release job, and only for stable releases: not for "-rc" tags or manual runs
+  # marked as pre-release.
+  # Needs the AUR_SSH_PRIVATE_KEY secret: the private half of an SSH key whose
+  # public half is added to the AUR maintainer account.
+  publish-aur-bin:
+    needs: release
+    if: ${{ !contains(inputs.tag || github.ref_name, '-') && !inputs.prerelease }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: archlinux:latest
+    env:
+      AUR_PACKAGE: nvbeam-bin
+      AUR_COMMIT_NAME: Marek Samec
+      AUR_COMMIT_EMAIL: samec.marek@gmail.com
+      # Pinned host key of aur.archlinux.org (Ed25519,
+      # SHA256:RFzBCUItH9LZS0cKB5UE6ceAYhBD5C8GeOBip8Z11+4, as listed on the
+      # AUR home page). If the AUR ever rotates it, the push fails here instead
+      # of trusting an unknown host.
+      AUR_HOST_KEY: aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN
+    steps:
+      - name: Install base tools
+        run: pacman -Syu --noconfirm --needed base-devel git openssh pacman-contrib
+
+      - uses: actions/checkout@v7
+
+      - name: Create unprivileged build user
+        run: |
+          # makepkg refuses to run as root.
+          useradd -m builder
+          chown -R builder:builder "$GITHUB_WORKSPACE"
+
+      - name: Update PKGBUILD to the release
+        working-directory: packaging/aur/${{ env.AUR_PACKAGE }}
+        run: |
+          sed -i "s/^pkgver=.*/pkgver=${RELEASE_TAG#v}/; s/^pkgrel=.*/pkgrel=1/" PKGBUILD
+          # updpkgsums downloads the release asset and pins its checksum.
+          sudo -u builder updpkgsums
+          # Build once without installing dependencies (-d) to prove package()
+          # still matches the asset's layout before anything is pushed.
+          sudo -u builder makepkg -d --noconfirm
+          sudo -u builder makepkg --printsrcinfo > .SRCINFO
+
+      - name: Push to the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [[ -z "$AUR_SSH_PRIVATE_KEY" ]]; then
+            echo "::error::The AUR_SSH_PRIVATE_KEY secret is not set."
+            exit 1
+          fi
+
+          # Explicit paths: in a container job HOME is not root's home, so ssh
+          # would not find files under ~/.ssh.
+          ssh_dir="$RUNNER_TEMP/aur-ssh"
+          mkdir -m 700 "$ssh_dir"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$ssh_dir/key"
+          chmod 600 "$ssh_dir/key"
+          printf '%s\n' "$AUR_HOST_KEY" > "$ssh_dir/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $ssh_dir/key -o IdentitiesOnly=yes -o UserKnownHostsFile=$ssh_dir/known_hosts -o StrictHostKeyChecking=yes"
+
+          # Cloning a package that does not exist yet gives an empty repo, and
+          # the push below creates the package.
+          aur_dir="$RUNNER_TEMP/aur-repo"
+          git clone "ssh://aur@aur.archlinux.org/${AUR_PACKAGE}.git" "$aur_dir"
+          cp "packaging/aur/${AUR_PACKAGE}/PKGBUILD" "packaging/aur/${AUR_PACKAGE}/.SRCINFO" "$aur_dir/"
+
+          cd "$aur_dir"
+          git config user.name "$AUR_COMMIT_NAME"
+          git config user.email "$AUR_COMMIT_EMAIL"
+          git add PKGBUILD .SRCINFO
+          if git diff --cached --quiet; then
+            echo "AUR ${AUR_PACKAGE} is already at ${RELEASE_TAG#v}, nothing to push."
+            exit 0
+          fi
+          git commit -m "Update to ${RELEASE_TAG#v}"
+          # The AUR only accepts pushes to master.
+          git push origin HEAD:master

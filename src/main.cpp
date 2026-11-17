@@ -58,8 +58,8 @@ int main(int argc, char *argv[])
     app.setApplicationVersion(QStringLiteral(NVBEAM_VERSION " (built with: %1)")
                                   .arg(buildFeatures()));
 
-    // Application icon. The build rasterizes an SVG master into a PNG size
-    // ladder and embeds it as a Qt resource (no runtime Qt6::Svg dependency).
+    // Application icon. The build embeds the PNG size ladder rendered from the
+    // SVG master as a Qt resource (no runtime Qt6::Svg dependency).
     // We load every available size into one QIcon so Qt can pick the best match
     // per request — crisp at small sizes and on HiDPI displays alike.
 #ifdef NVBEAM_ICON_SIZES
