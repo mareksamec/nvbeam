@@ -44,6 +44,11 @@ constexpr int kMinFontPointSize = 4;
 constexpr int kMaxFontPointSize = 72;
 // [review] context_lines upper bound: the context git diff writes by default.
 constexpr int kMaxReviewContextLines = 3;
+// [switcher] path_max_depth / path_max_entries bounds. A deeper or larger walk
+// of the home directory would take seconds and fill memory for no use.
+constexpr int kMaxPathDepth = 20;
+constexpr int kMinPathEntries = 100;
+constexpr int kMaxPathEntries = 1000000;
 
 bool readBool(const toml::value &sec, const char *secName, const char *key,
               bool &out, QList<ConfigIssue> *issues)
@@ -71,6 +76,21 @@ bool readInt(const toml::value &sec, const char *secName, const char *key,
     }
     out = static_cast<int>(v.as_integer());
     return true;
+}
+
+/// readInt() for a value with a valid range: one outside [min, max] is
+/// clamped to it, with a warning naming the value used.
+void readBoundedInt(const toml::value &sec, const char *secName, const char *key, int min,
+                    int max, int &out, QList<ConfigIssue> *issues)
+{
+    if (!readInt(sec, secName, key, out, issues) || (out >= min && out <= max))
+        return;
+    const int clamped = qBound(min, out, max);
+    report(issues, ConfigIssue::Warning,
+           QStringLiteral("[%1] %2: %3 is out of range (%4-%5), using %6")
+               .arg(QLatin1String(secName), QLatin1String(key))
+               .arg(out).arg(min).arg(max).arg(clamped));
+    out = clamped;
 }
 
 bool readString(const toml::value &sec, const char *secName, const char *key,
@@ -163,7 +183,7 @@ const KnownSection kKnownSections[] = {
             "branch_switcher_font_size"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
     {"session", {"restore_window", "restore_terminal"}},
-    {"switcher", {"keep_running", "max_recent"}},
+    {"switcher", {"keep_running", "max_recent", "path_max_depth", "path_max_entries"}},
 };
 
 void warnUnknownKeys(const toml::value &data, QList<ConfigIssue> *issues)
@@ -378,6 +398,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# [switcher]\n"
                 "# keep_running = true  # show the project switcher instead of quitting when nvim exits\n"
                 "# max_recent = 20      # recent files/folders kept in the switcher list (each)\n"
+                "# path_max_depth = 6   # folder levels path mode searches outside a git repository\n"
+                "# path_max_entries = 50000  # cap on the paths path mode searches\n"
                 "\n"
                 "# Pinned projects, shown on top of the project switcher list.\n"
                 "# Repeat the [[projects]] block once per project.\n"
@@ -480,16 +502,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readBool(*review, "review", "show_context", cfg.reviewShowContext, issues);
             // The panel filters the context git already wrote, so it can show
             // fewer lines than git, never more.
-            if (readInt(*review, "review", "context_lines", cfg.reviewContextLines, issues)
-                && (cfg.reviewContextLines < 0
-                    || cfg.reviewContextLines > kMaxReviewContextLines)) {
-                const int clamped = qBound(0, cfg.reviewContextLines, kMaxReviewContextLines);
-                report(issues, ConfigIssue::Warning,
-                       QStringLiteral("[review] context_lines: %1 is out of range (0-%2), "
-                                      "using %3")
-                           .arg(cfg.reviewContextLines).arg(kMaxReviewContextLines).arg(clamped));
-                cfg.reviewContextLines = clamped;
-            }
+            readBoundedInt(*review, "review", "context_lines", 0, kMaxReviewContextLines,
+                           cfg.reviewContextLines, issues);
             readBool(*review, "review", "image_preview", cfg.reviewImagePreview, issues);
             if (readInt(*review, "review", "image_max_bytes", cfg.reviewImageMaxBytes, issues))
                 cfg.reviewImageMaxBytes = qMax(0, cfg.reviewImageMaxBytes);
@@ -566,6 +580,10 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readBool(*switcher, "switcher", "keep_running", cfg.switcherKeepRunning, issues);
             if (readInt(*switcher, "switcher", "max_recent", cfg.switcherMaxRecent, issues))
                 cfg.switcherMaxRecent = qBound(0, cfg.switcherMaxRecent, 200);
+            readBoundedInt(*switcher, "switcher", "path_max_depth", 1, kMaxPathDepth,
+                           cfg.switcherPathMaxDepth, issues);
+            readBoundedInt(*switcher, "switcher", "path_max_entries", kMinPathEntries,
+                           kMaxPathEntries, cfg.switcherPathMaxEntries, issues);
         }
 
         readProjects(data, cfg.projects, issues);

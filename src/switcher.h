@@ -1,12 +1,20 @@
 #pragma once
 
+#include "pathindex.h"
+
 #include <QFrame>
+#include <QHash>
 #include <QList>
+#include <QSet>
 #include <QString>
+
+#include <atomic>
+#include <memory>
 
 class QLabel;
 class QLineEdit;
 class QListWidget;
+class QThread;
 class QTimer;
 
 /// One entry in the project switcher list.
@@ -36,6 +44,11 @@ class SwitcherWidget : public QFrame
 
 public:
     explicit SwitcherWidget(const QString &accentColor, QWidget *parent);
+    /// Stops a folder walk still running for path mode and waits for it.
+    ~SwitcherWidget() override;
+
+    /// Depth and size limits of path mode's recursive search.
+    void setPathLimits(const PathIndexLimits &limits);
 
     /// Replace the item set, reset to project mode, recenter and show focused.
     /// `baseDir` is where path mode starts and what relative paths resolve
@@ -78,6 +91,8 @@ protected:
     /// Keeps the box centered while the parent window resizes and dismisses
     /// on focus loss or Esc (filters on the embedded line edit).
     bool eventFilter(QObject *watched, QEvent *event) override;
+    /// Closing the switcher abandons the file lists being built for it.
+    void hideEvent(QHideEvent *event) override;
 
 private:
     /// What the text in the input line means.
@@ -95,8 +110,22 @@ private:
     void refilter(const QString &text);
     void refilterProjects(const QString &query);
     /// Rebuild the candidate list from the directory the typed path names,
-    /// matching the part after the last separator (see kMaxPathEntries).
+    /// matching the part after the last separator (see kMaxPathEntries). A
+    /// fragment of kRecursiveMinChars or more searches the whole tree below
+    /// that directory once its file list is ready (see requestPathIndex()).
     void refilterPath(const QString &text);
+    /// Candidates for `fragment` from the file list of `root`, the tree below it.
+    void showRecursive(const QString &root, const PathIndex &index, const QString &fragment);
+    /// Start building the file list of `root`, unless it is ready or being
+    /// built: `git ls-files` inside a repository, a folder walk on a worker
+    /// thread otherwise. pathIndexReady() takes the result.
+    void requestPathIndex(const QString &root);
+    void startPathWalk(const QString &root);
+    /// Store a finished file list and show it if the input still asks for it.
+    /// `generation` tells a result for an earlier opening of the switcher.
+    void pathIndexReady(quint64 generation, const QString &root, const PathIndex &index);
+    /// Drop every file list and stop the walks building one.
+    void resetPathIndexes();
     /// Tab in path mode: put the highlighted candidate in the input, and on
     /// every Tab after that move one row down and put that one in instead.
     /// The candidate list is deliberately not refiltered while cycling, so
@@ -143,4 +172,14 @@ private:
     QString m_pinDir;                 // folder the side command prompt is for
     Mode m_pinReturnMode = Mode::Projects; // mode the prompt interrupted
     QString m_pinReturnText;          // input text it interrupted
+
+    // Path mode's recursive search: one file list per root directory, kept
+    // while the switcher is open.
+    PathIndexLimits m_pathLimits;
+    QHash<QString, PathIndex> m_pathIndexes;  // ready file lists, by root
+    QSet<QString> m_pathIndexing;     // roots whose file list is being built
+    quint64 m_pathGeneration = 0;     // bumped by resetPathIndexes()
+    std::shared_ptr<std::atomic<bool>> m_cancelWalks =
+        std::make_shared<std::atomic<bool>>(false);  // set to stop the walks
+    QList<QThread *> m_walks;         // walk threads still running
 };

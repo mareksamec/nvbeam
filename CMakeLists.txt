@@ -58,6 +58,7 @@ add_library(nvbeam_core STATIC
     src/documentlines.cpp
     src/diffbody.cpp
     src/pathinput.cpp
+    src/pathindex.cpp
     src/logging.cpp
 )
 

@@ -28,6 +28,7 @@ private slots:
     void unknownHintingKeepsTheDefault();
     void invalidReviewModeFallsBackToUnstaged();
     void reviewContextLines();
+    void switcherPathLimits();
     void outOfRangeNumbersAreClamped();
     void aSyntaxErrorIsAnErrorAndLeavesDefaults();
 
@@ -246,6 +247,28 @@ void TestConfig::reviewContextLines()
     cfg = Config::load(writeConfig("[review]\ncontext_lines = \"two\"\n"), &issues);
     QCOMPARE(cfg.reviewContextLines, 2);
     QVERIFY(hasIssue(issues, QStringLiteral("[review] context_lines: expected integer")));
+}
+
+void TestConfig::switcherPathLimits()
+{
+    const Config defaults;
+    QCOMPARE(defaults.switcherPathMaxDepth, 6);
+    QCOMPARE(defaults.switcherPathMaxEntries, 50000);
+
+    QList<ConfigIssue> issues;
+    Config cfg = Config::load(writeConfig(
+        "[switcher]\npath_max_depth = 3\npath_max_entries = 2000\n"), &issues);
+    QCOMPARE(cfg.switcherPathMaxDepth, 3);
+    QCOMPARE(cfg.switcherPathMaxEntries, 2000);
+    QVERIFY(issues.isEmpty());
+
+    issues.clear();
+    cfg = Config::load(writeConfig(
+        "[switcher]\npath_max_depth = 0\npath_max_entries = 99999999\n"), &issues);
+    QCOMPARE(cfg.switcherPathMaxDepth, 1);
+    QCOMPARE(cfg.switcherPathMaxEntries, 1000000);
+    QVERIFY(hasIssue(issues, QStringLiteral("[switcher] path_max_depth: 0 is out of range (1-20)")));
+    QVERIFY(hasIssue(issues, QStringLiteral("[switcher] path_max_entries: 99999999 is out of range")));
 }
 
 void TestConfig::outOfRangeNumbersAreClamped()
