@@ -122,6 +122,7 @@
 **Diff view adjustment**
 - Add some context to diff viewer to see 1-2 lines before and after added/removed content 
 - Fix bug, where nvbeam would freeze when diff viewer is expanded a file is being edited.
+- Diff viewer sometimes causes High CPU spikes when many new lines are added to a file or when a big new file is created.
 
 **File switcher**
 - After pressing Ctrl+P and then Ctrl+D the file switcher always prepends ~/ when the user is typing. Sometimes two ~/~/ end up being in front of the path
