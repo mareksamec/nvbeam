@@ -141,6 +141,9 @@ struct Config {
     QList<ProjectEntry> projects;        // pinned projects, shown on top of the list
     bool switcherKeepRunning = true;     // show the switcher instead of quitting when nvim exits
     int switcherMaxRecent = 20;          // recent files/folders kept in the list (each)
+    int switcherPathMaxDepth = 6;        // folder levels path mode's recursive search walks
+                                         // outside a git repository
+    int switcherPathMaxEntries = 50000;  // paths collected for the recursive search
 
     // Load config from given path, or standard path if empty.
     // Problems (unknown options, wrong types, invalid values) are collected

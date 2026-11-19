@@ -87,6 +87,8 @@
 [switcher]
 # keep_running = true  # show the project switcher instead of quitting when nvim exits
 # max_recent = 20      # recent files/folders kept in the switcher list (each)
+# path_max_depth = 6   # folder levels path mode searches outside a git repository
+# path_max_entries = 50000  # cap on the paths path mode searches
 
 # Pinned projects, shown on top of the project switcher list.
 # Repeat the [[projects]] block once per project.

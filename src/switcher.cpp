@@ -1,5 +1,6 @@
 #include "switcher.h"
 #include "fuzzy.h"
+#include "pathindex.h"
 #include "pathinput.h"
 #include <algorithm>
 #include <QDir>
@@ -9,6 +10,8 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QProcess>
+#include <QThread>
 #include <QSignalBlocker>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -55,6 +58,10 @@ constexpr int kStatusMs = 2500;
 /// fragment match and the score sort are counted, so this caps widget work,
 /// not the directory read itself.
 constexpr int kMaxPathEntries = 200;
+/// Fragment length at which path mode searches the whole tree below the
+/// listed directory instead of the directory alone. Shorter keeps the plain
+/// listing, so browsing one folder at a time works as before.
+constexpr int kRecursiveMinChars = 2;
 
 } // namespace
 
@@ -117,6 +124,7 @@ void SwitcherWidget::open(const QList<SwitcherItem> &items, const QString &baseD
 {
     m_items = items;
     m_baseDir = baseDir.isEmpty() ? QDir::homePath() : baseDir;
+    resetPathIndexes();   // the tree may have changed since the last opening
     // Always reopen in project mode, prefilled with nothing: setMode() does
     // the clear and the refilter, including the already-empty case that
     // textChanged would not cover.
@@ -136,6 +144,131 @@ void SwitcherWidget::setItems(const QList<SwitcherItem> &items)
     refilter(m_input->text());
     if (row >= 0 && row < m_list->count())
         m_list->setCurrentRow(row);
+}
+
+SwitcherWidget::~SwitcherWidget()
+{
+    resetPathIndexes();
+    for (QThread *walk : std::as_const(m_walks))
+        walk->wait();
+}
+
+void SwitcherWidget::setPathLimits(const PathIndexLimits &limits)
+{
+    m_pathLimits = limits;
+}
+
+void SwitcherWidget::hideEvent(QHideEvent *event)
+{
+    resetPathIndexes();
+    QFrame::hideEvent(event);
+}
+
+void SwitcherWidget::resetPathIndexes()
+{
+    ++m_pathGeneration;
+    m_pathIndexes.clear();
+    m_pathIndexing.clear();
+    // The running walks hold the old flag and stop at their next folder; new
+    // ones get a fresh flag.
+    m_cancelWalks->store(true);
+    m_cancelWalks = std::make_shared<std::atomic<bool>>(false);
+}
+
+void SwitcherWidget::requestPathIndex(const QString &root)
+{
+    if (m_pathIndexes.contains(root) || m_pathIndexing.contains(root))
+        return;
+    m_pathIndexing.insert(root);
+
+    // Inside a repository git already knows the files and what .gitignore
+    // leaves out; anywhere else (exit code 128) or without git, walk.
+    const quint64 generation = m_pathGeneration;
+    auto *git = new QProcess(this);
+    git->setWorkingDirectory(root);
+    connect(git, &QProcess::finished, this,
+            [this, git, generation, root](int code, QProcess::ExitStatus status) {
+        git->deleteLater();
+        if (generation != m_pathGeneration)
+            return;
+        if (status == QProcess::NormalExit && code == 0)
+            pathIndexReady(generation, root,
+                           pathIndexFromGitLsFiles(git->readAllStandardOutput(),
+                                                   m_pathLimits.maxEntries));
+        else
+            startPathWalk(root);
+    });
+    // FailedToStart (no git installed) never reaches finished().
+    connect(git, &QProcess::errorOccurred, this,
+            [this, git, generation, root](QProcess::ProcessError error) {
+        if (error != QProcess::FailedToStart)
+            return;
+        git->deleteLater();
+        if (generation == m_pathGeneration)
+            startPathWalk(root);
+    });
+    git->start(QStringLiteral("git"),
+               {QStringLiteral("ls-files"), QStringLiteral("-z"), QStringLiteral("--cached"),
+                QStringLiteral("--others"), QStringLiteral("--exclude-standard")});
+}
+
+void SwitcherWidget::startPathWalk(const QString &root)
+{
+    const quint64 generation = m_pathGeneration;
+    const PathIndexLimits limits = m_pathLimits;
+    const std::shared_ptr<std::atomic<bool>> cancel = m_cancelWalks;
+    // A home directory can take a noticeable moment to walk, so it happens on
+    // a thread of its own; the result comes back to this one queued.
+    QThread *walk = QThread::create([this, generation, root, limits, cancel]() {
+        const PathIndex index = walkPathIndex(root, limits, cancel.get());
+        if (cancel->load())
+            return;
+        QMetaObject::invokeMethod(this, [this, generation, root, index]() {
+            pathIndexReady(generation, root, index);
+        }, Qt::QueuedConnection);
+    });
+    m_walks.append(walk);
+    connect(walk, &QThread::finished, this, [this, walk]() {
+        m_walks.removeOne(walk);
+        walk->deleteLater();
+    });
+    walk->start();
+}
+
+void SwitcherWidget::pathIndexReady(quint64 generation, const QString &root,
+                                    const PathIndex &index)
+{
+    if (generation != m_pathGeneration)
+        return;
+    m_pathIndexing.remove(root);
+    m_pathIndexes.insert(root, index);
+    // Replace the plain listing shown meanwhile, unless the user is already
+    // cycling or moving through it.
+    if (m_mode == Mode::Path && isVisible() && !m_completionPending && !m_selectionMoved)
+        refilter(m_input->text());
+}
+
+void SwitcherWidget::showRecursive(const QString &root, const PathIndex &index,
+                                   const QString &fragment)
+{
+    m_pathItems.clear();
+    QList<int> indices;
+    const QDir dir(root);
+    for (const QString &relative : rankPaths(index.paths, fragment, kMaxPathEntries)) {
+        SwitcherItem item;
+        const bool folder = relative.endsWith(QLatin1Char('/'));
+        item.kind = folder ? SwitcherItem::Folder : SwitcherItem::File;
+        // The relative path, not just the name: two files called main.cpp in
+        // different folders have to be told apart.
+        item.label = folder ? relative.chopped(1) : relative;
+        item.path = dir.filePath(item.label);
+        indices.append(m_pathItems.size());
+        m_pathItems.append(item);
+    }
+    showRows(indices);
+    if (index.truncated)
+        setStatus(QStringLiteral("Searched the first %1 paths ([switcher] path_max_entries)")
+                      .arg(index.paths.size()));
 }
 
 void SwitcherWidget::dismiss()
@@ -287,6 +420,17 @@ void SwitcherWidget::refilterPath(const QString &raw)
     const QString dirText = slash < 0 ? QString() : text.left(slash + 1);
     const QString fragment = slash < 0 ? text : text.mid(slash + 1);
     const QDir dir(resolvePath(dirText, m_baseDir));
+
+    // A longer fragment searches the whole tree below the directory, once its
+    // file list is ready. Until then the directory alone is listed below.
+    if (fragment.size() >= kRecursiveMinChars) {
+        const QString root = QDir::cleanPath(dir.absolutePath());
+        requestPathIndex(root);
+        if (const auto it = m_pathIndexes.constFind(root); it != m_pathIndexes.constEnd()) {
+            showRecursive(root, *it, fragment);
+            return;
+        }
+    }
 
     QDir::Filters filters = QDir::AllEntries | QDir::NoDotAndDotDot;
     if (fragment.startsWith(QLatin1Char('.')))

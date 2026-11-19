@@ -276,6 +276,8 @@ Nvbeam reads its config from `~/.config/nvbeam/nvbeam.toml`, or from the path gi
 # [switcher]
 # keep_running = true  # show the project switcher instead of quitting when nvim exits
 # max_recent = 20      # recent files/folders kept in the switcher list (each)
+# path_max_depth = 6   # folder levels path mode searches outside a git repository
+# path_max_entries = 50000  # cap on the paths path mode searches
 
 # Pinned projects, shown on top of the project switcher list.
 # Repeat the [[projects]] block once per project.
@@ -358,6 +360,8 @@ Run `nvbeam -k` (optionally with `-c <path>`) to validate the config without sta
 **`[switcher]`**
 - `keep_running` — When nvim exits, keep nvbeam running and show the project switcher instead of closing the window (default: `true`)
 - `max_recent` — How many recent files and folders (each) are remembered for the switcher; `0` disables recents tracking (default: `20`)
+- `path_max_depth`: How many folder levels path mode's recursive search walks outside a git repository. Inside one, `git ls-files` lists the files instead, with `.gitignore` applied (default: `6`, range 1-20)
+- `path_max_entries`: Cap on the files and folders path mode's recursive search collects (default: `50000`, range 100-1000000)
 
 **`[[projects]]`** (repeatable)
 - `path` — Project folder, `~` expands to your home directory (required)

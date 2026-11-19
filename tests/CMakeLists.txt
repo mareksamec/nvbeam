@@ -15,6 +15,7 @@ set(NVBEAM_TEST_SOURCES
     tst_documentlines.cpp
     tst_diffbody.cpp
     tst_pathinput.cpp
+    tst_pathindex.cpp
 )
 
 foreach(src IN LISTS NVBEAM_TEST_SOURCES)

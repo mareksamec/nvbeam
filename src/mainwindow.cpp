@@ -1052,6 +1052,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
 
     // Project switcher overlay (pinned projects + recent folders/files).
     m_switcher = new SwitcherWidget(cfg.accentColor, this);
+    m_switcher->setPathLimits({cfg.switcherPathMaxDepth, cfg.switcherPathMaxEntries});
     connect(m_switcher, &SwitcherWidget::itemSelected, this,
             &MainWindow::applySwitcherSelection);
     connect(m_switcher, &SwitcherWidget::dismissed, this,
