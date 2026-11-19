@@ -13,7 +13,8 @@
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)
+# color_scheme = "Neoblue"  # QTermWidget color scheme (default: the [ui] theme's; Neoblue, OneDark,
+#                           # Dracula, CatppuccinLatte, VimPaper ship with nvbeam)
 # foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
 # background = ""  # override scheme background color (empty = scheme default)
 # shell = ""  # shell program (empty = system default)
@@ -65,7 +66,9 @@
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
 # gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
-# accent_color = "#50fa7b"
+# theme = "dark"  # chrome palette: dark, catppuccin-latte, vim-paper
+#                  # (also picks the terminal color_scheme when that is not set)
+# accent_color = "#50fa7b"  # overrides the theme's accent
 # statusline_divider = "powerline"  # "powerline", "pipe", "none"
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
 # branch_switcher_font = "monospace"  # git branch switcher popup font family

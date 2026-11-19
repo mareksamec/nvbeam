@@ -65,20 +65,22 @@ constexpr int kRecursiveMinChars = 2;
 
 } // namespace
 
-SwitcherWidget::SwitcherWidget(const QString &accentColor, QWidget *parent)
+SwitcherWidget::SwitcherWidget(const Theme &theme, QWidget *parent)
     : QFrame(parent)
 {
     setObjectName("nbSwitcher");
     setStyleSheet(QStringLiteral(
-        "QFrame#nbSwitcher { background: #1a1b26; border: 1px solid #444; border-radius: 6px; }"
-        "QLineEdit { background: #24283b; color: #cdd6f4; border: 1px solid #333; "
+        "QFrame#nbSwitcher { background: %2; border: 1px solid %5; border-radius: 6px; }"
+        "QLineEdit { background: %3; color: %4; border: 1px solid %5; "
         "border-radius: 4px; padding: 6px 8px; font-size: 12pt; }"
         "QLineEdit:focus { border-color: %1; }"
-        "QListWidget { background: transparent; color: #a9b1d6; border: none; font-size: 10pt; }"
+        "QListWidget { background: transparent; color: %6; border: none; font-size: 10pt; }"
         "QListWidget::item { padding: 5px 8px; border-radius: 4px; }"
-        "QListWidget::item:selected { background: #313244; color: %1; }"
-        "QLabel#nbSwitcherStatus { color: #6c7086; font-size: 9pt; }")
-            .arg(accentColor));
+        "QListWidget::item:selected { background: %7; color: %1; }"
+        "QLabel#nbSwitcherStatus { color: %8; font-size: 9pt; }")
+            .arg(theme.accent.name(), theme.background.name(), theme.surface.name(),
+                 theme.text.name(), theme.border.name(), theme.subtext.name(),
+                 theme.selection.name(), theme.dim.name()));
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);

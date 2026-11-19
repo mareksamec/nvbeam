@@ -5,6 +5,8 @@
 #include <QList>
 #include <QFont>
 
+#include "theme.h"
+
 /// A problem found while loading the config file
 struct ConfigIssue {
     enum Severity { Warning, Error };
@@ -117,9 +119,13 @@ struct Config {
                                       // becomes a required plugin for the branch to show at all
     QString uiWindowTitle;            // window title template: %p project, %d cwd (~), %D cwd,
                                       // %f file name, %F file path (~), %% literal; empty = default title
-    QString accentColor = "#50fa7b";  // greenish accent for native elements
+    QString uiTheme = defaultThemeName();  // [ui] theme: palette of nvbeam's own chrome
+    Theme theme = *findTheme(defaultThemeName());  // that theme, with the explicit
+                                                   // colour keys below applied
+    QString accentColor = "#50fa7b";  // greenish accent for native elements; unset = the theme's
     QString statuslineDivider = "powerline"; // "powerline", "pipe", "none"
-    QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane
+    QString focusBorderColor = "#61afef"; // 1px border around the focused grid/terminal pane;
+                                          // unset = the theme's
 
     // Git branch switcher popup (the picker under the statusline's git segment).
     // A monospace family is what lets its commit-date column line up; a

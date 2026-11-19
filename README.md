@@ -203,7 +203,8 @@ Nvbeam reads its config from `~/.config/nvbeam/nvbeam.toml`, or from the path gi
 # height = 300  # startup height in pixels
 # font = ""  # terminal font (empty = use global font)
 # font_size = 0  # terminal font size (0 = use global)
-# color_scheme = "Neoblue"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)
+# color_scheme = "Neoblue"  # QTermWidget color scheme (default: the [ui] theme's; Neoblue, OneDark,
+#                           # Dracula, CatppuccinLatte, VimPaper ship with nvbeam)
 # foreground = ""  # override scheme text color, e.g. "#f8f8f2" (empty = scheme default)
 # background = ""  # override scheme background color (empty = scheme default)
 # shell = ""  # shell program (empty = system default)
@@ -254,7 +255,9 @@ Nvbeam reads its config from `~/.config/nvbeam/nvbeam.toml`, or from the path gi
 # statusline = true  # native statusline (mode, file, position, diagnostics)
 # git_status = true  # git branch + status counts in the statusline (push-updated, no polling)
 # gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider
-# accent_color = "#50fa7b"
+# theme = "dark"  # chrome palette: dark, catppuccin-latte, vim-paper
+#                  # (also picks the terminal color_scheme when that is not set)
+# accent_color = "#50fa7b"  # overrides the theme's accent
 # statusline_divider = "powerline"  # powerline, pipe, none
 # focus_border_color = "#61afef"  # 1px border around the focused grid/terminal pane
 # branch_switcher_font = "monospace"  # git branch switcher popup font family
@@ -311,7 +314,7 @@ Run `nvbeam -k` (optionally with `-c <path>`) to validate the config without sta
 - `height` — Terminal panel startup height in pixels (default: `300`)
 - `font` — Terminal font family; empty uses the global font (default: `""`)
 - `font_size` — Terminal font size in points; `0` uses the global font size (default: `0`)
-- `color_scheme` — Color scheme name (default: `"Neoblue"`, nvbeam's own dark blue scheme; `"OneDark"` — based on onedark.nvim with a slightly darker background than the editor — and `"Dracula"` also ship with nvbeam). Any scheme installed with qtermwidget works too (`Linux`, `Nord`, `Solarized`, ...), as does a full path to a `.colorscheme` file
+- `color_scheme` — Color scheme name (default: the `[ui] theme`'s, `"Neoblue"` for `dark`, nvbeam's own dark blue scheme; `"OneDark"` — based on onedark.nvim with a slightly darker background than the editor — `"Dracula"`, and the light `"CatppuccinLatte"` and `"VimPaper"` also ship with nvbeam). Any scheme installed with qtermwidget works too (`Linux`, `Nord`, `Solarized`, ...), as does a full path to a `.colorscheme` file
 - `foreground` — Override the scheme's text color, e.g. `"#f8f8f2"`; empty keeps the scheme's color (default: `""`)
 - `background` — Override the scheme's background color; empty keeps the scheme's color (default: `""`)
 - `shell` — Shell program to launch; empty uses the system default (default: `""`)
@@ -341,9 +344,10 @@ Run `nvbeam -k` (optionally with `-c <path>`) to validate the config without sta
   built-in provider, which runs `git` itself and needs no plugin. Only affects the name; the
   counts always come from the built-in provider. Enable this if you want the branch to follow
   gitsigns' own detection, and accept that it goes stale on gitsigns' schedule (default: `false`)
-- `accent_color` — Accent color for UI elements (default: `"#50fa7b"`)
+- `theme`: Palette of nvbeam's own chrome (statusline, bufferline, command line, messages, popups, switchers): `dark`, `catppuccin-latte` or `vim-paper`. It also picks the matching terminal `color_scheme` (`Neoblue`, `CatppuccinLatte`, `VimPaper`) when `[terminal] color_scheme` is not set, and the review panel follows that scheme. The nvim buffer keeps your nvim colorscheme, so set the matching one in nvim yourself (for example `catppuccin-latte` from catppuccin/nvim, or `paper` from vim-paper). `accent_color`, `focus_border_color` and `[mouse] selection_color` override the theme's colors (default: `"dark"`)
+- `accent_color` — Accent color for UI elements (default: the theme's, `"#50fa7b"` for `dark`)
 - `statusline_divider` — Statusline segment divider style: `powerline`, `pipe`, `none` (default: `powerline`)
-- `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: `"#61afef"`)
+- `focus_border_color` — Color of the 1px border around the focused grid/terminal pane (default: the theme's, `"#61afef"` for `dark`)
 - `branch_switcher_font` — Font family of the git branch switcher popup. A monospace family is what lets its commit-date column line up; a proportional one works too, the dates just stop aligning exactly (default: `"monospace"`)
 - `branch_switcher_font_size` — Point size of the branch switcher's list rows; the input line above them renders one point larger. Accepted range 4-72, clamped with a warning outside it (default: `10`)
 - `window_title` — Custom window title template. Empty uses the default title: `Nvbeam - ~/path`, plain `Nvbeam` for the home directory, or `<project name> - ~/path` after picking a pinned project in the switcher. Placeholders: `%p` project name (empty when no project is active), `%d` cwd (`~`-shortened), `%D` cwd (absolute), `%f` current file name, `%F` current file path (`~`-shortened), `%%` literal `%` (default: `""`)
@@ -351,7 +355,7 @@ Run `nvbeam -k` (optionally with `-c <path>`) to validate the config without sta
 **`[mouse]`**
 - `terminal_selection` — Terminal-style select/copy in nvim buffers when vim `mouse=` is empty (default: `true`)
 - `auto_copy` — Auto-copy the selection to the clipboard on release (default: `true`)
-- `selection_color` — Selection highlight color (default: `"#44475a"`)
+- `selection_color` — Selection highlight color (default: the `[ui] theme`'s, `"#44475a"` for `dark`)
 
 **`[session]`**
 - `restore_window` — Restore the window size, the editor/terminal panel proportions and the side terminal's per-split width. Best-effort: the window manager or Wayland compositor may override the size, and window position is ignored on Wayland and tiling WMs (default: `true`)

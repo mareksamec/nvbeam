@@ -10,6 +10,7 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include "gitstatus.h"
+#include "theme.h"
 
 class QPlainTextEdit;
 class QPushButton;
@@ -19,7 +20,7 @@ class PopupmenuWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit PopupmenuWidget(const QString &accent, QWidget *parent = nullptr);
+    explicit PopupmenuWidget(const Theme &theme, QWidget *parent = nullptr);
     void show(const QVariantList &items, int selected, int row, int col,
               int grid, int cellWidth, int cellHeight);
     void select(int idx);
@@ -27,7 +28,6 @@ public:
 
 private:
     QListWidget *m_list;
-    QString m_accent;
 };
 
 /// Native tabline widget (can show tabpages or buffers)
@@ -35,7 +35,7 @@ class TablineWidget : public QTabBar
 {
     Q_OBJECT
 public:
-    explicit TablineWidget(const QString &accent, QWidget *parent = nullptr);
+    explicit TablineWidget(const Theme &theme, QWidget *parent = nullptr);
     void update(int curtab, const QVariantList &tabs);
     void updateBuffers(const QVariantList &buffers, int currentBuf);
 
@@ -51,6 +51,7 @@ private:
     /// the others, or everything on one side of it.
     void showContextMenu(const QPoint &pos);
 
+    Theme m_theme;
     QVector<int> m_tabIds;
     bool m_bufferMode = false;
 };
@@ -63,7 +64,7 @@ class CmdlineWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit CmdlineWidget(const QString &accent, QWidget *parent = nullptr);
+    explicit CmdlineWidget(const Theme &theme, QWidget *parent = nullptr);
 
 public slots:
     void showCmdline(const QVariantList &content, int pos, const QString &firstc,
@@ -77,6 +78,7 @@ private:
 
     QLabel *m_label;
     QString m_accent;
+    QString m_onAccent;   // text drawn on the accent: the block cursor's character
     QString m_firstc, m_prompt, m_content, m_special;
     int m_bytePos = 0; // cursor position, a byte offset into m_content's UTF-8
     int m_indent = 0;
@@ -89,7 +91,7 @@ class MessageWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit MessageWidget(const QString &accent, QWidget *parent = nullptr);
+    explicit MessageWidget(const Theme &theme, QWidget *parent = nullptr);
     /// Move keyboard focus into the log, expanding it first so arrow/page
     /// keys have something to scroll (Ctrl+Shift+M).
     void focusLog();
@@ -128,6 +130,7 @@ private:
     QLabel *m_modeLabel;
     // Document position where the last message starts, so replace_last can
     // overwrite it in place (nvim uses it for progress-style updates).
+    Theme m_theme;
     int m_lastMsgPos = -1;
     bool m_expanded = false;
 };
@@ -137,7 +140,7 @@ class StatuslineWidget : public QWidget
 {
     Q_OBJECT
 public:
-    explicit StatuslineWidget(const QString &accent, const QString &dividerStyle = "powerline",
+    explicit StatuslineWidget(const Theme &theme, const QString &dividerStyle = "powerline",
                               QWidget *parent = nullptr);
 
     /// Update all statusline segments from Neovim state
@@ -184,7 +187,7 @@ private:
     QVector<QWidget *> m_dividers;
 
     QString m_dividerStyle;
-    QString m_accent;
+    Theme m_theme;
     QString m_mode = "NORMAL";
     QString m_file;
     QString m_branch;   // from statusline.lua (gitsigns); used only when m_gitsignsBranch

@@ -1,5 +1,7 @@
 #pragma once
 
+#include "theme.h"
+
 #include <QElapsedTimer>
 #include <QFrame>
 #include <QList>
@@ -37,8 +39,10 @@ public:
     /// and branch_switcher_font_size: the size applies to the list rows, and
     /// the input line above them renders one point larger. A monospace family
     /// is what lets showRows() line the date column up.
-    explicit BranchSwitcherWidget(const QString &highlightColor, const QString &fontFamily,
-                                  int fontPointSize, QWidget *parent);
+    /// `theme` gives the popup's surfaces and text, and its error and dim
+    /// colours for the status line.
+    explicit BranchSwitcherWidget(const Theme &theme, const QString &highlightColor,
+                                  const QString &fontFamily, int fontPointSize, QWidget *parent);
 
     /// Ask for a fresh branch list and show the popup under `anchor` (the
     /// statusline's git segment; the bottom-left of the window when it is
@@ -111,6 +115,8 @@ private:
     QLineEdit *m_input = nullptr;
     QListWidget *m_list = nullptr;
     QLabel *m_status = nullptr;
+    QString m_error;   // status line colours: an error, and a plain note
+    QString m_dim;
     QList<GitBranch> m_branches;      // full list, as GitStatus reported it
     QList<int> m_visible;             // indices into m_branches, filtered order
     QPointer<QWidget> m_anchor;       // git segment the popup hangs under

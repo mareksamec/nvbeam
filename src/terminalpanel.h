@@ -163,6 +163,11 @@ private:
     /// [Background] color, else black. Keeps areas not covered by the
     /// terminal display from showing through as black bands.
     QColor panelBackgroundColor() const;
+    /// Text color for the same chrome, by the same precedence: the configured
+    /// foreground, else the scheme's [Foreground], else light grey. The
+    /// button, hover and border shades are mixed from it and the background,
+    /// so a light scheme gets a light panel without colors of its own.
+    QColor panelForegroundColor() const;
 
     /// Add a split running `command` (empty = plain shell) and give every
     /// split an equal share of the panel again.

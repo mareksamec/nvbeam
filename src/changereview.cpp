@@ -59,8 +59,6 @@ constexpr int kGutterPadding = 6;
 /// The stripe painted across a changed line. Set directly rather than blended
 /// from the diff colors: the stripe has to stay dark enough to read code on,
 /// which is a different job from the marker color it would otherwise follow.
-const QColor kAddedStripe{"#2a3e29"};
-const QColor kRemovedStripe{"#4d3030"};
 
 /// Shortest an expanded body is ever made, so an empty or one-line diff still
 /// shows as an open row rather than a sliver.
@@ -376,7 +374,7 @@ void DiffBody::paintGutter(QPaintEvent *event)
             const bool removed = !added && line.startsWith(QLatin1Char('-'));
             if (added || removed)
                 painter.fillRect(0, top, m_gutter->width(), height,
-                                 added ? kAddedStripe : kRemovedStripe);
+                                 added ? m_cfg.addedStripe : m_cfg.removedStripe);
             if (number > 0) {
                 painter.setPen(added ? m_cfg.added : (removed ? m_cfg.removed : m_cfg.dim));
                 // Right-aligned against the text, and on the first line of a
@@ -858,8 +856,11 @@ void FileCard::applyBody()
         // change on each refresh, not the size of the whole diff. The stripes
         // go in with the text: painted afterwards, each one would make the
         // highlighter run over its line a second time.
-        rewritten = updateDocumentLines(m_body->document(), body.text.split(QLatin1Char('\n')),
-                                   stripeFormat);
+        rewritten = updateDocumentLines(
+            m_body->document(), body.text.split(QLatin1Char('\n')),
+            [this](const QString &line, const QTextBlockFormat &current) {
+                return stripeFormat(line, current);
+            });
         updateMs = timer.restart();
         m_body->setLineNumbers(body.numbers);
         m_body->verticalScrollBar()->setValue(scroll);
@@ -872,7 +873,8 @@ void FileCard::applyBody()
             textMs, updateMs, numbersMs, timer.elapsed());
 }
 
-QTextBlockFormat FileCard::stripeFormat(const QString &line, const QTextBlockFormat &current)
+QTextBlockFormat FileCard::stripeFormat(const QString &line,
+                                       const QTextBlockFormat &current) const
 {
     // Block formats rather than extra selections: a full-width extra selection
     // only reaches the first visual line of a wrapped block, leaving the rest
@@ -881,7 +883,7 @@ QTextBlockFormat FileCard::stripeFormat(const QString &line, const QTextBlockFor
     const bool removed = !added && line.startsWith(QLatin1Char('-'));
     QTextBlockFormat format = current;
     if (added || removed)
-        format.setBackground(added ? kAddedStripe : kRemovedStripe);
+        format.setBackground(added ? m_cfg.addedStripe : m_cfg.removedStripe);
     else
         format.clearBackground();
     return format;

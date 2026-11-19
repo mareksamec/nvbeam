@@ -128,19 +128,22 @@ void readStringList(const toml::value &sec, const char *secName, const char *key
     out = result;
 }
 
-void readColor(const toml::value &sec, const char *secName, const char *key,
+/// Returns true when the key held a valid colour (or an empty string), which
+/// tells an explicit setting from a default.
+bool readColor(const toml::value &sec, const char *secName, const char *key,
                QString &out, QList<ConfigIssue> *issues)
 {
     QString c;
     if (!readString(sec, secName, key, c, issues))
-        return;
+        return false;
     if (!c.isEmpty() && !QColor(c).isValid()) {
         report(issues, ConfigIssue::Warning,
                QStringLiteral("[%1] %2: \"%3\" is not a valid color (using default)")
                    .arg(QLatin1String(secName), QLatin1String(key), c));
-        return;
+        return false;
     }
     out = c;
+    return true;
 }
 
 void readHinting(const toml::value &sec, const char *secName, const char *key,
@@ -178,7 +181,7 @@ const KnownSection kKnownSections[] = {
                 "font_size", "max_lines", "file_max_height", "show_context", "context_lines", "syntax", "file_color", "image_preview",
                 "image_max_bytes"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
-            "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
+            "git_status", "gitsigns_branch", "theme", "accent_color", "statusline_divider",
             "focus_border_color", "window_title", "branch_switcher_font",
             "branch_switcher_font_size"}},
     {"mouse", {"terminal_selection", "auto_copy", "selection_color"}},
@@ -346,7 +349,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# height = 300  # startup height in pixels\n"
                 "# font = \"\"  # terminal font (empty = use global font)\n"
                 "# font_size = 0  # terminal font size (0 = use global)\n"
-                "# color_scheme = \"Neoblue\"  # QTermWidget color scheme (Neoblue, OneDark, Dracula ship with nvbeam)\n"
+                "# color_scheme = \"Neoblue\"  # QTermWidget color scheme (default: the [ui] theme's; Neoblue, OneDark,\n"
+                "#                           # Dracula, CatppuccinLatte, VimPaper ship with nvbeam)\n"
                 "# foreground = \"\"  # override scheme text color, e.g. \"#f8f8f2\" (empty = scheme default)\n"
                 "# background = \"\"  # override scheme background color (empty = scheme default)\n"
                 "# shell = \"\"  # shell program (empty = system default)\n"
@@ -376,7 +380,9 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                 "# statusline = true  # native statusline (mode, file, position, diagnostics)\n"
                 "# git_status = true  # git branch + status counts in the statusline (push-updated, no polling)\n"
                 "# gitsigns_branch = false  # take the branch name from gitsigns instead of the built-in git provider\n"
-                "# accent_color = \"#50fa7b\"\n"
+                "# theme = \"dark\"  # chrome palette: dark, catppuccin-latte, vim-paper\n"
+                "#                  # (also picks the terminal color_scheme when that is not set)\n"
+                "# accent_color = \"#50fa7b\"  # overrides the theme's accent\n"
                 "# statusline_divider = \"powerline\"  # powerline, pipe, none\n"
                 "# focus_border_color = \"#61afef\"  # 1px border around the focused grid/terminal pane\n"
                 "# branch_switcher_font = \"monospace\"  # git branch switcher popup font family\n"
@@ -419,6 +425,11 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
         return cfg;
     }
 
+    // Colour settings given explicitly; everything else comes from the theme.
+    bool schemeSet = false;
+    bool accentSet = false;
+    bool focusSet = false;
+    bool selectionSet = false;
     try {
         auto data = toml::parse(path.toStdString());
 
@@ -437,7 +448,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readInt(*term, "terminal", "height", cfg.terminalHeight, issues);
             readString(*term, "terminal", "font", cfg.terminalFont, issues);
             readInt(*term, "terminal", "font_size", cfg.terminalFontSize, issues);
-            readString(*term, "terminal", "color_scheme", cfg.terminalColorScheme, issues);
+            schemeSet = readString(*term, "terminal", "color_scheme", cfg.terminalColorScheme,
+                                   issues);
             readColor(*term, "terminal", "foreground", cfg.terminalForeground, issues);
             readColor(*term, "terminal", "background", cfg.terminalBackground, issues);
             readString(*term, "terminal", "shell", cfg.terminalShell, issues);
@@ -515,7 +527,14 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             readBool(*ui, "ui", "ext_popupmenu", cfg.extPopupmenu, issues);
             readBool(*ui, "ui", "ext_tabline", cfg.extTabline, issues);
             readBool(*ui, "ui", "ext_messages", cfg.extMessages, issues);
-            readColor(*ui, "ui", "accent_color", cfg.accentColor, issues);
+            if (readString(*ui, "ui", "theme", cfg.uiTheme, issues) && !findTheme(cfg.uiTheme)) {
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[ui] theme: unknown theme \"%1\" (expected %2; using \"%3\")")
+                           .arg(cfg.uiTheme, themeNames().join(QStringLiteral(", ")),
+                                defaultThemeName()));
+                cfg.uiTheme = defaultThemeName();
+            }
+            accentSet = readColor(*ui, "ui", "accent_color", cfg.accentColor, issues);
             readBool(*ui, "ui", "bufferline", cfg.bufferline, issues);
             readBool(*ui, "ui", "statusline", cfg.extStatusline, issues);
             readBool(*ui, "ui", "git_status", cfg.uiGitStatus, issues);
@@ -529,7 +548,7 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
                            QStringLiteral("[ui] statusline_divider: unknown value \"%1\" "
                                           "(expected powerline, pipe or none)").arg(divider));
             }
-            readColor(*ui, "ui", "focus_border_color", cfg.focusBorderColor, issues);
+            focusSet = readColor(*ui, "ui", "focus_border_color", cfg.focusBorderColor, issues);
             readString(*ui, "ui", "branch_switcher_font", cfg.branchSwitcherFont, issues);
             if (readInt(*ui, "ui", "branch_switcher_font_size",
                         cfg.branchSwitcherFontSize, issues)) {
@@ -568,7 +587,8 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
         if (const auto *mouse = sectionTable(data, "mouse")) {
             readBool(*mouse, "mouse", "terminal_selection", cfg.mouseTerminalSelection, issues);
             readBool(*mouse, "mouse", "auto_copy", cfg.mouseAutoCopy, issues);
-            readColor(*mouse, "mouse", "selection_color", cfg.mouseSelectionColor, issues);
+            selectionSet = readColor(*mouse, "mouse", "selection_color", cfg.mouseSelectionColor,
+                                     issues);
         }
 
         if (const auto *session = sectionTable(data, "session")) {
@@ -591,6 +611,22 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
         report(issues, ConfigIssue::Error,
                QStringLiteral("failed to parse %1:\n%2").arg(path, QString::fromUtf8(e.what())));
     }
+
+    // The theme fills in every colour the file does not set; an explicit one
+    // wins and is written back into the theme, so a widget reading either
+    // gets the same colour.
+    cfg.theme = *findTheme(cfg.uiTheme);
+    const auto resolve = [](bool set, QString &key, QColor &role) {
+        if (set && !key.isEmpty())
+            role = QColor(key);
+        else
+            key = role.name();
+    };
+    resolve(accentSet, cfg.accentColor, cfg.theme.accent);
+    resolve(focusSet, cfg.focusBorderColor, cfg.theme.focus);
+    resolve(selectionSet, cfg.mouseSelectionColor, cfg.theme.mouseSelection);
+    if (!schemeSet)
+        cfg.terminalColorScheme = cfg.theme.terminalScheme;
 
     return cfg;
 }
