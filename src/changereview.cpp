@@ -1,6 +1,7 @@
 #include "changereview.h"
 
 #include "colorscheme.h"
+#include "diffbody.h"
 #include "documentlines.h"
 #include "logging.h"
 #include "shortcuts.h"
@@ -25,7 +26,6 @@
 #include <QResizeEvent>
 #include <QFrame>
 #include <QPainter>
-#include <QRegularExpression>
 #include <QScopeGuard>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -613,7 +613,7 @@ FileCard::FileCard(const ReviewConfig &cfg, const FileDiff &file, QWidget *paren
     m_contextBtn->setCheckable(true);
     m_contextBtn->setChecked(m_context);
     m_contextBtn->setAutoRaise(true);
-    m_contextBtn->setToolTip(QStringLiteral("Show unchanged context lines"));
+    m_contextBtn->setToolTip(QStringLiteral("Show all context lines"));
     m_contextBtn->setStyleSheet(QStringLiteral(
         "QToolButton { color: %1; background: transparent; border: none; padding: 1px 4px; }"
         "QToolButton:checked { color: %2; background: %3; border-radius: 3px; }")
@@ -752,49 +752,9 @@ void FileCard::resizeEvent(QResizeEvent *event)
     fitBody();
 }
 
-FileCard::BodyText FileCard::bodyText() const
+DiffBodyText FileCard::bodyText() const
 {
-    // "@@ -old,count +new,count @@": the two numbers the lines after it are
-    // counted from.
-    static const QRegularExpression hunkHeader(
-        QStringLiteral("^@@ -(\\d+)(?:,\\d+)? \\+(\\d+)"));
-
-    BodyText out;
-    QStringList kept;
-    int oldNo = 1;
-    int newNo = 1;
-    const QStringList lines = m_file.body.split(QLatin1Char('\n'));
-    for (const QString &line : lines) {
-        const bool hunk = line.startsWith(QLatin1String("@@"));
-        const bool added = !hunk && line.startsWith(QLatin1Char('+'));
-        const bool removed = !hunk && line.startsWith(QLatin1Char('-'));
-
-        int number = 0;
-        if (hunk) {
-            const QRegularExpressionMatch match = hunkHeader.match(line);
-            if (match.hasMatch()) {
-                oldNo = match.captured(1).toInt();
-                newNo = match.captured(2).toInt();
-            }
-        } else if (added) {
-            number = newNo++;
-        } else if (removed) {
-            number = oldNo++;
-        } else {
-            // A context line exists in both files; its number in the new one is
-            // what the reader is looking for. Counted even when it is hidden,
-            // which is what keeps the numbers of the lines around it true.
-            number = newNo++;
-            ++oldNo;
-        }
-
-        if (!m_context && !(hunk || added || removed))
-            continue;
-        kept << line;
-        out.numbers << number;
-    }
-    out.text = kept.join(QLatin1Char('\n'));
-    return out;
+    return diffBodyText(m_file.body, m_context ? kAllContextLines : m_cfg.contextLines);
 }
 
 bool FileCard::showsImage() const
@@ -885,7 +845,7 @@ void FileCard::applyBody()
     if (m_file.untracked && !m_loaded)
         loadUntracked();
     const qint64 loadMs = timer.restart();
-    const BodyText body = bodyText();
+    const DiffBodyText body = bodyText();
     const qint64 textMs = timer.restart();
     qint64 updateMs = 0;
     qint64 numbersMs = 0;

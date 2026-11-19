@@ -27,6 +27,7 @@ private slots:
     void invalidColorKeepsTheDefault();
     void unknownHintingKeepsTheDefault();
     void invalidReviewModeFallsBackToUnstaged();
+    void reviewContextLines();
     void outOfRangeNumbersAreClamped();
     void aSyntaxErrorIsAnErrorAndLeavesDefaults();
 
@@ -218,6 +219,33 @@ void TestConfig::invalidReviewModeFallsBackToUnstaged()
 
     QCOMPARE(cfg.reviewMode, QStringLiteral("unstaged"));
     QVERIFY(hasIssue(issues, QStringLiteral("[review] mode")));
+}
+
+void TestConfig::reviewContextLines()
+{
+    // Default: two lines around each change.
+    QCOMPARE(Config().reviewContextLines, 2);
+
+    QList<ConfigIssue> issues;
+    Config cfg = Config::load(writeConfig("[review]\ncontext_lines = 0\n"), &issues);
+    QCOMPARE(cfg.reviewContextLines, 0);
+    QVERIFY(issues.isEmpty());
+
+    // git writes 3 context lines, so more than that is clamped to 3.
+    issues.clear();
+    cfg = Config::load(writeConfig("[review]\ncontext_lines = 10\n"), &issues);
+    QCOMPARE(cfg.reviewContextLines, 3);
+    QVERIFY(hasIssue(issues, QStringLiteral("[review] context_lines: 10 is out of range")));
+
+    issues.clear();
+    cfg = Config::load(writeConfig("[review]\ncontext_lines = -1\n"), &issues);
+    QCOMPARE(cfg.reviewContextLines, 0);
+    QVERIFY(hasIssue(issues, QStringLiteral("[review] context_lines: -1 is out of range")));
+
+    issues.clear();
+    cfg = Config::load(writeConfig("[review]\ncontext_lines = \"two\"\n"), &issues);
+    QCOMPARE(cfg.reviewContextLines, 2);
+    QVERIFY(hasIssue(issues, QStringLiteral("[review] context_lines: expected integer")));
 }
 
 void TestConfig::outOfRangeNumbersAreClamped()
