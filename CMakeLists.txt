@@ -55,6 +55,7 @@ add_library(nvbeam_core STATIC
     src/pinnedprojects.cpp
     src/gitstatus.cpp
     src/colorscheme.cpp
+    src/documentlines.cpp
     src/logging.cpp
 )
 
