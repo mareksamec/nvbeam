@@ -1,5 +1,6 @@
 #include "switcher.h"
 #include "fuzzy.h"
+#include "pathinput.h"
 #include <algorithm>
 #include <QDir>
 #include <QEvent>
@@ -21,40 +22,6 @@ int itemScore(const QString &query, const SwitcherItem &item)
     const int labelScore = fuzzyScore(query, item.label);
     const int pathScore = fuzzyScore(query, item.path);
     return qMax(labelScore >= 0 ? labelScore * 2 : -1, pathScore);
-}
-
-QString collapseHome(const QString &path)
-{
-    const QString home = QDir::homePath();
-    if (path == home)
-        return QStringLiteral("~");
-    if (path.startsWith(home + QLatin1Char('/')))
-        return QStringLiteral("~") + path.mid(home.size());
-    return path;
-}
-
-/// Inverse of collapseHome: "~" and "~/..." become absolute. Anything else,
-/// including a bare relative path, is returned as typed - refilterPath()
-/// resolves those against the base directory.
-QString expandHome(const QString &path)
-{
-    if (path == QStringLiteral("~"))
-        return QDir::homePath();
-    if (path.startsWith(QStringLiteral("~/")))
-        return QDir::homePath() + path.mid(1);
-    return path;
-}
-
-/// Resolve a typed path to an absolute one: ~ expanded, an empty text meaning
-/// `base`, and a relative path anchored at `base` (nvim's cwd) rather than at
-/// the process working directory. A trailing separator is preserved, since
-/// refilterPath() reads it as "list this directory".
-QString resolvePath(const QString &text, const QString &base)
-{
-    const QString path = expandHome(text.trimmed());
-    if (path.isEmpty())
-        return base;
-    return QDir::isAbsolutePath(path) ? path : QDir(base).filePath(path);
 }
 
 /// Folder/File switcher item for an existing filesystem path. Kind follows
@@ -187,11 +154,15 @@ void SwitcherWidget::setMode(Mode mode)
         ? QStringLiteral("Path to open - Tab completes, Ctrl+D returns to projects")
         : QStringLiteral("Search projects and recent files… (Ctrl+D: open a path)"));
     // Path mode starts at the base directory with a trailing separator, so
-    // its contents are listed right away. Blocked because refilter() is
-    // called once below either way (setText is silent when nothing changes).
+    // its contents are listed right away. The prefill is selected, so typing
+    // a path of its own replaces it instead of being appended to it. Blocked
+    // because refilter() is called once below either way (setText is silent
+    // when nothing changes).
     {
         QSignalBlocker blocker(m_input);
         m_input->setText(path ? collapseHome(m_baseDir) + QLatin1Char('/') : QString());
+        if (path)
+            m_input->selectAll();
     }
     refilter(m_input->text());
     setStatus();
@@ -311,7 +282,7 @@ void SwitcherWidget::refilterPath(const QString &raw)
     // directory and matches "Proj"; "~/Projects/" lists that folder and
     // matches everything in it. Without a separator the text is a name
     // relative to the base directory.
-    const QString text = expandHome(raw.trimmed());
+    const QString text = expandPathInput(raw);
     const int slash = text.lastIndexOf(QLatin1Char('/'));
     const QString dirText = slash < 0 ? QString() : text.left(slash + 1);
     const QString fragment = slash < 0 ? text : text.mid(slash + 1);
