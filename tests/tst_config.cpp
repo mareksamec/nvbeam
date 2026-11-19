@@ -29,6 +29,8 @@ private slots:
     void invalidReviewModeFallsBackToUnstaged();
     void reviewContextLines();
     void switcherPathLimits();
+    void themeSuppliesTheUnsetColors();
+    void unknownThemeFallsBackToDark();
     void outOfRangeNumbersAreClamped();
     void aSyntaxErrorIsAnErrorAndLeavesDefaults();
 
@@ -269,6 +271,42 @@ void TestConfig::switcherPathLimits()
     QCOMPARE(cfg.switcherPathMaxEntries, 1000000);
     QVERIFY(hasIssue(issues, QStringLiteral("[switcher] path_max_depth: 0 is out of range (1-20)")));
     QVERIFY(hasIssue(issues, QStringLiteral("[switcher] path_max_entries: 99999999 is out of range")));
+}
+
+void TestConfig::themeSuppliesTheUnsetColors()
+{
+    // The default theme is dark and gives the long-standing default colours.
+    const Config defaults;
+    QCOMPARE(defaults.uiTheme, QStringLiteral("dark"));
+    QCOMPARE(defaults.accentColor, defaults.theme.accent.name());
+
+    QList<ConfigIssue> issues;
+    Config cfg = Config::load(writeConfig("[ui]\ntheme = \"catppuccin-latte\"\n"), &issues);
+    QVERIFY(issues.isEmpty());
+    const Theme *latte = findTheme(QStringLiteral("catppuccin-latte"));
+    QCOMPARE(cfg.theme.background, latte->background);
+    QCOMPARE(cfg.accentColor, latte->accent.name());
+    QCOMPARE(cfg.focusBorderColor, latte->focus.name());
+    QCOMPARE(cfg.mouseSelectionColor, latte->mouseSelection.name());
+    QCOMPARE(cfg.terminalColorScheme, latte->terminalScheme);
+
+    // Explicit keys still win, and are written back into the theme.
+    cfg = Config::load(writeConfig(
+        "[ui]\ntheme = \"vim-paper\"\naccent_color = \"#ff0000\"\n"
+        "[terminal]\ncolor_scheme = \"Dracula\"\n"), &issues);
+    QCOMPARE(cfg.accentColor, QStringLiteral("#ff0000"));
+    QCOMPARE(cfg.theme.accent, QColor("#ff0000"));
+    QCOMPARE(cfg.terminalColorScheme, QStringLiteral("Dracula"));
+    QCOMPARE(cfg.focusBorderColor, findTheme(QStringLiteral("vim-paper"))->focus.name());
+}
+
+void TestConfig::unknownThemeFallsBackToDark()
+{
+    QList<ConfigIssue> issues;
+    const Config cfg = Config::load(writeConfig("[ui]\ntheme = \"solarized\"\n"), &issues);
+    QCOMPARE(cfg.uiTheme, QStringLiteral("dark"));
+    QCOMPARE(cfg.terminalColorScheme, QStringLiteral("Neoblue"));
+    QVERIFY(hasIssue(issues, QStringLiteral("[ui] theme: unknown theme \"solarized\"")));
 }
 
 void TestConfig::outOfRangeNumbersAreClamped()

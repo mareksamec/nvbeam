@@ -70,6 +70,8 @@ struct ReviewConfig {
     QColor rowHeader{"#2a2a2a"};  // band behind a file row's name, separating one file
                                   // from the next
     QColor rowBorder{"#3a3a3a"};  // hairline under that band
+    QColor addedStripe{"#2a3e29"};    // background of an added line: a tint of `added`
+    QColor removedStripe{"#4d3030"};  // background of a removed line: a tint of `removed`
 };
 
 /// One changed file, as parsed out of `git diff` (or listed as untracked).
@@ -293,7 +295,7 @@ private:
     /// Block format for one diff line: an added or removed line's background
     /// across the editor's whole width (a character format would stop at the
     /// end of the text), none for any other line.
-    static QTextBlockFormat stripeFormat(const QString &line, const QTextBlockFormat &current);
+    QTextBlockFormat stripeFormat(const QString &line, const QTextBlockFormat &current) const;
     /// Read an untracked file from disk and turn it into added lines.
     void loadUntracked();
     /// True when this row should show an image instead of a diff: the build can

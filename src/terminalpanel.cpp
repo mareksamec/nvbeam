@@ -23,6 +23,13 @@
 #include <QUrl>
 #include <QDebug>
 
+namespace {
+// How much of the scheme's foreground is mixed into its background for the
+// panel chrome: toolbar button text, and the hover, border and splitter lines.
+constexpr qreal kButtonTextFraction = 0.65;
+constexpr qreal kLineFraction = 0.18;
+} // namespace
+
 #ifdef NVBEAM_HAS_TERMINAL
 namespace {
 
@@ -163,6 +170,10 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     // not cover (margins, resize gaps) blends in instead of showing through
     // as black bands under non-black schemes.
     const QString bg = panelBackgroundColor().name();
+    const QString buttons = blendColors(panelBackgroundColor(), panelForegroundColor(),
+                                        kButtonTextFraction).name();
+    const QString line = blendColors(panelBackgroundColor(), panelForegroundColor(),
+                                     kLineFraction).name();
 
     // Toolbar with terminal actions
     m_toolbar = new QToolBar(this);
@@ -170,8 +181,8 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     m_toolbar->setMovable(false);
     m_toolbar->setStyleSheet(QStringLiteral(
         "QToolBar { background: %1; border: none; spacing: 4px; }"
-        "QToolButton { color: #aaa; background: transparent; border: none; padding: 2px 6px; }"
-        "QToolButton:hover { background: #333; border-radius: 3px; }").arg(bg));
+        "QToolButton { color: %2; background: transparent; border: none; padding: 2px 6px; }"
+        "QToolButton:hover { background: %3; border-radius: 3px; }").arg(bg, buttons, line));
 
     auto *addAct = m_toolbar->addAction("+", this, &TerminalPanel::addTerminal);
     addAct->setToolTip(Shortcuts::hint(QStringLiteral("New terminal"),
@@ -205,11 +216,12 @@ TerminalPanel::TerminalPanel(const TerminalConfig &cfg, QWidget *parent)
     m_splitter = new QSplitter(Qt::Horizontal, this);
     m_splitter->setStyleSheet(QStringLiteral(
         "QSplitter { background: %1; }"
-        "QSplitter::handle { background: #333; width: 2px; height: 2px; }").arg(bg));
+        "QSplitter::handle { background: %2; width: 2px; height: 2px; }").arg(bg, line));
     layout->addWidget(m_splitter, 1);
 
-    setStyleSheet(QStringLiteral("background: %1; border-%2: 1px solid #333;")
-                      .arg(bg, m_cfg.sidePanel ? QStringLiteral("left") : QStringLiteral("top")));
+    setStyleSheet(QStringLiteral("background: %1; border-%2: 1px solid %3;")
+                      .arg(bg, m_cfg.sidePanel ? QStringLiteral("left") : QStringLiteral("top"),
+                           line));
     // Resizable: enforce a sensible minimum rather than a fixed size so the
     // user can drag the surrounding splitter. The initial size is applied by
     // MainWindow via the splitter's sizes.
@@ -242,6 +254,19 @@ QColor TerminalPanel::panelBackgroundColor() const
         return schemeBg;
 #endif
     return QColor(Qt::black);
+}
+
+QColor TerminalPanel::panelForegroundColor() const
+{
+#ifdef NVBEAM_HAS_TERMINAL
+    const QColor configured(m_cfg.foreground);
+    if (configured.isValid())
+        return configured;
+    const QColor schemeFg = loadTerminalScheme(m_cfg.colorScheme).foreground;
+    if (schemeFg.isValid())
+        return schemeFg;
+#endif
+    return QColor(Qt::lightGray);
 }
 
 void TerminalPanel::toggle()
@@ -821,10 +846,13 @@ void TerminalPanel::showContextMenu(QTermWidget *term, const QPoint &pos)
 
     QMenu menu(this);
     const QString bg = panelBackgroundColor().name();
+    const QString line = blendColors(panelBackgroundColor(), panelForegroundColor(),
+                                     kLineFraction).name();
     menu.setStyleSheet(QStringLiteral(
-        "QMenu { background: %1; color: #cdd6f4; border: 1px solid #333; }"
+        "QMenu { background: %1; color: %2; border: 1px solid %3; }"
         "QMenu::item { padding: 4px 16px; }"
-        "QMenu::item:selected { background: #333; }").arg(bg));
+        "QMenu::item:selected { background: %3; }")
+            .arg(bg, panelForegroundColor().name(), line));
     QAction *openAct = menu.addAction(QStringLiteral("Open Link"));
     QAction *copyAct = menu.addAction(QStringLiteral("Copy Link"));
     const QAction *chosen = menu.exec(term->mapToGlobal(pos));

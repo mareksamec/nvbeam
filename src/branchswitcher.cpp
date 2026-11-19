@@ -78,10 +78,12 @@ QString rgbaOf(const QString &color, int alpha)
 
 } // namespace
 
-BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor,
+BranchSwitcherWidget::BranchSwitcherWidget(const Theme &theme, const QString &highlightColor,
                                            const QString &fontFamily, int fontPointSize,
                                            QWidget *parent)
     : QFrame(parent)
+    , m_error(theme.error.name())
+    , m_dim(theme.dim.name())
 {
     setObjectName("nbBranchSwitcher");
     // Same shape as the project switcher, tinted with the highlight colour
@@ -96,14 +98,16 @@ BranchSwitcherWidget::BranchSwitcherWidget(const QString &highlightColor,
     // ones being drawn. They are also configurable, which a hardcoded style
     // sheet rule would not be.
     setStyleSheet(QStringLiteral(
-        "QFrame#nbBranchSwitcher { background: #1a1b26; border: 1px solid %2; border-radius: 6px; }"
-        "QLineEdit { background: #24283b; color: #cdd6f4; border: 1px solid #333; "
+        "QFrame#nbBranchSwitcher { background: %4; border: 1px solid %2; border-radius: 6px; }"
+        "QLineEdit { background: %5; color: %6; border: 1px solid %7; "
         "border-radius: 4px; padding: 5px 8px; }"
         "QLineEdit:focus { border-color: %1; }"
-        "QListWidget { background: transparent; color: #a9b1d6; border: none; }"
+        "QListWidget { background: transparent; color: %8; border: none; }"
         "QListWidget::item { padding: 4px 8px; border-radius: 4px; }"
         "QListWidget::item:selected { background: %3; color: %1; }")
-            .arg(highlightColor, border, selection));
+            .arg(highlightColor, border, selection, theme.background.name(),
+                 theme.surface.name(), theme.text.name(), theme.border.name(),
+                 theme.subtext.name()));
 
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(10, 10, 10, 10);
@@ -372,7 +376,7 @@ void BranchSwitcherWidget::setStatus(const QString &text, bool error)
 {
     m_status->setText(text);
     m_status->setStyleSheet(QStringLiteral("color: %1; font-size: 9pt;")
-                                .arg(error ? QStringLiteral("#f7768e") : QStringLiteral("#565f89")));
+                                .arg(error ? m_error : m_dim));
     m_status->setVisible(!text.isEmpty());
     adjustSize();
     reposition();

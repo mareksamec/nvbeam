@@ -1,6 +1,7 @@
 #pragma once
 
 #include "pathindex.h"
+#include "theme.h"
 
 #include <QFrame>
 #include <QHash>
@@ -43,7 +44,7 @@ class SwitcherWidget : public QFrame
     Q_OBJECT
 
 public:
-    explicit SwitcherWidget(const QString &accentColor, QWidget *parent);
+    explicit SwitcherWidget(const Theme &theme, QWidget *parent);
     /// Stops a folder walk still running for path mode and waits for it.
     ~SwitcherWidget() override;
 

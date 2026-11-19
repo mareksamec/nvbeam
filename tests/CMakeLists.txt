@@ -16,12 +16,15 @@ set(NVBEAM_TEST_SOURCES
     tst_diffbody.cpp
     tst_pathinput.cpp
     tst_pathindex.cpp
+    tst_theme.cpp
 )
 
 foreach(src IN LISTS NVBEAM_TEST_SOURCES)
     get_filename_component(name "${src}" NAME_WE)
     add_executable(${name} ${src})
     target_link_libraries(${name} PRIVATE nvbeam_core Qt6::Test)
+    # Lets a test read files shipped in the source tree (color schemes).
+    target_compile_definitions(${name} PRIVATE NVBEAM_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
     add_test(NAME ${name} COMMAND ${name})
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/home-${name}")
     # offscreen: the QGuiApplication a QFont needs must not require a display.

@@ -61,6 +61,9 @@ constexpr qreal kPanelLift = 0.08;
 /// from the panel background towards a neutral grey.
 constexpr qreal kRowHeaderBlend = 0.12;
 constexpr qreal kRowBorderBlend = 0.28;
+/// How much of the green or red goes into an added or removed line's
+/// background, on a dark and a light scheme alike.
+constexpr qreal kStripeBlend = 0.2;
 
 /// Paint the review panel in the terminal's colors: the same scheme file the
 /// side terminal loads, with the [terminal] foreground/background overrides
@@ -83,7 +86,11 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
     // Dimmed text (directories, tags, toolbar): the scheme's bright black,
     // which is what a terminal itself uses for de-emphasized output.
     take(review.dim, scheme.ansiIntense[AnsiBlack]);
-    take(review.selection, scheme.ansi[AnsiBlack]);
+    // Selected text sits on the ANSI colour nearest the background: black on
+    // a dark scheme, white (a light grey) on a light one.
+    const bool lightScheme = scheme.background.isValid() && scheme.foreground.isValid()
+                             && qGray(scheme.background.rgb()) > qGray(scheme.foreground.rgb());
+    take(review.selection, scheme.ansi[lightScheme ? AnsiWhite : AnsiBlack]);
 
     // The overrides win over the scheme, the same precedence the terminal
     // applies in TerminalPanel::effectiveColorScheme().
@@ -99,6 +106,8 @@ void applyTerminalScheme(ReviewConfig &review, const Config &cfg)
     review.hover = blendColors(review.background, neutral, kHoverBlend);
     review.rowHeader = blendColors(review.background, neutral, kRowHeaderBlend);
     review.rowBorder = blendColors(review.background, neutral, kRowBorderBlend);
+    review.addedStripe = blendColors(review.background, review.added, kStripeBlend);
+    review.removedStripe = blendColors(review.background, review.removed, kStripeBlend);
 }
 
 } // namespace
@@ -174,7 +183,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Vertical splitter: the editor area (top) and the terminal panel (bottom)
     // are resizable relative to each other by dragging the handle.
     m_vsplitter = new QSplitter(Qt::Vertical, central);
-    m_vsplitter->setStyleSheet("QSplitter::handle { background: #333; height: 2px; }");
+    m_vsplitter->setStyleSheet(QStringLiteral("QSplitter::handle { background: %1; height: 2px; }")
+                                   .arg(cfg.theme.border.name()));
     m_vsplitter->setChildrenCollapsible(false);
 
     // Editor area container: tabline, grid+minimap row, messages, statusline.
@@ -192,7 +202,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     editorLayout->setContentsMargins(1, 1, 1, 1); // room for the focus-highlight border
     editorLayout->setSpacing(0);
 
-    m_tabline = new TablineWidget(cfg.accentColor, editorArea);
+    m_tabline = new TablineWidget(cfg.theme, editorArea);
     editorLayout->addWidget(m_tabline);
 
     m_grid = new GridWidget(cfg.font(), editorArea);
@@ -211,17 +221,17 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // ext_messages implies ext_cmdline: nvim externalizes the command line
     // too, so a native bar has to render it. Sits between the grid and the
     // message log, hidden unless a cmdline is active.
-    m_cmdline = new CmdlineWidget(cfg.accentColor, editorArea);
+    m_cmdline = new CmdlineWidget(cfg.theme, editorArea);
     if (cfg.extMessages)
         editorLayout->addWidget(m_cmdline);
 
-    m_messages = new MessageWidget(cfg.accentColor, editorArea);
+    m_messages = new MessageWidget(cfg.theme, editorArea);
     if (cfg.extMessages)
         editorLayout->addWidget(m_messages);
     else
         m_messages->hide(); // not in the layout; would otherwise paint at (0,0)
 
-    m_statusline = new StatuslineWidget(cfg.accentColor, cfg.statuslineDivider, editorArea);
+    m_statusline = new StatuslineWidget(cfg.theme, cfg.statuslineDivider, editorArea);
     // Branch name source: the built-in GitStatus provider by default, gitsigns
     // (vim.b.gitsigns_head) only when the user asks for it.
     m_statusline->setGitsignsBranch(cfg.uiGitsignsBranch);
@@ -308,7 +318,8 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     // Horizontal splitter: editor area (left) and side terminal (right).
     auto *hsplitter = new QSplitter(Qt::Horizontal, m_vsplitter);
     m_hsplitter = hsplitter;
-    hsplitter->setStyleSheet("QSplitter::handle { background: #333; width: 2px; }");
+    hsplitter->setStyleSheet(QStringLiteral("QSplitter::handle { background: %1; width: 2px; }")
+                                 .arg(cfg.theme.border.name()));
     hsplitter->setChildrenCollapsible(false);
     m_sideTerminal = new TerminalPanel(sideCfg, hsplitter);
     // Change review panel: third child, so it opens to the right of the side
@@ -507,10 +518,12 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     btnLayout->addStretch();
 
     auto btnStyle = QStringLiteral(
-        "QPushButton { color: #888; background: #1a1b26; border: 1px solid #333; "
+        "QPushButton { color: %1; background: %2; border: 1px solid %3; "
         "border-radius: 3px; padding: 2px 8px; font-size: 9pt; }"
-        "QPushButton:hover { color: #cdd6f4; background: #313244; }"
-        "QPushButton:checked { color: #50fa7b; border-color: #50fa7b; }");
+        "QPushButton:hover { color: %4; background: %5; }"
+        "QPushButton:checked { color: %6; border-color: %6; }")
+            .arg(cfg.theme.subtext.name(), cfg.theme.background.name(), cfg.theme.border.name(),
+                 cfg.theme.text.name(), cfg.theme.selection.name(), cfg.theme.accent.name());
 
     auto *minimapBtn = new QPushButton("⊟", central);
     minimapBtn->setToolTip("Toggle minimap");
@@ -655,7 +668,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     }
 
     // Popupmenu is a floating child of the grid
-    m_popupmenu = new PopupmenuWidget(cfg.accentColor, m_grid);
+    m_popupmenu = new PopupmenuWidget(cfg.theme, m_grid);
 
     // Image renderer overlay (for future vim.ui.img API)
     m_imageRenderer = new ImageRenderer(m_grid);
@@ -917,7 +930,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
         // git command for it.
         // Highlighted with the focus-border blue, not the green accent: it
         // keeps the branch picker visually distinct from the project switcher.
-        m_branchSwitcher = new BranchSwitcherWidget(cfg.focusBorderColor, cfg.branchSwitcherFont,
+        m_branchSwitcher = new BranchSwitcherWidget(cfg.theme, cfg.focusBorderColor, cfg.branchSwitcherFont,
                                                     cfg.branchSwitcherFontSize, this);
         m_statusline->setGitSegmentClickable(true);
         connect(m_statusline, &StatuslineWidget::gitSegmentClicked,
@@ -1051,7 +1064,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     });
 
     // Project switcher overlay (pinned projects + recent folders/files).
-    m_switcher = new SwitcherWidget(cfg.accentColor, this);
+    m_switcher = new SwitcherWidget(cfg.theme, this);
     m_switcher->setPathLimits({cfg.switcherPathMaxDepth, cfg.switcherPathMaxEntries});
     connect(m_switcher, &SwitcherWidget::itemSelected, this,
             &MainWindow::applySwitcherSelection);

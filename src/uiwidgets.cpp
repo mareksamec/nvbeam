@@ -16,20 +16,19 @@
 
 // --- PopupmenuWidget ---
 
-PopupmenuWidget::PopupmenuWidget(const QString &accent, QWidget *parent)
+PopupmenuWidget::PopupmenuWidget(const Theme &theme, QWidget *parent)
     : QWidget(parent)
-    , m_accent(accent)
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
     m_list = new QListWidget(this);
     m_list->setFocusPolicy(Qt::NoFocus);
     m_list->setStyleSheet(QString(
-        "QListWidget { background-color: #1a1b26; color: #c0caf5; border: 1px solid %1; "
+        "QListWidget { background-color: %2; color: %3; border: 1px solid %1; "
         "font-family: monospace; font-size: 10pt; border-radius: 4px; }"
         "QListWidget::item { padding: 2px 8px; }"
-        "QListWidget::item:selected { background-color: %1; color: #1a1b26; }"
-    ).arg(accent));
+        "QListWidget::item:selected { background-color: %1; color: %2; }"
+    ).arg(theme.accent.name(), theme.background.name(), theme.text.name()));
     m_list->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_list->setVerticalScrollBarPolicy(Qt::ScrollBarAsNeeded);
     layout->addWidget(m_list);
@@ -86,16 +85,18 @@ void PopupmenuWidget::hidePopup()
 
 // --- TablineWidget ---
 
-TablineWidget::TablineWidget(const QString &accent, QWidget *parent)
+TablineWidget::TablineWidget(const Theme &theme, QWidget *parent)
     : QTabBar(parent)
+    , m_theme(theme)
 {
     setStyleSheet(QString(
-        "QTabBar { background: #1a1b26; border-bottom: 1px solid #333; }"
-        "QTabBar::tab { background: #1a1b26; color: #888; padding: 6px 16px; "
+        "QTabBar { background: %2; border-bottom: 1px solid %3; }"
+        "QTabBar::tab { background: %2; color: %4; padding: 6px 16px; "
         "border: none; border-bottom: 2px solid transparent; margin-right: 1px; }"
         "QTabBar::tab:selected { color: %1; border-bottom: 2px solid %1; }"
-        "QTabBar::tab:hover { color: #c0caf5; }"
-    ).arg(accent));
+        "QTabBar::tab:hover { color: %5; }"
+    ).arg(theme.accent.name(), theme.background.name(), theme.border.name(),
+          theme.subtext.name(), theme.text.name()));
     setExpanding(false);
     setVisible(false);
 
@@ -173,10 +174,12 @@ void TablineWidget::showContextMenu(const QPoint &pos)
 
     QMenu menu(this);
     menu.setStyleSheet(QStringLiteral(
-        "QMenu { background: #1a1b26; color: #cdd6f4; border: 1px solid #333; }"
+        "QMenu { background: %1; color: %2; border: 1px solid %3; }"
         "QMenu::item { padding: 4px 16px; }"
-        "QMenu::item:selected { background: #333; }"
-        "QMenu::item:disabled { color: #555; }"));
+        "QMenu::item:selected { background: %4; }"
+        "QMenu::item:disabled { color: %5; }")
+            .arg(m_theme.background.name(), m_theme.text.name(), m_theme.border.name(),
+                 m_theme.selection.name(), m_theme.dim.name()));
 
     // One entry per buffer set; an empty set stays visible but disabled so the
     // menu keeps a stable shape.
@@ -209,18 +212,20 @@ void TablineWidget::showContextMenu(const QPoint &pos)
 
 // --- CmdlineWidget ---
 
-CmdlineWidget::CmdlineWidget(const QString &accent, QWidget *parent)
+CmdlineWidget::CmdlineWidget(const Theme &theme, QWidget *parent)
     : QWidget(parent)
-    , m_accent(accent)
+    , m_accent(theme.accent.name())
+    , m_onAccent(theme.background.name())
 {
     auto *layout = new QHBoxLayout(this);
     layout->setContentsMargins(12, 4, 12, 4);
     m_label = new QLabel(this);
     m_label->setTextFormat(Qt::RichText);
-    m_label->setStyleSheet("color: #c0caf5; font-family: monospace; font-size: 10pt;");
+    m_label->setStyleSheet(QStringLiteral("color: %1; font-family: monospace; font-size: 10pt;")
+                               .arg(theme.text.name()));
     layout->addWidget(m_label, 1);
     setAttribute(Qt::WA_StyledBackground);
-    setStyleSheet("background-color: #1a1b26;");
+    setStyleSheet(QStringLiteral("background-color: %1;").arg(theme.background.name()));
     setFixedHeight(26);
     setVisible(false);
 }
@@ -299,8 +304,8 @@ void CmdlineWidget::render()
                 .arg(m_accent, esc(m_firstc + m_prompt));
     html += esc(QString(m_indent, QChar(' ')));
     html += esc(left);
-    html += QStringLiteral("<span style=\"background-color:%1;color:#1a1b26;\">%2</span>")
-                .arg(m_accent, esc(cursorCh));
+    html += QStringLiteral("<span style=\"background-color:%1;color:%2;\">%3</span>")
+                .arg(m_accent, m_onAccent, esc(cursorCh));
     html += esc(rest);
     m_label->setText(html);
 }
@@ -339,8 +344,9 @@ protected:
 
 } // namespace
 
-MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
+MessageWidget::MessageWidget(const Theme &theme, QWidget *parent)
     : QWidget(parent)
+    , m_theme(theme)
 {
     auto *layout = new QVBoxLayout(this);
     layout->setContentsMargins(0, 0, 0, 0);
@@ -357,15 +363,16 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     m_toggle->setFlat(true);
     m_toggle->setCursor(Qt::PointingHandCursor);
     m_toggle->setFocusPolicy(Qt::NoFocus);
-    m_toggle->setStyleSheet(
-        "QPushButton { color: #888; background: transparent; border: none; "
+    m_toggle->setStyleSheet(QStringLiteral(
+        "QPushButton { color: %1; background: transparent; border: none; "
         "font-family: monospace; font-size: 9pt; padding: 0 4px; text-align: left; }"
-        "QPushButton:hover { color: #c0caf5; }");
+        "QPushButton:hover { color: %2; }").arg(theme.subtext.name(), theme.text.name()));
     headerLayout->addWidget(m_toggle);
     headerLayout->addStretch(1);
 
     m_modeLabel = new QLabel(header);
-    m_modeLabel->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 10pt;").arg(accent));
+    m_modeLabel->setStyleSheet(QString("color: %1; font-family: monospace; font-size: 10pt;")
+                                   .arg(theme.accent.name()));
     headerLayout->addWidget(m_modeLabel);
 
     m_hideButton = new QPushButton(QStringLiteral("✕"), header);
@@ -373,10 +380,10 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     m_hideButton->setCursor(Qt::PointingHandCursor);
     m_hideButton->setFocusPolicy(Qt::NoFocus);
     m_hideButton->setToolTip(QStringLiteral("Hide messages panel (Ctrl+Shift+M to restore)"));
-    m_hideButton->setStyleSheet(
-        "QPushButton { color: #888; background: transparent; border: none; "
+    m_hideButton->setStyleSheet(QStringLiteral(
+        "QPushButton { color: %1; background: transparent; border: none; "
         "font-family: monospace; font-size: 9pt; padding: 0 4px; }"
-        "QPushButton:hover { color: #f7768e; }");
+        "QPushButton:hover { color: %2; }").arg(theme.subtext.name(), theme.error.name()));
     connect(m_hideButton, &QPushButton::clicked, this, &MessageWidget::hidePanel);
     headerLayout->addWidget(m_hideButton);
     layout->addWidget(header);
@@ -387,11 +394,12 @@ MessageWidget::MessageWidget(const QString &accent, QWidget *parent)
     // Cap history so a chatty plugin cannot grow the document unbounded.
     m_log->setMaximumBlockCount(1000);
     m_log->setStyleSheet(QString(
-        "QPlainTextEdit { background-color: #1a1b26; color: #c0caf5; "
-        "selection-background-color: %1; selection-color: #1a1b26; }").arg(accent));
+        "QPlainTextEdit { background-color: %2; color: %3; "
+        "selection-background-color: %1; selection-color: %2; }")
+            .arg(theme.accent.name(), theme.background.name(), theme.text.name()));
     layout->addWidget(m_log);
 
-    setStyleSheet("background-color: #1a1b26;");
+    setStyleSheet(QStringLiteral("background-color: %1;").arg(theme.background.name()));
 
     connect(m_toggle, &QPushButton::toggled, this, [this](bool on) {
         m_expanded = on;
@@ -476,9 +484,9 @@ void MessageWidget::showMsg(const QString &kind, const QVariantList &content, bo
     static const QSet<QString> errorKinds = {
         QStringLiteral("emsg"), QStringLiteral("echoerr"), QStringLiteral("lua_error"),
         QStringLiteral("rpc_error"), QStringLiteral("shell_err")};
-    QColor color("#c0caf5");
-    if (errorKinds.contains(kind)) color = QColor("#f7768e");
-    else if (kind == QLatin1String("wmsg")) color = QColor("#e0af68");
+    QColor color = m_theme.text;
+    if (errorKinds.contains(kind)) color = m_theme.error;
+    else if (kind == QLatin1String("wmsg")) color = m_theme.warning;
 
     QScrollBar *sb = m_log->verticalScrollBar();
     const bool atBottom = sb->value() >= sb->maximum();
@@ -493,7 +501,7 @@ void MessageWidget::showMsg(const QString &kind, const QVariantList &content, bo
     if (cur.position() > 0) cur.insertBlock();
 
     QTextCharFormat stampFmt;
-    stampFmt.setForeground(QColor("#565f89"));
+    stampFmt.setForeground(m_theme.dim);
     cur.insertText(QStringLiteral("[%1] ").arg(QTime::currentTime().toString("HH:mm:ss")),
                    stampFmt);
     QTextCharFormat msgFmt;
@@ -711,8 +719,8 @@ protected:
     }
 
 private:
-    QColor m_fg{"#c0caf5"};
-    QColor m_bg{"#24283b"};
+    QColor m_fg;   // both set by setColors() before the first paint
+    QColor m_bg;
     std::function<void()> m_click;
     int m_height = kMinHeight;   // glyph geometry in device-independent px,
     int m_padLeft = 0;           // all three derived from the font metrics
@@ -754,17 +762,17 @@ protected:
     }
 
 private:
-    QColor m_prevBg{"#1a1b26"};
-    QColor m_nextBg{"#1a1b26"};
+    QColor m_prevBg;   // both set by setColors() before the first paint
+    QColor m_nextBg;
 };
 
 } // namespace
 
-StatuslineWidget::StatuslineWidget(const QString &accent, const QString &dividerStyle,
+StatuslineWidget::StatuslineWidget(const Theme &theme, const QString &dividerStyle,
                                    QWidget *parent)
     : QWidget(parent)
     , m_dividerStyle(dividerStyle)
-    , m_accent(accent)
+    , m_theme(theme)
 {
     setFixedHeight(28);
 
@@ -792,7 +800,8 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
             pipe->setFont(QFont("monospace", 10, QFont::Bold));
             pipe->setAlignment(Qt::AlignCenter);
             pipe->setContentsMargins(2, 0, 2, 0);
-            pipe->setStyleSheet("color: #565f89; background-color: #1a1b26;");
+            pipe->setStyleSheet(QStringLiteral("color: %1; background-color: %2;")
+                                    .arg(m_theme.dim.name(), m_theme.background.name()));
             divider = pipe;
         }
         if (divider) {
@@ -820,25 +829,25 @@ StatuslineWidget::StatuslineWidget(const QString &accent, const QString &divider
 QColor StatuslineWidget::modeColor() const
 {
     if (m_mode.startsWith("I", Qt::CaseInsensitive))
-        return QColor("#c678dd"); // violet — Insert
+        return m_theme.modeInsert;
     if (m_mode.startsWith("V", Qt::CaseInsensitive) ||
         m_mode.startsWith("S", Qt::CaseInsensitive) ||
         m_mode.contains("BLOCK", Qt::CaseInsensitive))
-        return QColor("#56b6c2"); // cyan — Visual/Select
+        return m_theme.modeVisual;  // Visual and Select
     if (m_mode.startsWith("C", Qt::CaseInsensitive))
-        return QColor("#e5c07b"); // yellow — Command
+        return m_theme.modeCommand;
     if (m_mode.startsWith("R", Qt::CaseInsensitive))
-        return QColor("#f7768e"); // red — Replace
-    return QColor(m_accent); // Normal
+        return m_theme.error;       // Replace
+    return m_theme.accent;          // Normal
 }
 
 void StatuslineWidget::refresh()
 {
     const QColor modeBg = modeColor();
-    const QColor dark("#1a1b26");
-    const QColor mid("#24283b");
-    const QColor dim("#565f89");
-    const QColor fg("#c0caf5");
+    const QColor dark = m_theme.background;
+    const QColor mid = m_theme.surface;
+    const QColor dim = m_theme.dim;
+    const QColor fg = m_theme.text;
 
     // Git segment: the branch name comes from the Qt-side GitStatus provider,
     // which runs `git` itself, so no nvim plugin is required. With
@@ -862,7 +871,7 @@ void StatuslineWidget::refresh()
         branchText = branchName.toHtmlEscaped();
         if (!counts.isEmpty())
             branchText += QStringLiteral("<span style=\"color:%1;\">%2</span>")
-                              .arg(m_accent, counts.toHtmlEscaped());
+                              .arg(m_theme.accent.name(), counts.toHtmlEscaped());
         branchText += QStringLiteral("&nbsp;");
     }
 
@@ -873,9 +882,8 @@ void StatuslineWidget::refresh()
     // change" check the way the git subprocess itself is.
     if (!branchName.isEmpty() && m_git.valid) {
         static constexpr int kMaxTooltipFiles = 20;
-        static const QString kChangedFileColor   = QStringLiteral("#98c379"); // OneDark green
-        static const QString kUntrackedFileColor = QStringLiteral("#61afef"); // OneDark blue,
-            // same blue already used elsewhere in nvbeam (e.g. the focus-border color)
+        const QString changedFileColor = m_theme.gitChanged.name();
+        const QString untrackedFileColor = m_theme.gitUntracked.name();
 
         QString tip = QStringLiteral("<b>%1</b>").arg(branchName.toHtmlEscaped());
         if (m_git.ahead || m_git.behind) {
@@ -896,13 +904,13 @@ void StatuslineWidget::refresh()
             for (const QString &file : m_git.changedFiles) {
                 if (shown >= kMaxTooltipFiles) break;
                 tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
-                           .arg(kChangedFileColor, file.toHtmlEscaped());
+                           .arg(changedFileColor, file.toHtmlEscaped());
                 ++shown;
             }
             for (const QString &file : m_git.untrackedFiles) {
                 if (shown >= kMaxTooltipFiles) break;
                 tip += QStringLiteral("<br><span style=\"color:%1;\">%2</span>")
-                           .arg(kUntrackedFileColor, file.toHtmlEscaped());
+                           .arg(untrackedFileColor, file.toHtmlEscaped());
                 ++shown;
             }
             const int overflow = totalFiles - shown;
@@ -923,7 +931,7 @@ void StatuslineWidget::refresh()
         {m_modeLabel,   " " + m_mode + " ",                                    dark,              modeBg, true,  true},
         {m_branchLabel, branchText,                                            fg,                mid,    false, !branchText.isEmpty()},
         {m_fileLabel,   " " + (m_file.isEmpty() ? "[No Name]" : m_file) + " ", fg,                dark,   false, true},
-        {m_diagLabel,   " " + m_diag + " ",                                    QColor("#f7768e"), mid,    false, !m_diag.isEmpty()},
+        {m_diagLabel,   " " + m_diag + " ",                                    m_theme.error,     mid,    false, !m_diag.isEmpty()},
         {m_encLabel,    " " + m_encoding + " ",                                dim,               mid,    false, !m_encoding.isEmpty()},
         {m_posLabel,    " " + m_pos + " ",                                     dark,              modeBg, false, !m_pos.isEmpty()},
     };
