@@ -14,6 +14,7 @@ set(NVBEAM_TEST_SOURCES
     tst_terminalkeys.cpp
     tst_documentlines.cpp
     tst_diffbody.cpp
+    tst_pathinput.cpp
 )
 
 foreach(src IN LISTS NVBEAM_TEST_SOURCES)
