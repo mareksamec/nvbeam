@@ -13,3 +13,4 @@ Q_DECLARE_LOGGING_CATEGORY(nbMessages) // nvbeam.messages — ext_messages msg_s
 Q_DECLARE_LOGGING_CATEGORY(nbTitle)    // nvbeam.title   — window title recomputation (cwd/project changes)
 Q_DECLARE_LOGGING_CATEGORY(nbFocus)    // nvbeam.focus   — FocusGained/FocusLost forwarded to nvim
 Q_DECLARE_LOGGING_CATEGORY(nbSession)  // nvbeam.session — startup restore decisions (terminal panels)
+Q_DECLARE_LOGGING_CATEGORY(nbReview)   // nvbeam.review  — change review refresh timings (git, parse, body rebuild)

@@ -12,6 +12,7 @@ set(NVBEAM_TEST_SOURCES
     tst_session.cpp
     tst_pinnedprojects.cpp
     tst_terminalkeys.cpp
+    tst_documentlines.cpp
 )
 
 foreach(src IN LISTS NVBEAM_TEST_SOURCES)

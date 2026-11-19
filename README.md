@@ -382,7 +382,6 @@ behind existing design decisions; `AGENTS.md` states the project's scope.
 
 ## Known bugs
 - Minimap sometimes does not show the whole file.
-- Nvbeam freezes when the git diff view is expanded and the files are edited fast in the background e.g. by coding agent.
 - Side term scaling issues when resizing the window (e.g. during tiling)
 
 ## Roadmap

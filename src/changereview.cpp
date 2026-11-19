@@ -1,10 +1,13 @@
 #include "changereview.h"
 
 #include "colorscheme.h"
+#include "documentlines.h"
+#include "logging.h"
 #include "shortcuts.h"
 
 #include <QAction>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
 #include <QFontDatabase>
@@ -149,6 +152,10 @@ QFont diffFont(const ReviewConfig &cfg)
 /// The lexer state a line ended in, kept so the next line continues it (a
 /// string or comment running across lines). QSyntaxHighlighter's own int state
 /// cannot hold it.
+/// Block state of a line the language lexer does not see: a hunk header, or
+/// any line that is not code. Constant, so highlighting stops propagating there.
+constexpr int kNoLexerState = 0;
+
 class DiffBlockState : public QTextBlockUserData
 {
 public:
@@ -227,6 +234,7 @@ void DiffHighlighter::highlightBlock(const QString &text)
     // arbitrary line of the file, so its state begins empty.
     if (hunk || !(added || removed || context)) {
         setCurrentBlockUserData(data);
+        setCurrentBlockState(kNoLexerState);
         return;
     }
 
@@ -242,6 +250,12 @@ void DiffHighlighter::highlightBlock(const QString &text)
     m_offset = 1;
     data->state = highlightLine(QStringView(text).mid(m_offset), previous);
     setCurrentBlockUserData(data);
+    // The block state is what QSyntaxHighlighter compares to decide whether
+    // the next block needs highlighting again. Carrying the lexer state in it
+    // means an edit that opens or closes a multi-line construct (a comment, a
+    // string) recolors the lines after it, while an edit that does not stops
+    // at the edited lines.
+    setCurrentBlockState(int(qHash(data->state) & 0x7fffffff));
 #else
     Q_UNUSED(context);
 #endif
@@ -866,41 +880,51 @@ void FileCard::applyBody()
         m_preview->hide();
         m_body->show();
     }
+    QElapsedTimer timer;
+    timer.start();
     if (m_file.untracked && !m_loaded)
         loadUntracked();
+    const qint64 loadMs = timer.restart();
     const BodyText body = bodyText();
+    const qint64 textMs = timer.restart();
+    qint64 updateMs = 0;
+    qint64 numbersMs = 0;
+    int rewritten = 0;
     if (body.text != m_shown) {
         m_shown = body.text;
         const int scroll = m_body->verticalScrollBar()->value();
-        m_body->setPlainText(body.text);
+        // Only the lines that differ from what the editor already shows are
+        // rewritten, so a diff an agent keeps growing costs the size of the
+        // change on each refresh, not the size of the whole diff. The stripes
+        // go in with the text: painted afterwards, each one would make the
+        // highlighter run over its line a second time.
+        rewritten = updateDocumentLines(m_body->document(), body.text.split(QLatin1Char('\n')),
+                                   stripeFormat);
+        updateMs = timer.restart();
         m_body->setLineNumbers(body.numbers);
         m_body->verticalScrollBar()->setValue(scroll);
-        paintChangedLines();
+        numbersMs = timer.restart();
     }
     fitBody();
+    qCDebug(nbReview, "body %s: %lld lines, %d rewritten, load %lld ms, text %lld ms, "
+                      "update %lld ms, numbers %lld ms, fit %lld ms",
+            qUtf8Printable(m_file.path), qint64(body.numbers.size()), rewritten, loadMs,
+            textMs, updateMs, numbersMs, timer.elapsed());
 }
 
-void FileCard::paintChangedLines()
+QTextBlockFormat FileCard::stripeFormat(const QString &line, const QTextBlockFormat &current)
 {
     // Block formats rather than extra selections: a full-width extra selection
     // only reaches the first visual line of a wrapped block, leaving the rest
     // of a long changed line unmarked.
-    QTextCursor cursor(m_body->document());
-    cursor.beginEditBlock();
-    for (QTextBlock block = m_body->document()->begin(); block.isValid();
-         block = block.next()) {
-        const QString line = block.text();
-        const bool added = line.startsWith(QLatin1Char('+'));
-        const bool removed = !added && line.startsWith(QLatin1Char('-'));
-        QTextBlockFormat format = block.blockFormat();
-        if (added || removed)
-            format.setBackground(added ? kAddedStripe : kRemovedStripe);
-        else
-            format.clearBackground();
-        cursor.setPosition(block.position());
-        cursor.setBlockFormat(format);
-    }
-    cursor.endEditBlock();
+    const bool added = line.startsWith(QLatin1Char('+'));
+    const bool removed = !added && line.startsWith(QLatin1Char('-'));
+    QTextBlockFormat format = current;
+    if (added || removed)
+        format.setBackground(added ? kAddedStripe : kRemovedStripe);
+    else
+        format.clearBackground();
+    return format;
 }
 
 void FileCard::fitBody()
@@ -1209,6 +1233,8 @@ void ChangeReviewPanel::collect()
             qWarning("change review: a git run has been in flight for %lld ms; starting a new one",
                      m_runStarted.elapsed());
         } else { // one git run at a time; the burst collapses into one rerun
+            qCDebug(nbReview, "refresh deferred: previous run in flight for %lld ms",
+                    m_runStarted.elapsed());
             m_rerun = true;
             return;
         }
@@ -1264,7 +1290,11 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
     if (!base.isEmpty())
         args << base;
 
-    runGit(args, [this, includeUntracked](bool ok, const QString &output) {
+    auto timer = std::make_shared<QElapsedTimer>();
+    timer->start();
+    runGit(args, [this, includeUntracked, timer](bool ok, const QString &output) {
+        qCDebug(nbReview, "git diff: %lld ms, %lld chars", timer->restart(),
+                qint64(output.size()));
         auto finish = [this] {
             m_running = false;
             if (m_rerun) {
@@ -1289,6 +1319,8 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
             return;
         }
         QList<FileDiff> files = parseDiff(output, m_cfg.maxLines);
+        qCDebug(nbReview, "parseDiff: %lld ms, %lld files", timer->restart(),
+                qint64(files.size()));
         // An image row reads the working copy from disk, so every file needs
         // its absolute path, not only the untracked ones.
         for (FileDiff &file : files)
@@ -1299,12 +1331,14 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
         // not: that one compares two revisions.
         if (!includeUntracked) {
             apply(files);
+            qCDebug(nbReview, "apply: %lld ms", timer->restart());
             finish();
             return;
         }
         runGit({QStringLiteral("ls-files"), QStringLiteral("--others"),
                 QStringLiteral("--exclude-standard")},
-               [this, files, finish](bool listed, const QString &untracked) mutable {
+               [this, files, finish, timer](bool listed, const QString &untracked) mutable {
+            qCDebug(nbReview, "git ls-files: %lld ms", timer->restart());
             if (listed) {
                 const QStringList names =
                     untracked.split(QLatin1Char('\n'), Qt::SkipEmptyParts);
@@ -1326,8 +1360,11 @@ void ChangeReviewPanel::collectDiff(const QString &base, const QString &label,
                                          .count(QLatin1Char('\n'));
                     files << file;
                 }
+                qCDebug(nbReview, "untracked: %lld files counted in %lld ms",
+                        qint64(names.size()), timer->restart());
             }
             apply(files);
+            qCDebug(nbReview, "apply: %lld ms", timer->restart());
             finish();
         });
     });

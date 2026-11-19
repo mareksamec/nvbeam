@@ -292,10 +292,10 @@ private:
     void applyBody();
     /// Fit the editor to the wrapped text, capped at ReviewConfig::fileMaxHeight.
     void fitBody();
-    /// Paint an added or removed line's background across the editor's whole
-    /// width. A character format would stop at the end of the text, so the
-    /// stripe is drawn as a full-width extra selection per changed line.
-    void paintChangedLines();
+    /// Block format for one diff line: an added or removed line's background
+    /// across the editor's whole width (a character format would stop at the
+    /// end of the text), none for any other line.
+    static QTextBlockFormat stripeFormat(const QString &line, const QTextBlockFormat &current);
     /// Read an untracked file from disk and turn it into added lines.
     void loadUntracked();
     /// True when this row should show an image instead of a diff: the build can
