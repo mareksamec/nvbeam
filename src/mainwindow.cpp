@@ -329,6 +329,7 @@ MainWindow::MainWindow(const Config &cfg, const QStringList &nvimArgs, QWidget *
     reviewCfg.maxLines = cfg.reviewMaxLines;
     reviewCfg.fileMaxHeight = cfg.reviewFileMaxHeight;
     reviewCfg.showContext = cfg.reviewShowContext;
+    reviewCfg.contextLines = cfg.reviewContextLines;
     reviewCfg.imagePreview = cfg.reviewImagePreview;
     reviewCfg.imageMaxBytes = cfg.reviewImageMaxBytes;
     reviewCfg.syntax = cfg.reviewSyntax;

@@ -56,6 +56,7 @@ add_library(nvbeam_core STATIC
     src/gitstatus.cpp
     src/colorscheme.cpp
     src/documentlines.cpp
+    src/diffbody.cpp
     src/logging.cpp
 )
 

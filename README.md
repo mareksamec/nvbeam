@@ -239,6 +239,7 @@ Nvbeam reads its config from `~/.config/nvbeam/nvbeam.toml`, or from the path gi
 # max_lines = 20000  # cap on the diff lines kept per file
 # file_max_height = 600  # tallest an expanded file grows before it scrolls itself, in pixels
 # show_context = false  # expand a file to the full hunks instead of the changed lines only
+# context_lines = 2  # unchanged lines shown around each change (0-3, 0 = changed lines only)
 # syntax = true  # color the code in a diff by the file's language (needs KF6SyntaxHighlighting)
 # image_preview = true  # show a changed image as an image instead of git's "Binary files differ"
 # image_max_bytes = 10485760  # larger images are not decoded (10 MiB)

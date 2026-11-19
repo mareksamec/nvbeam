@@ -42,6 +42,8 @@ void warnType(QList<ConfigIssue> *issues, const char *sec, const char *key,
 /// editor and terminal font zoom clamps to at runtime.
 constexpr int kMinFontPointSize = 4;
 constexpr int kMaxFontPointSize = 72;
+// [review] context_lines upper bound: the context git diff writes by default.
+constexpr int kMaxReviewContextLines = 3;
 
 bool readBool(const toml::value &sec, const char *secName, const char *key,
               bool &out, QList<ConfigIssue> *issues)
@@ -153,7 +155,7 @@ const KnownSection kKnownSections[] = {
                   "refresh_prompt_on_git_change"}},
     {"side_terminal", {"width", "font", "font_size"}},
     {"review", {"width", "refresh_ms", "timeout_ms", "base", "mode", "base_branch", "font",
-                "font_size", "max_lines", "file_max_height", "show_context", "syntax", "file_color", "image_preview",
+                "font_size", "max_lines", "file_max_height", "show_context", "context_lines", "syntax", "file_color", "image_preview",
                 "image_max_bytes"}},
     {"ui", {"ext_popupmenu", "ext_tabline", "ext_messages", "bufferline", "statusline",
             "git_status", "gitsigns_branch", "accent_color", "statusline_divider",
@@ -476,6 +478,18 @@ Config Config::load(const QString &customPath, QList<ConfigIssue> *issues)
             if (readInt(*review, "review", "file_max_height", cfg.reviewFileMaxHeight, issues))
                 cfg.reviewFileMaxHeight = qMax(24, cfg.reviewFileMaxHeight);
             readBool(*review, "review", "show_context", cfg.reviewShowContext, issues);
+            // The panel filters the context git already wrote, so it can show
+            // fewer lines than git, never more.
+            if (readInt(*review, "review", "context_lines", cfg.reviewContextLines, issues)
+                && (cfg.reviewContextLines < 0
+                    || cfg.reviewContextLines > kMaxReviewContextLines)) {
+                const int clamped = qBound(0, cfg.reviewContextLines, kMaxReviewContextLines);
+                report(issues, ConfigIssue::Warning,
+                       QStringLiteral("[review] context_lines: %1 is out of range (0-%2), "
+                                      "using %3")
+                           .arg(cfg.reviewContextLines).arg(kMaxReviewContextLines).arg(clamped));
+                cfg.reviewContextLines = clamped;
+            }
             readBool(*review, "review", "image_preview", cfg.reviewImagePreview, issues);
             if (readInt(*review, "review", "image_max_bytes", cfg.reviewImageMaxBytes, issues))
                 cfg.reviewImageMaxBytes = qMax(0, cfg.reviewImageMaxBytes);

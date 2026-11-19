@@ -94,6 +94,7 @@ struct Config {
     int reviewFileMaxHeight = 600;        // tallest an expanded file grows before it scrolls itself
     bool reviewShowContext = false;       // expand a file to the full hunks instead of the
                                           // changed lines only
+    int reviewContextLines = 2;           // unchanged lines kept around each change (0-3)
     bool reviewImagePreview = true;       // show a changed image as an image instead of git's
                                           // "Binary files ... differ" line
     int reviewImageMaxBytes = 10485760;   // larger images are not decoded (10 MiB)

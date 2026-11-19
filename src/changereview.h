@@ -1,5 +1,7 @@
 #pragma once
 
+#include "diffbody.h"
+
 #include <QBoxLayout>
 #include <QColor>
 #include <QElapsedTimer>
@@ -45,6 +47,8 @@ struct ReviewConfig {
     int fileMaxHeight = 600;   // tallest an expanded file body grows before it scrolls itself
     bool showContext = false;  // expand a file straight to the full hunks instead of
                                // the changed lines only
+    int contextLines = 2;      // unchanged lines kept around each change while the
+                               // full hunks are not shown
     bool imagePreview = true;  // show a changed image as an image instead of git's
                                // "Binary files ... differ" line
     qint64 imageMaxBytes = 10 * 1024 * 1024;  // larger images are not decoded
@@ -279,15 +283,9 @@ protected:
     void resizeEvent(QResizeEvent *event) override;
 
 private:
-    /// What the body shows: the lines themselves plus, per line, the number it
-    /// carries in the file. With `context` off only the added/removed lines
-    /// (and the hunk headers that locate them) are kept, but the hidden lines
-    /// are still counted, so the numbers stay true.
-    struct BodyText {
-        QString text;
-        QList<int> numbers;
-    };
-    BodyText bodyText() const;
+    /// What the body shows: the full hunks with ⋯ on, otherwise the changes
+    /// with ReviewConfig::contextLines unchanged lines around each one.
+    DiffBodyText bodyText() const;
     /// Put bodyText() into the editor and size the editor to its content.
     void applyBody();
     /// Fit the editor to the wrapped text, capped at ReviewConfig::fileMaxHeight.
