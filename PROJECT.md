@@ -98,6 +98,7 @@
 - [x] Ctrl+-/Ctrl+= and Ctrl+wheel change the nvim buffer font size (session only)
 - [x] Ctrl+Shift+X also maximizes the bottom or side terminal
 - [x] Project switcher path mode (Ctrl+D) with Tab completion against the directory tree
+- [x] Create a new folder from the project switcher (Ctrl+N or the folder button)
 
 ## Side TERM - AI agent features
 

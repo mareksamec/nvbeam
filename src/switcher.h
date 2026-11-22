@@ -12,6 +12,7 @@
 #include <atomic>
 #include <memory>
 
+class QAction;
 class QLabel;
 class QLineEdit;
 class QListWidget;
@@ -20,7 +21,9 @@ class QTimer;
 
 /// One entry in the project switcher list.
 struct SwitcherItem {
-    enum Kind { Project, Folder, File };
+    /// CreateFolder is the switcher's own "+ Create folder" row in path mode;
+    /// it never leaves the switcher (itemSelected is not emitted for it).
+    enum Kind { Project, Folder, File, CreateFolder };
     Kind kind = Folder;
     QString label;        // display name (project name or path basename)
     QString path;         // absolute path (folder for Project/Folder, file for File)
@@ -38,7 +41,8 @@ struct SwitcherItem {
 /// Ctrl+D switches the same field between two modes: the project/recent search
 /// and a filesystem path mode where Tab completes what is typed against the
 /// real directory tree, so any folder or file can be opened without being
-/// pinned or recently used.
+/// pinned or recently used. Path mode can also create the typed folder
+/// (Ctrl+N, the folder button in the input, or the "+ Create folder" row).
 class SwitcherWidget : public QFrame
 {
     Q_OBJECT
@@ -115,8 +119,9 @@ private:
     /// fragment of kRecursiveMinChars or more searches the whole tree below
     /// that directory once its file list is ready (see requestPathIndex()).
     void refilterPath(const QString &text);
-    /// Candidates for `fragment` from the file list of `root`, the tree below it.
-    void showRecursive(const QString &root, const PathIndex &index, const QString &fragment);
+    /// Candidates for `fragment` from the file list of `root`, the tree below
+    /// it: fills m_pathItems and returns the indices to show.
+    QList<int> recursiveRows(const QString &root, const PathIndex &index, const QString &fragment);
     /// Start building the file list of `root`, unless it is ready or being
     /// built: `git ls-files` inside a repository, a folder walk on a worker
     /// thread otherwise. pathIndexReady() takes the result.
@@ -144,6 +149,14 @@ private:
     const QList<SwitcherItem> &source() const;
     void moveSelection(int delta);
     void selectCurrent();
+    /// Ctrl+N, the folder button and the "+ Create folder" row. Project mode
+    /// switches to path mode so the new folder's path can be typed; path mode
+    /// creates the folder the input names and lists it, so Enter opens it and
+    /// Ctrl+P pins it through the existing flows.
+    void newFolder();
+    /// Append the "+ Create folder" row to `indices` (and m_pathItems) when the
+    /// typed path `raw` names something that does not exist yet.
+    void appendCreateRow(const QString &raw, QList<int> &indices);
     /// Ctrl+P: pin the directory the switcher is pointing at, or unpin it when
     /// it is already an app-pinned project. Emits nothing for anything that
     /// cannot be a project (a file, a path that does not exist) and for a
@@ -161,6 +174,7 @@ private:
     QListWidget *m_list = nullptr;
     QLabel *m_status = nullptr;       // key hints, and pin feedback
     QTimer *m_statusTimer = nullptr;  // clears a transient message
+    QAction *m_newFolderAction = nullptr; // folder button inside the input
     QList<SwitcherItem> m_items;      // full item set, switcher order
     QList<SwitcherItem> m_pathItems;  // path-mode candidates, display order
     QList<int> m_visible;             // indices into source(), filtered order

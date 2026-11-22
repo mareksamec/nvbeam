@@ -28,3 +28,15 @@ QString expandPathInput(const QString &text);
 /// meaning `base` and a relative path anchored at `base` (nvim's cwd) rather
 /// than at the process working directory.
 QString resolvePath(const QString &text, const QString &base);
+
+/// What createFolder() did.
+enum class CreateFolderResult {
+    Created,        // the folder (and any missing parents) now exists
+    AlreadyExists,  // a folder was already there, nothing was changed
+    NotAFolder,     // a file or other non-folder entry has that name
+    Failed          // mkpath failed, e.g. no write permission
+};
+
+/// Create the folder `path` names, parents included, so "a/b/c" works in one
+/// step. `path` is expected absolute (resolvePath() gives one).
+CreateFolderResult createFolder(const QString &path);

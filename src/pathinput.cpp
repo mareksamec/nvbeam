@@ -1,6 +1,7 @@
 #include "pathinput.h"
 
 #include <QDir>
+#include <QFileInfo>
 
 QString collapseHome(const QString &path)
 {
@@ -48,4 +49,16 @@ QString resolvePath(const QString &text, const QString &base)
     if (path.isEmpty())
         return base;
     return QDir::isAbsolutePath(path) ? path : QDir(base).filePath(path);
+}
+
+CreateFolderResult createFolder(const QString &path)
+{
+    const QFileInfo info(path);
+    if (info.isDir())
+        return CreateFolderResult::AlreadyExists;
+    if (info.exists())
+        return CreateFolderResult::NotAFolder;
+    // mkpath also fails when a parent component is a file, which lands here
+    // as Failed: the message for that is the same "could not create".
+    return QDir().mkpath(path) ? CreateFolderResult::Created : CreateFolderResult::Failed;
 }
