@@ -3,6 +3,7 @@
 #include "pathindex.h"
 #include "pathinput.h"
 #include <algorithm>
+#include <QAction>
 #include <QDir>
 #include <QEvent>
 #include <QFileInfo>
@@ -10,6 +11,9 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
+#include <QPainterPath>
+#include <QPixmap>
 #include <QProcess>
 #include <QThread>
 #include <QSignalBlocker>
@@ -47,6 +51,7 @@ QChar itemGlyph(const SwitcherItem &item)
     case SwitcherItem::Project: return item.pinned ? QChar(u'◇') : QChar(u'◆');
     case SwitcherItem::Folder:  return QChar(u'▸');
     case SwitcherItem::File:    return QChar(u'·');
+    case SwitcherItem::CreateFolder: return QChar(u'+');
     }
     return QChar(u' ');
 }
@@ -62,6 +67,52 @@ constexpr int kMaxPathEntries = 200;
 /// listed directory instead of the directory alone. Shorter keeps the plain
 /// listing, so browsing one folder at a time works as before.
 constexpr int kRecursiveMinChars = 2;
+
+/// New-folder button icon: drawn in a kIconUnits x kIconUnits box, rendered at
+/// these device pixel ratios so it stays sharp on HiDPI screens.
+constexpr int kIconUnits = 16;
+constexpr qreal kIconStroke = 1.3;
+constexpr int kIconScales[] = {1, 2, 3};
+
+/// Folder outline with a "+" inside, in the theme's text colour. Painted
+/// rather than shipped as a file: it follows the theme (light and dark) and
+/// needs neither Qt6::Svg nor an icon theme, which BSD and Windows lack.
+QIcon newFolderIcon(const QColor &color)
+{
+    QIcon icon;
+    for (const int scale : kIconScales) {
+        QPixmap pix(kIconUnits * scale, kIconUnits * scale);
+        pix.setDevicePixelRatio(scale);
+        pix.fill(Qt::transparent);
+
+        QPainter p(&pix);
+        p.setRenderHint(QPainter::Antialiasing, true);
+        QPen pen(color, kIconStroke);
+        pen.setCapStyle(Qt::RoundCap);
+        pen.setJoinStyle(Qt::RoundJoin);
+        p.setPen(pen);
+        p.setBrush(Qt::NoBrush);
+
+        // Folder: tab on the top left, body below it.
+        QPainterPath folder;
+        folder.moveTo(1.5, 3.5);
+        folder.lineTo(6.0, 3.5);
+        folder.lineTo(7.5, 5.0);
+        folder.lineTo(14.5, 5.0);
+        folder.lineTo(14.5, 13.5);
+        folder.lineTo(1.5, 13.5);
+        folder.closeSubpath();
+        p.drawPath(folder);
+
+        // Plus, centered in the body.
+        p.drawLine(QPointF(8.0, 7.0), QPointF(8.0, 11.5));
+        p.drawLine(QPointF(5.75, 9.25), QPointF(10.25, 9.25));
+        p.end();
+
+        icon.addPixmap(pix);
+    }
+    return icon;
+}
 
 } // namespace
 
@@ -90,6 +141,14 @@ SwitcherWidget::SwitcherWidget(const Theme &theme, QWidget *parent)
     m_input->setPlaceholderText(QStringLiteral("Search projects and recent files…"));
     m_input->installEventFilter(this);
     layout->addWidget(m_input);
+
+    // Folder button at the right edge of the input. QLineEdit's action buttons
+    // take no focus, so a click keeps focus in the input and does not trip the
+    // focus-loss dismiss below.
+    m_newFolderAction = m_input->addAction(newFolderIcon(theme.subtext),
+                                           QLineEdit::TrailingPosition);
+    m_newFolderAction->setToolTip(QStringLiteral("New folder (Ctrl+N)"));
+    connect(m_newFolderAction, &QAction::triggered, this, &SwitcherWidget::newFolder);
 
     m_list = new QListWidget(this);
     // Focus stays in the line edit; clicks on items still select and activate,
@@ -250,8 +309,8 @@ void SwitcherWidget::pathIndexReady(quint64 generation, const QString &root,
         refilter(m_input->text());
 }
 
-void SwitcherWidget::showRecursive(const QString &root, const PathIndex &index,
-                                   const QString &fragment)
+QList<int> SwitcherWidget::recursiveRows(const QString &root, const PathIndex &index,
+                                         const QString &fragment)
 {
     m_pathItems.clear();
     QList<int> indices;
@@ -267,10 +326,10 @@ void SwitcherWidget::showRecursive(const QString &root, const PathIndex &index,
         indices.append(m_pathItems.size());
         m_pathItems.append(item);
     }
-    showRows(indices);
     if (index.truncated)
         setStatus(QStringLiteral("Searched the first %1 paths ([switcher] path_max_entries)")
                       .arg(index.paths.size()));
+    return indices;
 }
 
 void SwitcherWidget::dismiss()
@@ -324,6 +383,7 @@ void SwitcherWidget::askSideCommand(const QString &dir, const QString &suggestio
         m_input->setText(suggestion);
         m_input->selectAll();
     }
+    m_newFolderAction->setVisible(false);   // the line holds a command now
     m_list->hide();
     setStatus();
     adjustSize();
@@ -334,6 +394,7 @@ void SwitcherWidget::cancelPin()
 {
     m_pinDir.clear();
     m_mode = m_pinReturnMode;
+    m_newFolderAction->setVisible(true);
     {
         QSignalBlocker blocker(m_input);
         m_input->setText(m_pinReturnText);
@@ -361,10 +422,11 @@ void SwitcherWidget::setStatus(const QString &message)
         break;
     case Mode::Path:
         m_status->setText(
-            QStringLiteral("Tab completes · Ctrl+P pins this folder · Ctrl+D returns to projects"));
+            QStringLiteral("Tab completes · Ctrl+P pins · Ctrl+N new folder · Ctrl+D projects"));
         break;
     case Mode::Projects:
-        m_status->setText(QStringLiteral("Ctrl+P pins the highlighted folder · Ctrl+D opens a path"));
+        m_status->setText(QStringLiteral(
+            "Ctrl+P pins the highlighted folder · Ctrl+N new folder · Ctrl+D opens a path"));
         break;
     }
 }
@@ -429,7 +491,9 @@ void SwitcherWidget::refilterPath(const QString &raw)
         const QString root = QDir::cleanPath(dir.absolutePath());
         requestPathIndex(root);
         if (const auto it = m_pathIndexes.constFind(root); it != m_pathIndexes.constEnd()) {
-            showRecursive(root, *it, fragment);
+            QList<int> indices = recursiveRows(root, *it, fragment);
+            appendCreateRow(raw, indices);
+            showRows(indices);
             return;
         }
     }
@@ -464,7 +528,27 @@ void SwitcherWidget::refilterPath(const QString &raw)
         indices.append(m_pathItems.size());
         m_pathItems.append(s.item);
     }
+    appendCreateRow(raw, indices);
     showRows(indices);
+}
+
+void SwitcherWidget::appendCreateRow(const QString &raw, QList<int> &indices)
+{
+    // Only for a path that is not there yet: "~/Projects/" names an existing
+    // folder, "~/Projects/newthing" does not. The row goes last, so Enter on a
+    // fuzzy fragment still opens the best match; it is the highlighted row
+    // only when nothing else matched.
+    if (expandPathInput(raw).isEmpty())
+        return;
+    const QString path = QDir::cleanPath(resolvePath(raw, m_baseDir));
+    if (QFileInfo::exists(path))
+        return;
+    SwitcherItem item;
+    item.kind = SwitcherItem::CreateFolder;
+    item.label = QStringLiteral("Create folder");
+    item.path = path;
+    indices.append(m_pathItems.size());
+    m_pathItems.append(item);
 }
 
 void SwitcherWidget::fillFromRow(int row)
@@ -575,8 +659,50 @@ void SwitcherWidget::selectCurrent()
     if (row < 0 || row >= m_visible.size())
         return;
     const SwitcherItem item = source().at(m_visible.at(row));
+    if (item.kind == SwitcherItem::CreateFolder) {
+        newFolder();   // the switcher's own row: nothing for MainWindow to open
+        return;
+    }
     hide();
     emit itemSelected(item);
+}
+
+void SwitcherWidget::newFolder()
+{
+    if (m_mode == Mode::PinCommand)
+        return;
+    // Project mode has no path to create: switch to path mode, prefilled with
+    // the base directory, and let the name be typed after it.
+    if (m_mode == Mode::Projects) {
+        setMode(Mode::Path);
+        setStatus(QStringLiteral("Type the new folder's path · Ctrl+N creates it"));
+        return;
+    }
+
+    // Path mode creates exactly what is typed, like Ctrl+P pins what is typed,
+    // whatever row the list below highlights.
+    const QString path = QDir::cleanPath(resolvePath(m_input->text(), m_baseDir));
+    const QString shown = collapseHome(path);
+    switch (createFolder(path)) {
+    case CreateFolderResult::Created:
+        // The cached file lists predate the folder; drop them so the
+        // recursive search finds it.
+        resetPathIndexes();
+        // Refilters and lists the new, empty folder. Enter then opens it (an
+        // exactly typed path wins) and Ctrl+P pins it.
+        m_input->setText(shown + QLatin1Char('/'));
+        setStatus(QStringLiteral("Created %1 · Enter opens · Ctrl+P pins").arg(shown));
+        break;
+    case CreateFolderResult::AlreadyExists:
+        setStatus(QStringLiteral("%1 already exists").arg(shown));
+        break;
+    case CreateFolderResult::NotAFolder:
+        setStatus(QStringLiteral("A file named %1 already exists").arg(shown));
+        break;
+    case CreateFolderResult::Failed:
+        setStatus(QStringLiteral("Could not create %1").arg(shown));
+        break;
+    }
 }
 
 void SwitcherWidget::togglePin()
@@ -693,6 +819,14 @@ bool SwitcherWidget::eventFilter(QObject *watched, QEvent *event)
             // Ctrl+P pins (or unpins) the folder the switcher points at.
             if (ke->modifiers().testFlag(Qt::ControlModifier)) {
                 togglePin();
+                return true;
+            }
+            break;
+        case Qt::Key_N:
+            // Ctrl+N creates the typed folder (path mode) or switches to path
+            // mode to type one (project mode).
+            if (ke->modifiers().testFlag(Qt::ControlModifier)) {
+                newFolder();
                 return true;
             }
             break;

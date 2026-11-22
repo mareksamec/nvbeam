@@ -1,6 +1,9 @@
 #include "pathinput.h"
 
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryDir>
 #include <QTest>
 
 /// The switcher's path mode input: "~" handling, restarting a path midway and
@@ -73,6 +76,49 @@ private slots:
         QCOMPARE(expandHome(QStringLiteral("~/x")), home + "/x");
         QCOMPARE(expandHome(QStringLiteral("~x")), QStringLiteral("~x"));
         QCOMPARE(expandHome(QStringLiteral("rel")), QStringLiteral("rel"));
+    }
+
+    /// The switcher's new-folder action: nested creation, and the cases that
+    /// must leave the filesystem alone or report failure.
+    void createsFolders()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QDir root(tmp.path());
+
+        const QString single = root.filePath(QStringLiteral("new"));
+        QCOMPARE(createFolder(single), CreateFolderResult::Created);
+        QVERIFY(QFileInfo(single).isDir());
+        QCOMPARE(createFolder(single), CreateFolderResult::AlreadyExists);
+
+        const QString nested = root.filePath(QStringLiteral("a/b/c"));
+        QCOMPARE(createFolder(nested), CreateFolderResult::Created);
+        QVERIFY(QFileInfo(nested).isDir());
+
+        const QString file = root.filePath(QStringLiteral("file.txt"));
+        QFile f(file);
+        QVERIFY(f.open(QIODevice::WriteOnly));
+        f.close();
+        QCOMPARE(createFolder(file), CreateFolderResult::NotAFolder);
+        // A file in the middle of the path blocks mkpath.
+        QCOMPARE(createFolder(file + QStringLiteral("/below")), CreateFolderResult::Failed);
+    }
+
+    void reportsAFolderItCannotCreate()
+    {
+        QTemporaryDir tmp;
+        QVERIFY(tmp.isValid());
+        const QString locked = QDir(tmp.path()).filePath(QStringLiteral("locked"));
+        QVERIFY(QDir().mkdir(locked));
+        QVERIFY(QFile::setPermissions(locked, QFile::ReadOwner | QFile::ExeOwner));
+        // root ignores permission bits, so the check means nothing there.
+        if (QFileInfo(locked).isWritable()) {
+            QFile::setPermissions(locked, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+            QSKIP("Directory permissions are not enforced for this user");
+        }
+        const CreateFolderResult result = createFolder(locked + QStringLiteral("/new"));
+        QFile::setPermissions(locked, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+        QCOMPARE(result, CreateFolderResult::Failed);
     }
 };
 

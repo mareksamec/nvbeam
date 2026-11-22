@@ -141,7 +141,7 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 | Ctrl+- | Decrease the font size of the focused pane (terminal or nvim buffer) |
 | Ctrl+Mouse wheel | Increase/decrease the font size of the pane under the pointer |
 | Ctrl+Shift+X | Maximize the focused pane (nvim buffer, bottom terminal or side terminal); press again to restore |
-| Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode, Ctrl+P pins a folder as a project) |
+| Ctrl+Shift+P | Toggle the project switcher (Ctrl+D inside it switches between project search and path mode, Ctrl+P pins a folder as a project, Ctrl+N creates a new folder) |
 | Ctrl+Shift+B | Toggle the git branch switcher, from anywhere in the window including inside a terminal (also opens by clicking the statusline's git segment) |
 | Ctrl+Shift+L | Open the link in the focused terminal's selection |
 | Ctrl+Shift+R | Toggle the change review panel (git diff of the worktree, opens right of the side terminal) |
@@ -150,6 +150,8 @@ Any unrecognized arguments are passed directly to the embedded Neovim process.
 ### Project switcher
 
 Starting nvbeam without arguments, or pressing **Ctrl+Shift+P**, opens a KRunner-style switcher: type to fuzzy-search pinned projects (`[[projects]]` in the config) and recently opened folders and files. Selecting an entry points nvim's cwd and every terminal at the project directory and opens it in nvim. When nvim exits (`:q`), nvbeam shows the switcher again instead of closing (`[switcher] keep_running = false` turns that off). **Ctrl+D** switches to path mode, where Tab completes the typed path against the directory tree, for opening anything that is neither pinned nor recent.
+
+**Ctrl+N** (or the folder button at the right edge of the input) creates a new folder. In path mode it creates the typed path, parents included; in project search it first switches to path mode so the name can be typed. A typed path that does not exist also shows a `+ Create folder` row at the end of the list. The new folder is then listed in the input, so Enter opens it and Ctrl+P pins it.
 
 **Ctrl+P** pins the highlighted folder (or the typed path) as a project and asks for its `side_command`, prefilled with whatever the side terminal is running; clear it for a plain shell. Ctrl+P on a pinned project (◇) removes it again. Pins are written to `~/.config/nvbeam/projects.toml` in the same `[[projects]]` format, so moving one into `nvbeam.toml` is a copy-paste; projects declared there (◆) cannot be removed from the switcher.
 
